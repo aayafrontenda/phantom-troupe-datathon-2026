@@ -19,7 +19,8 @@ from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
 from .entry import door_findings
-from .workplace import client_findings, desk_findings, find_roi, left_items_findings, phone_times, scan
+from .workplace import (client_findings, desk_findings, find_roi, left_items_findings, phone_times, scan,
+                        stranger_findings)
 
 log = logging.getLogger("ml.pipeline")
 DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
@@ -92,6 +93,20 @@ def to_violation(f: dict, frames: list[Frame], s) -> dict:
     }
 
 
+def _emit_partial(progress, findings: list[dict], frames: list[Frame], s) -> None:
+    """Промежуточный результат для backend (on_progress.partial): если задачу оборвёт срок или сторож,
+    жюри получит уже найденное, а не «нарушений нет»."""
+    send = getattr(progress, "partial", None)
+    if not send:
+        return
+    try:
+        kept = [f for f in _merge(findings, s.merge_sec) if f["confidence"] >= s.min_confidence]
+        vs = [to_violation(f, frames, s) for f in kept]
+        send({"verdict": "violation" if vs else "no_violation", "violations": vs})
+    except Exception as e:  # промежуточный результат не должен ронять анализ
+        log.warning("partial: %s", e)
+
+
 def analyze(path: str, on_progress: Progress | None = None, deadline: float | None = None) -> dict:
     s = get_settings()
     progress = on_progress or _noop
@@ -130,10 +145,14 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     vlm_calls, vlm_errors, scenes = 0, 0, []
     if dets:
         findings += door_findings(frames, dets)  # T04: дверь после входа в пустую кассу, без VLM
+        _emit_partial(progress, findings, frames, s)
     from .vlm import VLMClient
     # вызов скана - около 1 с; длинный таймаут нужен только на загрузку модели в память
     vlm = VLMClient(timeout=min(s.vlm_timeout, DESK_CALL_TIMEOUT))
     roi = find_roi(dets, info.width or frames[0].image.shape[1], info.height or frames[0].image.shape[0]) if dets else None
+    if roi:
+        # T05: посторонний рядом с кассиром на служебной стороне стола - по рамкам детектора, без VLM
+        findings += stranger_findings(frames, dets, roi)
     if vlm.enabled and roi:
         # рабочее место: дорожка состояний по увеличенному фрагменту → T01–T03 по правилам
         progress("vlm", 0.25)
@@ -149,10 +168,12 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
                 scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
         for f in desk_findings(desk_states, phone_times(frames, dets, roi)) + client_findings(desk_states):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
+        _emit_partial(progress, findings, frames, s)
         # после каждого ухода - узкий вопрос «что оставлено на столе» (2 вызова на уход, ~0.4 с каждый)
         if stats.get("errors", 0) < 2 and time.time() < deadline - DESK_CALL_TIMEOUT - 5:
             for f in left_items_findings(vlm, frames, roi, desk_states):
                 findings.append({**f, "source": "vlm", "candidate": "уход кассира"})
+            _emit_partial(progress, findings, frames, s)
 
     if vlm.enabled and s.vlm_generic:
         for i, c in enumerate(cands):

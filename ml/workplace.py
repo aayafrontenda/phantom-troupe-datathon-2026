@@ -289,6 +289,45 @@ def left_items_findings(vlm: VLMClient, frames: list[Frame], roi, states: list[D
     return found
 
 
+# T05 по рамкам детектора: «рядом» - ближе STRANGER_NEAR роста кассира, «не отражение» - рост от STRANGER_SIZE его роста,
+# держится STRANGER_RUN кадров подряд (3 с при 2 кадр/с). Подобрано на Х-18/Х-30: 0 ложных на 20 нормальных видео
+STRANGER_NEAR, STRANGER_SIZE, STRANGER_RUN = 1.0, 0.8, 6
+
+
+def stranger_findings(frames: list[Frame], dets: list[list[Det]], roi) -> list[dict]:
+    """T05: рядом с кассиром, на его стороне стола, стоит ещё один человек.
+
+    Кассир - человек, ближайший к центру рабочего места (медиана положения и роста по видео). «Сторона кассира» -
+    полуплоскость от центра стола в сторону кассира: клиент сидит напротив, через стол, и сюда не попадает.
+    Ручных зон нет: всё от найденного рабочего места и роста кассира в этом видео.
+    """
+    x1, y1, x2, y2 = roi
+    rc = np.array([(x1 + x2) / 2, (y1 + y2) / 2])
+    ctr = lambda b: np.array([(b[0] + b[2]) / 2, (b[1] + b[3]) / 2])  # noqa: E731
+    persons = [[p for p in ds if p.group == "person" and p.score >= 0.5] for ds in dets]
+    nearest_rc = [min(ps, key=lambda p: np.linalg.norm(ctr(p.box) - rc)) for ps in persons if ps]
+    if len(nearest_rc) < 5:
+        return []
+    cpos = np.median([ctr(p.box) for p in nearest_rc], axis=0)
+    ch = float(np.median([p.box[3] - p.box[1] for p in nearest_rc]))
+    side = cpos - rc  # направление «стол → кассир»
+    run = 0
+    for i, (f, ps) in enumerate(zip(frames, persons)):
+        ok = False
+        if len(ps) >= 2:
+            cashier = min(ps, key=lambda p: np.linalg.norm(ctr(p.box) - cpos))
+            ok = any(np.dot(ctr(p.box) - rc, side) > 0                                     # сторона кассира
+                     and np.linalg.norm(ctr(p.box) - ctr(cashier.box)) < STRANGER_NEAR * ch  # вплотную к кассиру
+                     and (p.box[3] - p.box[1]) >= STRANGER_SIZE * ch                         # не мелкое отражение
+                     for p in ps if p is not cashier)
+        run = run + 1 if ok else 0
+        if run == STRANGER_RUN:
+            return [{"code": "T05", "t": frames[i - STRANGER_RUN + 1].t, "confidence": 0.6, "source": "detector",
+                     "observed": "Рядом с кассиром, на служебной стороне стола, находится ещё один человек "
+                                 "(не клиент напротив) и держится рядом не меньше 3 секунд"}]
+    return []
+
+
 def phone_times(frames: list[Frame], dets: list[list[Det]], roi) -> list[float]:
     """Моменты, когда детектор видит телефон в руке кассира на рабочем месте - подтверждение для T15.
 
