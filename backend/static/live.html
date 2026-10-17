@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CashGuard Live</title>
+<style>
+  :root { --bg: #f6f7f9; --card: #fff; --ink: #14171f; --muted: #5d6573; --line: #e3e6eb; --accent: #c8102e; --warn: #b54708; --warn-bg: #fff4e5; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --card: #171a21; --ink: #e8eaee; --muted: #9aa3b2; --line: #2a2f39; --warn: #ffb35c; --warn-bg: #3a2810; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: var(--card); border-bottom: 1px solid var(--line); }
+  header a { color: var(--muted); text-decoration: none; } header .sp { flex: 1; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } header .muted { display: none; } }
+  .stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; }
+  video, canvas.ov { width: 100%; display: block; } canvas.ov { position: absolute; inset: 0; height: 100%; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .alert { border-left: 4px solid var(--warn); background: var(--warn-bg); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .alert.info { border-color: var(--muted); background: transparent; }
+  .alert small { color: var(--muted); display: block; }
+  .muted { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header><b>CashGuard Live</b><span class="muted">поток с камеры: телефон, еда, сумки, посторонние, экран без присмотра</span><span class="sp"></span><a href="/">← Анализ видео</a></header>
+<main>
+  <div>
+    <div class="stage"><video id="cam" autoplay playsinline muted></video><canvas class="ov" id="ov"></canvas></div>
+    <p><button class="btn primary" id="go">Включить камеру</button> <button class="btn" id="stop">Стоп</button>
+      <span class="muted" id="stat"></span></p>
+  </div>
+  <div class="card"><b>События</b><div id="alerts" style="margin-top:10px"><p class="muted">Пока событий нет</p></div></div>
+</main>
+<canvas id="grab" hidden></canvas>
+<script>
+const $ = s => document.querySelector(s);
+const COLORS = { person: '#3b82f6', phone: '#ef4444', drink: '#f59e0b', food: '#f59e0b', bag: '#a855f7', laptop: '#10b981', book: '#64748b' };
+let ws = null, timer = null, stream = null, busy = false, last = null;
+
+$('#go').onclick = async () => {
+  stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+  $('#cam').srcObject = stream;
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ui/api/live`);
+  ws.onmessage = ev => { busy = false; const m = JSON.parse(ev.data); if (m.error) { $('#stat').textContent = m.error; return; } last = m; draw(m); (m.alerts || []).forEach(addAlert);
+    $('#stat').textContent = `${m.detections.length} объектов · ${m.ms} мс`; };
+  ws.onclose = () => { $('#stat').textContent = 'соединение закрыто'; };
+  timer = setInterval(send, 333);  // ~3 кадра/с
+};
+$('#stop').onclick = () => { clearInterval(timer); ws && ws.close(); stream && stream.getTracks().forEach(t => t.stop()); };
+
+function send() {
+  const v = $('#cam'); if (!ws || ws.readyState !== 1 || busy || !v.videoWidth) return;
+  const c = $('#grab'), k = Math.min(1, 640 / v.videoWidth);
+  c.width = v.videoWidth * k; c.height = v.videoHeight * k;
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  busy = true;
+  ws.send(JSON.stringify({ image: c.toDataURL('image/jpeg', 0.7) }));
+}
+function draw(m) {
+  const ov = $('#ov'), v = $('#cam'); ov.width = v.clientWidth; ov.height = v.clientHeight;
+  const g = ov.getContext('2d'); g.clearRect(0, 0, ov.width, ov.height);
+  const [w, h] = m.size || [1, 1], sx = ov.width / w, sy = ov.height / h;
+  g.lineWidth = 2; g.font = '13px system-ui';
+  m.detections.forEach(d => { const [x1, y1, x2, y2] = d.box, col = COLORS[d.group] || '#fff';
+    g.strokeStyle = col; g.strokeRect(x1 * sx, y1 * sy, (x2 - x1) * sx, (y2 - y1) * sy);
+    g.fillStyle = col; g.fillText(`${d.label} ${Math.round(d.score * 100)}%`, x1 * sx + 3, y1 * sy + 14); });
+}
+function addAlert(a) {
+  const box = $('#alerts'); if (box.querySelector('p.muted')) box.innerHTML = '';
+  const el = document.createElement('div'); el.className = `alert ${a.severity === 'info' ? 'info' : ''}`;
+  el.innerHTML = `<b>${a.type}</b><br>${a.message}<small>${new Date(a.ts * 1000).toLocaleTimeString()}${a.norm ? ' · ' + a.norm : ''}</small>`;
+  box.prepend(el);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# данные и артефакты — не в git (видео кейса нельзя публиковать)
+data/
+storage/
+ml/eval/out/
+*.mov
+*.mp4
+# окружения
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+
+.env
+.DS_Store
