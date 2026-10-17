@@ -18,6 +18,7 @@ from . import kb
 from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
+from .entry import door_findings
 from .workplace import desk_findings, find_roi, scan
 
 log = logging.getLogger("ml.pipeline")
@@ -119,6 +120,8 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     # --- VLM ---
     findings: list[dict] = []
     vlm_calls, vlm_errors, scenes = 0, 0, []
+    if dets:
+        findings += door_findings(frames, dets)  # T04: дверь после входа в пустую кассу, без VLM
     from .vlm import VLMClient
     vlm = VLMClient()
     roi = find_roi(dets, info.width or frames[0].image.shape[1], info.height or frames[0].image.shape[0]) if dets else None
@@ -153,8 +156,8 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
                 findings.append({"code": f["code"], "t": win[f["frame"] - 1].t, "confidence": f["confidence"],
                                  "observed": f["observed"], "source": "vlm", "candidate": c.reason})
 
-    # без VLM (или если она упала целиком) — правила только по детектору
-    if sig and (not vlm.enabled or vlm_calls == 0):
+    # без VLM — правила только по детектору (с VLM они давали ложные: счётная машина = «чемодан» → T13)
+    if sig and not vlm.enabled:
         for f in cv_findings(sig):
             findings.append({**f, "source": "detector"})
 
