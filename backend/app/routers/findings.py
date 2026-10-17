@@ -32,13 +32,14 @@ def _finding_or_404(st, fid: int, p: Principal, with_frames: bool = False) -> di
 def findings_list(request: Request, source: str | None = None, decision: str | None = None,
                   verified: bool | None = None, type_code: str | None = None, camera_id: str | None = None,
                   decided_by: str | None = None, edited: bool | None = None, since: float | None = None,
-                  until: float | None = None, q: str | None = None, limit: int = Query(100, ge=1, le=1000),
-                  offset: int = Query(0, ge=0), p: Principal = Depends(ui_access)):
+                  until: float | None = None, q: str | None = None, verify_result: str | None = None,
+                  limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0), p: Principal = Depends(ui_access)):
     st = _st(request)
     data = st.findings.list(source=source, decision=decision, verified=verified, type_code=type_code,
                             camera_id=camera_id, camera_ids=p.camera_ids, decided_by=decided_by, edited=edited,
-                            since=since, until=until, q=q, limit=limit, offset=offset)
+                            since=since, until=until, q=q, verify_result=verify_result, limit=limit, offset=offset)
     data["counts"] = st.findings.counts(p.camera_ids)
+    data["operators"] = st.findings.operators(p.camera_ids)
     return data
 
 

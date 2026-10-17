@@ -55,7 +55,8 @@ class _Pending:
 class _Running:
     job_id: str
     path: str
-    deadline: float
+    deadline: float                 # hard deadline (upload + JOB_HARD_LIMIT_SEC)
+    budget_deadline: float          # what the pipeline is told: shares the time with jobs waiting behind it
     kill_at: float
     started_at: float
     last_msg_at: float
@@ -209,14 +210,15 @@ class _Worker:
         self.state = "dead"
 
     # -- job dispatch --------------------------------------------------------
-    def run(self, job: _Pending) -> None:
+    def run(self, job: _Pending, budget_deadline: float | None = None) -> None:
         now = time.time()
-        self.current = _Running(job_id=job.job_id, path=job.path, deadline=job.deadline,
+        budget = min(job.deadline, budget_deadline) if budget_deadline else job.deadline
+        self.current = _Running(job_id=job.job_id, path=job.path, deadline=job.deadline, budget_deadline=budget,
                                 kill_at=job.deadline + self.pool.grace_sec, started_at=now, last_msg_at=now,
                                 attempts=job.attempts + 1, token=self.generation * 1_000_000 + int(now * 1000) % 1_000_000)
         self.state = "busy"
         if self.pool.mode == "process":
-            self._in_q.put({"cmd": "run", "job_id": job.job_id, "path": job.path, "deadline": job.deadline})
+            self._in_q.put({"cmd": "run", "job_id": job.job_id, "path": job.path, "deadline": budget})
         else:
             threading.Thread(target=self._thread_run, args=(self.current,), name=f"job-{job.job_id}", daemon=True).start()
 
@@ -264,7 +266,7 @@ class _Worker:
         )
         t0 = time.time()
         try:
-            result = analyze(running.path, on_progress=progress, deadline=running.deadline)
+            result = analyze(running.path, on_progress=progress, deadline=running.budget_deadline)
             if not isinstance(result, dict):
                 raise TypeError(f"analyzer returned {type(result).__name__}, expected dict")
             send({"type": "done", "job_id": job_id, "result": result, "sec": time.time() - t0})
@@ -279,7 +281,7 @@ class _Worker:
 class WorkerPool:
     def __init__(self, analyzer_name: str, mode: str = "process", workers: int = 1, warmup: bool = True,
                  grace_sec: float = 8.0, stall_sec: float = 150.0, max_attempts: int = 2,
-                 retry_on_error: bool = True,
+                 retry_on_error: bool = True, min_budget_sec: float = 35.0,
                  on_finish: Callable[[Outcome], None] | None = None,
                  on_progress: Callable[[str, str, float], None] | None = None,
                  log_file: str | None = None):
@@ -292,6 +294,7 @@ class WorkerPool:
         self.stall_sec = stall_sec
         self.max_attempts = max(1, max_attempts)
         self.retry_on_error = retry_on_error
+        self.min_budget_sec = min_budget_sec
         self.max_start_failures = 5
         self.log_file = log_file
         self.on_finish = on_finish or (lambda o: None)
@@ -445,9 +448,22 @@ class WorkerPool:
                         self._finish(Outcome(job.job_id, "deadline", error="deadline passed in queue",
                                              attempts=job.attempts + 1, worker=w.name))
                         continue
-                    log.info("job %s -> %s (priority %d, queued %d)", job.job_id, w.name, job.priority, len(self._pending))
-                    w.run(job)
+                    budget = self._budget_deadline(job, now)
+                    log.info("job %s -> %s (priority %d, queued %d, budget %.0f s)", job.job_id, w.name, job.priority,
+                             len(self._pending), budget - now)
+                    w.run(job, budget)
                     self.on_progress(job.job_id, "started", 0.0)
+
+    def _budget_deadline(self, job: _Pending, now: float) -> float:
+        """Deadline handed to the pipeline: the job's own hard deadline, shortened so that jobs waiting behind it
+        (same or higher priority) still get their share before *their* deadlines - the jury may upload 5+ videos
+        at once and one GPU serves them one by one. Never shorter than min_budget_sec."""
+        behind = [p for p in self._pending if p.priority <= job.priority]
+        if not behind:
+            return job.deadline
+        earliest = min(p.deadline for p in behind + [job])
+        share = (earliest - now) / (len(behind) + 1) / max(1, len(self._workers))
+        return min(job.deadline, now + max(self.min_budget_sec, share))
 
     def _replace(self, w: _Worker) -> None:
         if self.mode == "process":

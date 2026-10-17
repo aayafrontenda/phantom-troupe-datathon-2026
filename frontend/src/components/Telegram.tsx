@@ -1,7 +1,12 @@
+import { Check, Clock, Send } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { useI18n } from '../i18n';
-import { Icon, fmtDate, useUi } from '../ui';
+import { fmtDate, useUi } from '../ui';
+import { Note } from './page';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 
 interface TgStatus { enabled: boolean; bot: string | null; linked: boolean; telegram: { username: string | null; linked_at: number } | null; photos: boolean }
 
@@ -44,34 +49,34 @@ export function TelegramDialog({ close, role }: { close: () => void; role: strin
 
   return (
     <div>
-      <h3 style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Icon id="tg" />{t('tg.title')}</h3>
-      <p>{t('tg.lead')}</p>
-      {!st ? <p className="muted" style={{ marginTop: 16 }}>{t('loading')}</p> : !st.enabled ? (
-        <div className="note" style={{ margin: '16px 0 0' }}><Icon id="alert" /><span>{t('tg.off')}</span></div>
+      <DialogTitle><Send className="size-[18px]" strokeWidth={1.8} />{t('tg.title')}</DialogTitle>
+      <DialogDescription>{t('tg.lead')}</DialogDescription>
+      {!st ? <p className="mt-4 text-sm text-muted-foreground">{t('loading')}</p> : !st.enabled ? (
+        <Note className="mt-4">{t('tg.off')}</Note>
       ) : (
         <>
-          <div className="tg-what"><b>{t('tg.youGet')}</b><span>{t(`tg.what.${role}`)}</span></div>
-          {!st.photos && <p className="muted small" style={{ marginTop: 10 }}>{t('tg.noPhotos')}</p>}
+          <div className="mt-4 flex flex-col gap-1 rounded-[10px] bg-muted px-4 py-3.5 text-sm"><b className="text-heading">{t('tg.youGet')}</b><span>{t(`tg.what.${role}`)}</span></div>
+          {!st.photos && <p className="mt-2.5 text-[13px] text-muted-foreground">{t('tg.noPhotos')}</p>}
           {st.linked ? (
-            <div className="tg-state ok">
-              <span className="pill ok"><Icon id="check" />{t('tg.linked', { u: st.telegram?.username ? '@' + st.telegram.username : 'Telegram' })}</span>
-              {st.telegram?.linked_at && <span className="muted small">{t('tg.since', { d: fmtDate(st.telegram.linked_at, locale) })}</span>}
+            <div className="mt-3.5 flex flex-wrap items-center gap-3">
+              <Badge variant="success"><Check />{t('tg.linked', { u: st.telegram?.username ? '@' + st.telegram.username : 'Telegram' })}</Badge>
+              {st.telegram?.linked_at && <span className="text-[13px] text-muted-foreground">{t('tg.since', { d: fmtDate(st.telegram.linked_at, locale) })}</span>}
             </div>
           ) : url ? (
-            <div className="tg-state">
-              <span className="pill info"><Icon id="clock" />{t('tg.waiting')}</span>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="small">{t('tg.openAgain')}</a>
+            <div className="mt-3.5 flex flex-wrap items-center gap-3">
+              <Badge variant="info"><Clock />{t('tg.waiting')}</Badge>
+              <a href={url} target="_blank" rel="noopener noreferrer" className="text-[13px] underline decoration-border-strong hover:decoration-foreground">{t('tg.openAgain')}</a>
             </div>
           ) : (
-            <p className="muted small" style={{ marginTop: 14 }}>{t('tg.step', { bot: st.bot ? '@' + st.bot : 'PhantomGuard' })}</p>
+            <p className="mt-3.5 text-[13px] text-muted-foreground">{t('tg.step', { bot: st.bot ? '@' + st.bot : 'PhantomGuard' })}</p>
           )}
         </>
       )}
-      <div className="acts">
-        {st?.enabled && st.linked && <button className="btn sm danger" disabled={busy} onClick={unlink}>{t('tg.unlink')}</button>}
-        <button className="btn sm" onClick={close}>{t('close')}</button>
-        {st?.enabled && !st.linked && <button className="btn sm primary" disabled={busy} onClick={connect}><Icon id="tg" />{t(url ? 'tg.newLink' : 'tg.connect')}</button>}
-      </div>
+      <DialogFooter>
+        {st?.enabled && st.linked && <Button variant="destructive" size="sm" disabled={busy} onClick={unlink}>{t('tg.unlink')}</Button>}
+        <Button variant="secondary" size="sm" onClick={close}>{t('close')}</Button>
+        {st?.enabled && !st.linked && <Button size="sm" disabled={busy} onClick={connect}><Send />{t(url ? 'tg.newLink' : 'tg.connect')}</Button>}
+      </DialogFooter>
     </div>
   );
 }

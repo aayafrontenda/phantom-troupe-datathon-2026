@@ -1,9 +1,8 @@
-/* Entry stylesheet. Tailwind (utilities win) on top of the legacy page styles in app.css, which sit in their own
-   layer so a utility class always overrides them. Colour tokens live in app.css (:root / [data-theme=dark]);
-   here they are exposed to Tailwind under shadcn names. */
-@layer theme, base, legacy, components, utilities;
+/* Entry stylesheet. Tailwind utilities on top of the design tokens and element defaults in app.css.
+   Colour tokens live in app.css (:root / [data-theme=dark]); here they are exposed to Tailwind under shadcn names. */
+@layer theme, base, components, utilities;
 @import "tailwindcss";
-@import "./app.css" layer(legacy);
+@import "./app.css" layer(base);
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
@@ -29,12 +28,18 @@
   --color-primary-soft: var(--brand-soft);
   --color-primary-ink: var(--brand-ink);
   --color-primary-foreground: #fff;
+  --color-salmon: var(--salmon);
   --color-destructive: var(--bad);
   --color-destructive-soft: var(--bad-bg);
+  --color-destructive-line: var(--bad-line);
   --color-success: var(--ok);
   --color-success-soft: var(--ok-bg);
+  --color-success-line: var(--ok-line);
   --color-warning: var(--warn);
   --color-warning-soft: var(--warn-bg);
+  --color-warning-line: var(--warn-line);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-bg);
   --color-border: var(--line);
   --color-border-strong: var(--line-2);
   --color-input: var(--line);
@@ -45,8 +50,14 @@
   --color-sidebar: var(--sidebar);
   --color-video: var(--video);
   --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --ease-in-out: cubic-bezier(.77, 0, .175, 1);
   --animate-shimmer: shimmer 1.6s linear infinite;
   --animate-scan: scan 1.8s var(--ease-out) infinite;
+  --animate-blink: blink 1.6s infinite;
+  --animate-sweep: sweep 1.1s var(--ease-in-out) infinite alternate;
+  --animate-turn: turn 240s linear infinite;
+  --animate-stamp: stamp .26s var(--ease-out) both;
+  --animate-pop-in: pop-in .16s var(--ease-out);
 }
 
 @keyframes shimmer {
@@ -56,6 +67,17 @@
 @keyframes scan {
   from { transform: translateX(-100%); }
   to { transform: translateX(350%); }
+}
+@keyframes blink { 50% { opacity: .3; } }
+@keyframes sweep {
+  from { transform: scaleX(.15); }
+  to { transform: scaleX(1); }
+}
+@keyframes turn { to { rotate: 360deg; } }
+/* the decision lands like a stamp: a brief press-in, once */
+@keyframes stamp {
+  from { opacity: 0; transform: scale(1.14) rotate(-3deg); }
+  60% { opacity: 1; transform: scale(.98) rotate(.4deg); }
 }
 
 @keyframes fade-in { from { opacity: 0; } }
@@ -70,5 +92,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-shimmer, .animate-scan { animation: none !important; }
+  .animate-shimmer, .animate-scan, .animate-turn, .animate-blink, .animate-sweep { animation: none !important; }
 }

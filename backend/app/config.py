@@ -9,7 +9,7 @@ import os
 import secrets
 import subprocess
 from dataclasses import dataclass, field
-from functools import lru_cache
+import threading
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parents[2]
@@ -78,6 +78,8 @@ class Settings:
     job_hard_limit_sec: float = field(default_factory=lambda: _float("JOB_HARD_LIMIT_SEC", 270))
     watchdog_grace_sec: float = field(default_factory=lambda: _float("WATCHDOG_GRACE_SEC", 8))
     worker_stall_sec: float = field(default_factory=lambda: _float("WORKER_STALL_SEC", 150))
+    # a job never gets less than this to analyze, however deep the queue is (detector + a few VLM calls)
+    min_job_budget_sec: float = field(default_factory=lambda: _float("MIN_JOB_BUDGET_SEC", 35))
     on_deadline: str = field(default_factory=lambda: _env("ON_DEADLINE", "partial"))  # partial | failed
     on_failure: str = field(default_factory=lambda: _env("ON_FAILURE", "partial"))    # partial | failed
     max_attempts: int = field(default_factory=lambda: _int("MAX_ATTEMPTS", 2))
@@ -200,13 +202,31 @@ class Settings:
         return out
 
 
-@lru_cache(maxsize=1)
+_settings: Settings | None = None
+_settings_lock = threading.Lock()
+
+
 def get_settings() -> Settings:
-    load_dotenv()
-    s = Settings()
-    s.ensure_dirs()
-    return s
+    """Cached settings. Built and stored under a lock, so a reset can never be overwritten by a build that
+    started before it (a background thread reading the old environment)."""
+    s = _settings
+    if s is not None:
+        return s
+    return _build_settings()
+
+
+def _build_settings() -> Settings:
+    global _settings
+    with _settings_lock:
+        if _settings is None:
+            load_dotenv()
+            s = Settings()
+            s.ensure_dirs()
+            _settings = s
+        return _settings
 
 
 def reset_settings() -> None:
-    get_settings.cache_clear()
+    global _settings
+    with _settings_lock:
+        _settings = None

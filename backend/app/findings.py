@@ -188,8 +188,11 @@ class FindingService:
     def list(self, *, source: str | None = None, decision: str | None = None, verified: bool | None = None,
              type_code: str | None = None, camera_id: str | None = None, camera_ids: list[str] | None = None,
              decided_by: str | None = None, edited: bool | None = None, since: float | None = None,
-             until: float | None = None, q: str | None = None, limit: int = 100, offset: int = 0) -> dict:
+             until: float | None = None, q: str | None = None, verify_result: str | None = None,
+             limit: int = 100, offset: int = 0) -> dict:
         conds, params = [], []
+        if verify_result in ("agree", "disagree"):
+            conds.append("verify_result=?"); params.append(verify_result)
         if source:
             conds.append("source=?"); params.append(source)
         if decision == "pending":
@@ -227,6 +230,15 @@ class FindingService:
         for r in rows:
             r["filename"] = names.get(r["job_id"])
         return {"findings": rows, "total": total}
+
+    def operators(self, camera_ids: list[str] | None = None) -> list[str]:
+        """Logins that have decided at least one finding (for the supervisor's filter)."""
+        scope, params = "WHERE decided_by IS NOT NULL", []
+        if camera_ids is not None:
+            marks = ",".join("?" for _ in camera_ids) or "''"
+            scope += f" AND (source<>'camera' OR camera_id IN ({marks}))"
+            params = list(camera_ids)
+        return [r["decided_by"] for r in self.db.all(f"SELECT DISTINCT decided_by FROM findings {scope} ORDER BY decided_by", params)]
 
     def _filenames(self, job_ids: list[str]) -> dict[str, str]:
         ids = sorted(set(job_ids))

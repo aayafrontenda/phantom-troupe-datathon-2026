@@ -3,7 +3,7 @@
    an incomplete last row is centred. */
 import { Children, isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-const GAP = 12;
+const GAP = 12; // keep in step with the gap-3 utilities below
 
 export function bestGrid(n: number, W: number, H: number, ratio: number, gap = GAP) {
   let best = { cols: 1, w: 0, h: 0 };
@@ -31,9 +31,9 @@ export function CameraGallery({ children, ratio = 3 / 4 }: { children: ReactNode
 
   return (
     <div ref={ref} className="absolute inset-3 sm:inset-4">
-      <div className="flex h-full w-full flex-wrap content-center items-center justify-center" style={{ gap: GAP, maxWidth: '100%' }}>
+      <div className="flex h-full w-full max-w-full flex-wrap content-center items-center justify-center gap-3">
         {/* the row width caps how many tiles wrap per line, so rows hold exactly `cols` tiles */}
-        <div className="flex flex-wrap content-center justify-center" style={{ gap: GAP, width: cols * w + (cols - 1) * GAP }}>
+        <div className="flex flex-wrap content-center justify-center gap-3" style={{ width: cols * w + (cols - 1) * GAP }}>
           {items.map((c, i) => <div key={isValidElement(c) && c.key != null ? c.key : i} style={{ width: w, height: h }} className="relative">{c}</div>)}
         </div>
       </div>

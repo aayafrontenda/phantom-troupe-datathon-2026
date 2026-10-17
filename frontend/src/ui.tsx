@@ -1,44 +1,10 @@
-/* Small shared UI: icons, toasts, modals, lightbox, formatting helpers. */
+/* Small shared UI: toasts, modals, lightbox, formatting helpers, theme. */
+import { AlertTriangle, Check } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Button } from './components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from './components/ui/dialog';
 import { useI18n } from './i18n';
-
-/* ---------- icons ---------- */
-const PATHS: Record<string, string> = {
-  up: '<path d="M12 15V4M7 9l5-5 5 5M5 15v4.5h14V15"/>',
-  play: '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>',
-  pause: '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/>',
-  back: '<path d="M14.5 6l-6 6 6 6"/>',
-  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-  x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
-  alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4.2M12 17.2v.3"/>',
-  shield: '<path d="M12 3l8 3v6c0 4.6-3.4 8.1-8 9-4.6-.9-8-4.4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
-  film: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 3.5v17M16 3.5v17M4 9h4M4 15h4M16 9h4M16 15h4"/>',
-  cam: '<rect x="3" y="6.5" width="13" height="11" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  link: '<path d="M14 4h6v6M20 4l-8.5 8.5M18 14v5.5H4.5V6H10"/>',
-  trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/>',
-  doc: '<path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12h6M9 16h6"/>',
-  clip: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5v5l4-2.5z" fill="currentColor" stroke="none"/>',
-  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
-  moon: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
-  chev: '<path d="M9 6l6 6-6 6"/>',
-  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
-  user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>',
-  logout: '<path d="M10 4.5H5.5v15H10M15 8l4 4-4 4M19 12H9"/>',
-  edit: '<path d="M4 20h4l10.5-10.5-4-4L4 16z"/><path d="M12.5 7.5l4 4"/>',
-  eye: '<path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
-  flag: '<path d="M5.5 21V4h11l-2 4 2 4h-11"/>',
-  undo: '<path d="M8 7H4v4M4 11a8 8 0 1 1 2.3 7"/>',
-  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
-  tg: '<path d="M21 4.5L2.8 11.4l5.7 2.1 2.2 6.6 3.3-4.2 4.7 3.6z"/><path d="M8.5 13.5l12.5-9"/>',
-  download: '<path d="M12 4v11M7 10l5 5 5-5M5 19.5h14"/>',
-  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0M15.5 5a3.5 3.5 0 0 1 0 7M18 13.5a6 6 0 0 1 3.5 6"/>',
-  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
-};
-export function Icon({ id, className = '' }: { id: string; className?: string }) {
-  return <svg className={`i ${className}`} viewBox="0 0 24 24" aria-hidden="true" dangerouslySetInnerHTML={{ __html: PATHS[id] || '' }} />;
-}
+import { cn } from './lib/utils';
 
 /* ---------- formatting ---------- */
 export const tc = (t: number | null | undefined) => {
@@ -119,22 +85,20 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const confirm = useCallback((title: string, text: ReactNode, okLabel: string, danger = true) =>
     modal<boolean>(close => (
       <>
-        <h3>{title}</h3><p>{text}</p>
-        <div className="acts">
-          <button className="btn sm" onClick={() => close(null)}>{t('cancel')}</button>
-          <button className={`btn sm ${danger ? 'danger-solid' : 'primary'}`} autoFocus onClick={() => close(true)}>{okLabel}</button>
-        </div>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{text}</DialogDescription>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={() => close(null)}>{t('cancel')}</Button>
+          <Button variant={danger ? 'danger' : 'default'} size="sm" autoFocus onClick={() => close(true)}>{okLabel}</Button>
+        </DialogFooter>
       </>
     )).then(v => !!v), [modal, t]);
 
   const zoom = useCallback((src: string, cap: string) => setLb({ src, cap }), []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (lb) { setLb(null); return; }
-      setModals(m => { const last = m[m.length - 1]; last?.resolve(null); return m.slice(0, -1); });
-    };
+    if (!lb) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLb(null); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [lb]);
@@ -144,12 +108,17 @@ export function UiProvider({ children }: { children: ReactNode }) {
     <Ui.Provider value={value}>
       {children}
       {modals.map(m => (
-        <div className="modal" key={m.id} onClick={e => { if (e.target === e.currentTarget) closeModal(m.id, null); }}>
-          <div className={`modal-card ${m.wide ? 'wide' : ''}`} role="dialog" aria-modal="true">{m.render(v => closeModal(m.id, v))}</div>
-        </div>
+        <Dialog key={m.id} open onOpenChange={o => { if (!o) closeModal(m.id, null); }}>
+          <DialogContent wide={m.wide} aria-describedby={undefined}>{m.render(v => closeModal(m.id, v))}</DialogContent>
+        </Dialog>
       ))}
-      {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb.src} alt="" /><div className="lb-cap">{lb.cap}</div></div>}
-      <div className="toasts" aria-live="polite">
+      {lb && (
+        <div className="fixed inset-0 z-[60] flex cursor-zoom-out flex-col items-center justify-center gap-2.5 bg-black/90 [animation:fade-in_.2s_var(--ease-out)]" onClick={() => setLb(null)}>
+          <img src={lb.src} alt="" className="max-h-[88vh] max-w-[94vw] rounded-lg" />
+          <div className="text-xs text-white/75 tabular-nums">{lb.cap}</div>
+        </div>
+      )}
+      <div aria-live="polite" className="fixed bottom-5 left-1/2 z-[70] flex w-[min(460px,calc(100vw-32px))] -translate-x-1/2 flex-col gap-2">
         {toasts.map(x => <ToastItem key={x.id} toast={x} onDone={dropToast} />)}
       </div>
     </Ui.Provider>
@@ -183,10 +152,14 @@ function ToastItem({ toast, onDone }: { toast: Toast; onDone: (id: number) => vo
     const id = window.setTimeout(() => onDone(toast.id), 220);
     return () => clearTimeout(id);
   }, [leaving, onDone, toast.id]);
+  const err = toast.kind === 'err';
   return (
-    <div className={`toast ${toast.kind} ${leaving ? 'out' : ''}`} role={toast.kind === 'err' ? 'alert' : 'status'}
-      onMouseEnter={pause} onMouseLeave={resume} onClick={() => setLeaving(true)}>
-      <Icon id={toast.kind === 'err' ? 'alert' : 'check'} /><span>{toast.msg}</span>
+    <div role={err ? 'alert' : 'status'} onMouseEnter={pause} onMouseLeave={resume} onClick={() => setLeaving(true)}
+      className={cn('flex items-center gap-2.5 rounded-[10px] px-4 py-3 text-sm shadow-lg transition-[transform,opacity] duration-300 [animation:pop-in_.3s_var(--ease-out)]',
+        err ? 'bg-destructive text-white' : 'bg-foreground text-background',
+        leaving && 'translate-y-1.5 scale-[.98] opacity-0 duration-200')}>
+      {err ? <AlertTriangle className="size-[18px] shrink-0" /> : <Check className="size-[18px] shrink-0 opacity-75" />}
+      <span>{toast.msg}</span>
     </div>
   );
 }

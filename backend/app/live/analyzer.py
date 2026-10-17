@@ -44,9 +44,11 @@ class LiveSession:
 
 
 class MLLiveSession(LiveSession):
-    def __init__(self, busy: Any = None):
+    def __init__(self, busy=None):
         from ml.live import LiveRules
         self.det = _get_detector()
+        # busy() -> True while jury/UI videos are being analyzed: live keeps the detector but skips VLM questions,
+        # so camera sessions never queue in front of the jury at the single GPU
         self.rules = LiveRules(busy=busy)
 
     def process(self, img: np.ndarray) -> dict:
@@ -114,10 +116,9 @@ class MockLiveSession(LiveSession):
                     "norm": None, "severity": "info", "ts": time.time()}
 
 
-def new_session(busy: Any = None) -> LiveSession:
-    """busy() -> True while the job queue is processing videos: the live VLM desk scan then pauses (jury first)."""
+def new_session(busy=None) -> LiveSession:
     if get_settings().analyzer == "ml":
-        return MLLiveSession(busy)
+        return MLLiveSession(busy=busy)
     return MockLiveSession()
 
 

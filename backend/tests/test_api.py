@@ -35,6 +35,17 @@ def test_upload_validation(app_factory, video, tmp_path):
         assert not list(st.settings.upload_dir.glob("*"))
 
 
+def test_upload_accepted_by_content_not_by_name(app_factory, video):
+    """The jury's client may send the file without an extension or with an unusual one: decode decides."""
+    with app_factory() as (c, st):
+        h = {"X-API-Key": "test-key"}
+        body = video.read_bytes()
+        for name in ("video", "clip.avi", "Х-7.MOV"):
+            r = c.post("/api/v1/analyze", headers=h, files={"file": (name, body, "application/octet-stream")})
+            assert r.status_code == 200, (name, r.text)
+            assert r.json()["status"] in ("processing", "done")
+
+
 def test_full_flow_schema_and_order(app_factory, video):
     from ml.schema import validate_job
     with app_factory() as (c, st):

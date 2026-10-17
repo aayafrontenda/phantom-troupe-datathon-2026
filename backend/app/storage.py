@@ -31,23 +31,37 @@ class Upload:
 
 
 def probe_video(path: Path) -> dict:
-    """Read container metadata with OpenCV (shared with the ML package)."""
-    from ml.video import probe
+    """Read container metadata with OpenCV (shared with the ML package).
+
+    Some .mov/.mp4 files report no frame count in the header; the file is still accepted if at least one frame
+    decodes (the pipeline reads frames sequentially and measures the duration itself).
+    """
+    import cv2
+    from ml.video import ascii_path, probe
     info = probe(path)
     if info.frame_count <= 0:
-        raise ValueError("video has no frames")
+        cap = cv2.VideoCapture(ascii_path(path))
+        ok, frame = cap.read()
+        cap.release()
+        if not ok or frame is None:
+            raise ValueError("video has no decodable frames")
+        info.height, info.width = int(frame.shape[0]), int(frame.shape[1])
     return {"duration_sec": float(info.duration), "fps": float(info.fps), "frame_count": info.frame_count,
             "width": info.width, "height": info.height}
+
+
+def _safe_ext(filename: str) -> str:
+    """Extension for the stored copy: the client's if it looks like one, otherwise .mov (the case format).
+    Whether the body is a video is decided by decoding it, not by the name."""
+    ext = Path(filename).suffix.lower()
+    return ext if 2 <= len(ext) <= 6 and ext[1:].isalnum() else ".mov"
 
 
 async def save_upload(file: UploadFile) -> Upload:
     """Stream the multipart body to disk in 1 MB chunks, enforce the size limit, hash on the fly."""
     s = get_settings()
     name = file.filename or "video.mov"
-    ext = Path(name).suffix.lower()
-    if ext not in s.allowed_ext:
-        raise HTTPException(status_code=400, detail=f"Ожидается видео {', '.join(sorted(s.allowed_ext))} "
-                                                    f"(получено: {ext or 'без расширения'})")
+    ext = _safe_ext(name)
     tmp = s.upload_dir / f"upload-{time.time_ns()}{ext}"
     h = hashlib.sha256()
     size = 0

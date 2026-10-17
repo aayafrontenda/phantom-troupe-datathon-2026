@@ -23,7 +23,8 @@ from .workplace import (client_findings, desk_findings, find_roi, left_items_fin
                         stranger_findings)
 
 log = logging.getLogger("ml.pipeline")
-DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
+DESK_CALL_TIMEOUT = 15.0  # per workplace question: ~1 s normally, a few seconds while the model loads
+DEADLINE_MARGIN = 6.0     # stop asking the VLM this long before the deadline (one call + report)
 Progress = Callable[[str, float], None]
 
 
@@ -158,7 +159,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
         progress("vlm", 0.25)
         stats: dict = {}
         desk_states = scan(vlm, frames, roi, s.desk_step_sec, s.desk_max_calls,
-                           deadline_ok=lambda: time.time() < deadline - DESK_CALL_TIMEOUT - 5,
+                           deadline_ok=lambda: time.time() < deadline - DEADLINE_MARGIN,
                            on_call=lambda k: progress("vlm", 0.25 + 0.6 * min(1.0, k / max(1, s.desk_max_calls))),
                            stats=stats)
         vlm_errors += stats.get("errors", 0)
@@ -170,14 +171,14 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
         _emit_partial(progress, findings, frames, s)
         # после каждого ухода - узкий вопрос «что оставлено на столе» (2 вызова на уход, ~0.4 с каждый)
-        if stats.get("errors", 0) < 2 and time.time() < deadline - DESK_CALL_TIMEOUT - 5:
+        if stats.get("errors", 0) < 2 and time.time() < deadline - DEADLINE_MARGIN:
             for f in left_items_findings(vlm, frames, roi, desk_states):
                 findings.append({**f, "source": "vlm", "candidate": "уход кассира"})
             _emit_partial(progress, findings, frames, s)
 
     if vlm.enabled and s.vlm_generic:
         for i, c in enumerate(cands):
-            if time.time() > deadline - min(s.vlm_timeout, 30):
+            if time.time() > deadline - DEADLINE_MARGIN:
                 log.warning("Бюджет времени исчерпан: проверено %d из %d кандидатов", i, len(cands))
                 break
             progress("vlm", 0.25 + 0.65 * i / max(1, len(cands)))

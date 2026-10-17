@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
+import { EmptyState, Loading, Page } from './components/page';
 import { AppShell } from './components/shell/AppShell';
+import { Card } from './components/ui/card';
 import { UploadProvider } from './components/uploads';
 import { useI18n } from './i18n';
 import AdminPage from './pages/Admin';
@@ -13,24 +15,25 @@ import QualityPage from './pages/Quality';
 import ReviewPage from './pages/Review';
 import RulesPage from './pages/Rules';
 
+// video checks are the landing page for every role; monitoring stays one click away in the sidebar
+const HOME = '/checks';
+
 function Guard({ role, children }: { role: 'operator' | 'supervisor' | 'admin'; children: React.ReactNode }) {
   const { can } = useAuth();
   const { t } = useI18n();
-  if (!can(role)) return <div className="page"><div className="card empty"><b>{t('err.403')}</b></div></div>;
+  if (!can(role)) return <Page><Card><EmptyState title={t('err.403')} /></Card></Page>;
   return <>{children}</>;
 }
 
 export default function App() {
   const { ready, user } = useAuth();
-  const { t } = useI18n();
-  if (!ready) return <div className="loading" style={{ paddingTop: '30vh' }}>{t('loading')}</div>;
+  if (!ready) return <Loading className="pt-[30vh]" />;
   if (!user) return <LoginPage />;
-  const home = user.role === 'supervisor' ? '/review' : '/checks';
   return (
     <UploadProvider>
       <AppShell>
         <Routes>
-          <Route path="/" element={<Navigate to={home} replace />} />
+          <Route path="/" element={<Navigate to={HOME} replace />} />
           <Route path="/live" element={<LivePage />} />
           <Route path="/checks" element={<ChecksPage />} />
           <Route path="/checks/:id" element={<CheckPage />} />
@@ -39,7 +42,7 @@ export default function App() {
           <Route path="/quality" element={<Guard role="supervisor"><QualityPage /></Guard>} />
           <Route path="/rules" element={<RulesPage />} />
           <Route path="/admin" element={<Guard role="admin"><AdminPage /></Guard>} />
-          <Route path="*" element={<Navigate to={home} replace />} />
+          <Route path="*" element={<Navigate to={HOME} replace />} />
         </Routes>
       </AppShell>
     </UploadProvider>

@@ -4,8 +4,8 @@ import { BookOpenCheck, ChartColumn, Cctv, ListVideo, Settings, UserCheck, type 
 export type Need = 'operator' | 'supervisor' | 'admin';
 export interface NavItem { to: string; label: string; icon: LucideIcon; need?: Need; match: string[]; badge?: 'open' }
 export const NAV: NavItem[] = [
-  { to: '/live', label: 'nav.live', icon: Cctv, match: ['live', 'findings'], badge: 'open' },
   { to: '/checks', label: 'nav.checks', icon: ListVideo, match: ['checks'] },
+  { to: '/live', label: 'nav.live', icon: Cctv, match: ['live', 'findings'], badge: 'open' },
   { to: '/review', label: 'nav.review', icon: UserCheck, need: 'supervisor', match: ['review'] },
   { to: '/quality', label: 'nav.quality', icon: ChartColumn, need: 'supervisor', match: ['quality'] },
   { to: '/rules', label: 'nav.rules', icon: BookOpenCheck, match: ['rules'] },

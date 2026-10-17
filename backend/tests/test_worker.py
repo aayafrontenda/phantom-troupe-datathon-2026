@@ -152,3 +152,22 @@ def test_requeue_with_replay_priority(tmp_path, video):
         assert r.status_code == 200
         j = wait_done(c, jid)
         assert j["status"] == "done" and st.jobs.get(jid)["attempts"] >= 1
+
+
+def test_budget_is_shared_with_queued_jobs():
+    """With N jury videos waiting, the running job is told a deadline that leaves time for the others."""
+    from backend.app.worker import WorkerPool, _Pending
+
+    pool = WorkerPool("mock", mode="thread", workers=1, warmup=False, min_budget_sec=35)
+    now = 1000.0
+    head = _Pending(0, 1, "a", "a.mov", deadline=now + 270)
+    assert pool._budget_deadline(head, now) == now + 270          # alone: full hard deadline
+    for i in range(4):                                            # four more jury uploads in the same second
+        pool.submit(f"j{i}", f"{i}.mov", 0, now + 270 + i)
+    assert pool._budget_deadline(head, now) == pytest.approx(now + 270 / 5)
+    pool.submit("ui", "ui.mov", 1, now + 270)                     # lower priority does not take the jury's share
+    assert pool._budget_deadline(head, now) == pytest.approx(now + 270 / 5)
+    late = _Pending(0, 9, "z", "z.mov", deadline=now + 40)        # deep queue: never below the minimum...
+    assert pool._budget_deadline(late, now) == now + 35
+    tight = _Pending(0, 9, "z", "z.mov", deadline=now + 20)       # ...but never past the job's own hard deadline
+    assert pool._budget_deadline(tight, now) == now + 20
