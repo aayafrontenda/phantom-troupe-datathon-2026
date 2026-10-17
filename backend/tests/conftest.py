@@ -67,7 +67,15 @@ def video(tmp_path_factory) -> Path:
         cv2.circle(img, (20 + i * 3, 120), 20, (0, 0, 255), -1)
         w.write(img)
     w.release()
+    _violation_sized(p)
     return p
+
+
+def _violation_sized(p: Path) -> None:
+    """The mock analyzer reports violations only when size % 3 != 0; encoders differ by OS, so pad if needed."""
+    if p.stat().st_size % 3 == 0:
+        with open(p, "ab") as f:
+            f.write(b"\0")
 
 
 @pytest.fixture(scope="session")

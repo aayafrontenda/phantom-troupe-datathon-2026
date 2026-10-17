@@ -4,7 +4,7 @@ import { useI18n } from '../i18n';
 import type { RuleType } from '../types';
 import { Icon } from '../ui';
 
-const LIVE_CODES = new Set(['T01', 'T05', 'T13', 'T14', 'T15']);
+const LIVE_CODES = new Set(['T01', 'T05', 'T13', 'T14', 'T15', 'T16']);
 
 export default function RulesPage() {
   const { t, typeName, typeField, docName, pointName, docUrl, has } = useI18n();
