@@ -131,7 +131,9 @@ def ask_state(vlm: VLMClient, frame: Frame, roi) -> DeskState:
 
 
 def _key(s: DeskState) -> tuple:
-    return s.present, s.screen, s.cash, s.bag, s.safe_open
+    # смена любого из этих признаков между грубыми замерами - повод уточнить отрезок с шагом 2 с;
+    # клиент пришёл/ушёл - для T07 (деньги прошлого клиента при входе следующего)
+    return s.present, s.client in ("sit", "stand"), s.screen, s.cash, s.bag, s.safe_open
 
 
 def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float = 2.0, max_calls: int = 26,
@@ -226,6 +228,27 @@ def _leave_time(states: list[DeskState], i0: int) -> float:
     if states[i0 - 1].t - states[k].t <= 3.0:
         return (states[k - 1].t + states[k].t) / 2 if k > 0 else states[k].t
     return states[i0 - 1].t
+
+
+def client_findings(states: list[DeskState]) -> list[dict]:
+    """T07 по дорожке «клиент / деньги на столе»: клиент №1 ушёл, наличные всё время лежат на столе, подходит клиент №2.
+
+    Клиент - отрезок client in (sit, stand) от MIN_AWAY_STATES замеров подряд. Деньги должны быть видны в последнем
+    замере клиента №1, во всей паузе между клиентами и в первом замере клиента №2 - без этого условия любая смена
+    клиентов давала бы тревогу (на нормальных видео деньги на столе между клиентами не лежат).
+    Таймкод - момент подхода клиента №2: середина между последним замером паузы и первым замером, где он уже у стола
+    (по разметке нарушение видно, когда «входит следующий клиент», то есть раньше, чем он сел).
+    """
+    has_client = lambda s: s.client in ("sit", "stand")  # noqa: E731
+    visits = [(a, b) for a, b in _runs(states, has_client) if b - a + 1 >= MIN_AWAY_STATES]
+    found = []
+    for (_, b1), (a2, _) in zip(visits, visits[1:]):
+        gap = states[b1 + 1:a2]
+        if gap and states[b1].cash and all(s.cash for s in gap) and states[a2].cash:
+            found.append({"code": "T07", "t": (states[a2 - 1].t + states[a2].t) / 2, "confidence": 0.7,
+                          "observed": "Предыдущий клиент ушёл, наличные остались на столе; "
+                                      "к столу подходит следующий клиент"})
+    return found
 
 
 LEFT_PROMPT = (ML_DIR / "prompts" / "left_items_ru.txt").read_text(encoding="utf-8")

@@ -106,14 +106,14 @@ class _Desk:
         threading.Thread(target=self._ask, args=(Frame(t=now, index=0, image=img.copy()),), daemon=True).start()
 
     def _ask(self, frame: Frame) -> None:
-        from .workplace import MIN_AWAY_STATES, _leave_time, _left_items, ask_state, desk_findings
+        from .workplace import MIN_AWAY_STATES, _leave_time, _left_items, ask_state, client_findings, desk_findings
         try:
             st = ask_state(self.vlm, frame, self.roi)
             self.asked_frames.append((st.t, frame))
             with self.lock:
                 self.states.append(st)
                 states = list(self.states)
-            found = {f["code"]: f for f in desk_findings(states, list(self.phones))}
+            found = {f["code"]: f for f in desk_findings(states, list(self.phones)) + client_findings(states)}
             # кассир только что ушёл (ровно MIN_AWAY_STATES пустых замеров после присутствия) - узкий вопрос,
             # что оставлено на столе, по двум последним кадрам (как в анализе видео)
             n = MIN_AWAY_STATES

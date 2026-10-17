@@ -19,7 +19,7 @@ from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
 from .entry import door_findings
-from .workplace import desk_findings, find_roi, left_items_findings, phone_times, scan
+from .workplace import client_findings, desk_findings, find_roi, left_items_findings, phone_times, scan
 
 log = logging.getLogger("ml.pipeline")
 DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
@@ -147,7 +147,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
             if not st.reused:
                 vlm_calls += 1
                 scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
-        for f in desk_findings(desk_states, phone_times(frames, dets, roi)):
+        for f in desk_findings(desk_states, phone_times(frames, dets, roi)) + client_findings(desk_states):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
         # после каждого ухода - узкий вопрос «что оставлено на столе» (2 вызова на уход, ~0.4 с каждый)
         if stats.get("errors", 0) < 2 and time.time() < deadline - DESK_CALL_TIMEOUT - 5:
