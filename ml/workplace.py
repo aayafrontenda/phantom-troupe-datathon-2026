@@ -410,9 +410,13 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
         ("T13", lambda s: s.personal and s.person in ("sit", "none") and s.client == "none", 3, 0.65,
          "На рабочем столе кассира лежат личные вещи (сумка, рюкзак или верхняя одежда)"),
     ]
+    # чьи вещи: кассир принесла их сама (вещи видны, пока она стоит - Х-40: «сумка на плече», «держит куртку»)
+    # или они лежат на столе с начала видео. Сумка, появившаяся посреди видео, пока кассир сидит, - её положил
+    # кто-то другой (инкассатор в Х-16), это не личные вещи кассира
+    own_items = any(s.personal and s.person == "stand" for s in asked) or any(s.personal for s in asked[:2])
     for code, pred, need, conf, observed in rules:
         hits = [s for s in asked if pred(s)]
-        if len(hits) < need:
+        if len(hits) < need or (code == "T13" and not own_items):
             continue
         t = hits[0].t
         if code == "T14" and any(s.cash and abs(s.t - t) <= 10 for s in states):
