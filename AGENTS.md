@@ -51,6 +51,7 @@ backend/app/         (подробно — docs/backend.md; контракт —
   analyzers.py     контракт с ML: analyze(path, on_progress, deadline); on_progress.partial(result); warmup()
   db.py, storage.py, events.py, sse.py, metrics.py, reports.py, i18n.py, state.py
   alerts/          policy engine (backend/alerts.yaml), каналы web/telegram/webhook/email
+  telegram.py      бот: привязка аккаунта по одноразовой ссылке; уведомления операторам и супервайзерам (решения — только на сайте)
   live/            WebSocket браузера, RTSP/файл-камеры (кольцевой буфер кадров → клип при тревоге), live-анализатор
 backend/i18n-kb.json  переводы типов нарушений и норм (en, kk); источник правды по-русски — ml/rules_kb.yaml
 backend/templates/ печатный отчёт проверки (ru/kk/en)

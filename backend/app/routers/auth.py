@@ -52,6 +52,46 @@ def me(request: Request, p: Principal = Depends(ui_access)):
                          "retention_days": st.settings.video_retention_days}}
 
 
+# ----------------------------------------------------------------------------- Telegram (own account)
+
+def _me_user(request: Request, p: Principal) -> dict:
+    if p.user_id is None:
+        raise HTTPException(status_code=400, detail="Telegram is linked to a user account: sign in first")
+    u = _st(request).users.get(p.user_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return u
+
+
+@router.get("/auth/telegram")
+def telegram_status(request: Request, p: Principal = Depends(ui_access)):
+    bot = _st(request).alerts.telegram
+    u = _me_user(request, p) if p.user_id is not None else None
+    return {"enabled": bot.enabled, "bot": bot.bot_username() if bot.enabled else None,
+            "linked": bool(u and u.get("telegram")), "telegram": (u or {}).get("telegram"),
+            "photos": _st(request).settings.telegram_photos}
+
+
+@router.post("/auth/telegram/link")
+def telegram_link(request: Request, p: Principal = Depends(ui_access)):
+    bot = _st(request).alerts.telegram
+    u = _me_user(request, p)
+    if not bot.enabled:
+        raise HTTPException(status_code=409, detail="Telegram bot is not configured (TELEGRAM_BOT_TOKEN)")
+    name = bot.bot_username()
+    if not name:
+        raise HTTPException(status_code=503, detail="Telegram is unreachable from the server")
+    code = bot.link_code(u["id"])
+    return {"url": f"https://t.me/{name}?start={code}", "bot": name, "expires_in": 15 * 60}
+
+
+@router.delete("/auth/telegram")
+def telegram_unlink(request: Request, p: Principal = Depends(ui_access)):
+    u = _me_user(request, p)
+    _st(request).alerts.telegram.unlink(u["id"], p.name)
+    return {"ok": True}
+
+
 # ----------------------------------------------------------------------------- users (admin)
 
 class UserIn(BaseModel):
@@ -69,6 +109,7 @@ class UserPatch(BaseModel):
     password: str | None = Field(default=None, min_length=4, max_length=200)
     camera_ids: list[str] | None = None
     all_cameras: bool | None = None
+    unlink_telegram: bool | None = None
 
 
 @router.get("/users")
@@ -94,6 +135,8 @@ def users_patch(uid: int, body: UserPatch, request: Request, p: Principal = Depe
             and st.users.count_active_admins() <= 1:
         raise HTTPException(status_code=409, detail="Нельзя убрать последнего администратора")
     fields = body.model_dump(exclude_none=True)
+    if fields.pop("unlink_telegram", None):
+        st.alerts.telegram.unlink(uid, p.name)
     if fields.pop("all_cameras", None):
         fields["camera_ids"] = None
     elif "camera_ids" not in body.model_fields_set:

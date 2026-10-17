@@ -34,6 +34,7 @@ class FindingService:
         self.bus = bus
         self.alerts = alerts
         self.quality = quality
+        self.on_decided = None   # (finding, actor) -> None; the Telegram bot asks supervisors to verify rejections
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ create
@@ -296,7 +297,13 @@ class FindingService:
         self._log(fid, actor, action, {"before": f.get("decision"), "after": decision, "comment": comment})
         self.db.audit("finding.decide", actor.name, str(fid), {"decision": decision})
         self._sync_alert(f, decision, actor.name)
-        return self._changed(fid)
+        out = self._changed(fid)
+        if self.on_decided is not None and decision is not None:
+            try:
+                self.on_decided(out, actor)
+            except Exception:
+                log.exception("finding #%s: on_decided hook failed", fid)
+        return out
 
     def verify(self, fid: int, result: str | None, comment: str | None, actor) -> dict | None:
         f = self.get(fid)

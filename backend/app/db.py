@@ -208,6 +208,15 @@ MIGRATIONS: list[str] = [
 
     ALTER TABLE jobs ADD COLUMN created_by TEXT;
     """,
+    # 3 — Telegram: personal bot linked to a user
+    """
+    ALTER TABLE users ADD COLUMN tg_user_id INTEGER;
+    ALTER TABLE users ADD COLUMN tg_chat_id INTEGER;
+    ALTER TABLE users ADD COLUMN tg_username TEXT;
+    ALTER TABLE users ADD COLUMN tg_lang TEXT;
+    ALTER TABLE users ADD COLUMN tg_linked_at REAL;
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_users_tg ON users(tg_user_id);
+    """,
 ]
 
 

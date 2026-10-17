@@ -3,7 +3,8 @@ import { NavLink } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { LANGS, useI18n, type Lang } from '../i18n';
-import { Icon, useTheme } from '../ui';
+import { Icon, useTheme, useUi } from '../ui';
+import { TelegramDialog } from './Telegram';
 import { useOpenCount } from './events';
 
 interface Health { analyzer: string; queue: number; running: string[]; version: string }
@@ -12,6 +13,7 @@ export default function Header() {
   const { t, lang, setLang } = useI18n();
   const { user, logout, can } = useAuth();
   const { dark, toggle } = useTheme();
+  const { modal } = useUi();
   const [health, setHealth] = useState<Health | null | 'down'>(null);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -73,6 +75,7 @@ export default function Header() {
           {menu && (
             <div className="user-menu" role="menu">
               <div style={{ padding: '6px 12px 10px', color: 'var(--muted)', fontSize: 13 }}>{t('signedAs')} <b style={{ color: 'var(--fg)' }}>{user?.login}</b></div>
+              {user && user.kind === 'user' && user.role !== 'admin' && <button role="menuitem" onClick={() => { setMenu(false); modal<null>(close => <TelegramDialog role={user.role} close={() => close(null)} />); }}><Icon id="tg" />{t('tg.menu')}</button>}
               <button role="menuitem" onClick={() => { setMenu(false); logout(); }}><Icon id="logout" />{t('logout')}</button>
             </div>
           )}

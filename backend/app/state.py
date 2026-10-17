@@ -63,6 +63,8 @@ class AppState:
         state.jobs = JobService(db, pool, bus, on_result=state._on_result, findings=findings)
         pool.on_finish = state._on_finish
         pool.on_progress = state.jobs.on_progress
+        alerts.telegram.attach(state)
+        findings.on_decided = alerts.telegram.on_finding_decided
         state.cameras = CameraManager(db, bus, on_alert=state._on_live_alert, busy=pool.busy, on_clip=findings.from_camera)
         return state
 
@@ -125,7 +127,7 @@ class AppState:
                 "t_sec": v.get("timecode_sec"), "confidence": v.get("confidence"),
                 "message": (v.get("description") or "")[:400],
                 "norm": _norm_text(v), "evidence_b64": frames[0].get("image_base64") if frames else None,
-                "link": f"/checks/{job['job_id']}",
+                "link": f"/checks/{job['job_id']}", "jury": job.get("source") == "jury",
             }), actor=job.get("source"))
 
     def _clips(self, job: dict, result: dict) -> None:

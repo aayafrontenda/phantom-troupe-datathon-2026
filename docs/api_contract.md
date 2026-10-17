@@ -94,7 +94,10 @@ curl https://<адрес>/api/v1/jobs/<job_id> -H "X-API-Key: <ключ>"
 | GET | `/ui/api/auth/me` | текущий пользователь, анализатор, версия, включённые функции |
 | GET | `/ui/api/users` | **admin** · список пользователей |
 | POST | `/ui/api/users` | **admin** · `{"login", "password", "role", "name", "camera_ids": null \| ["cam1"]}` (`null` = все камеры) |
-| PATCH | `/ui/api/users/{id}` | **admin** · `name, role, active, password, camera_ids, all_cameras` |
+| PATCH | `/ui/api/users/{id}` | **admin** · `name, role, active, password, camera_ids, all_cameras, unlink_telegram` |
+| GET | `/ui/api/auth/telegram` | `{enabled, bot, linked, telegram{username, linked_at}, photos}` |
+| POST | `/ui/api/auth/telegram/link` | одноразовая ссылка `https://t.me/<bot>?start=<code>` (15 мин) — привязать свой Telegram |
+| DELETE | `/ui/api/auth/telegram` | отвязать свой Telegram |
 
 Операторы видят только назначенные им камеры (`camera_ids`), супервайзеры и админы — все.
 
@@ -161,7 +164,21 @@ curl https://<адрес>/api/v1/jobs/<job_id> -H "X-API-Key: <ключ>"
 
 Объект алерта: `id, severity (critical|high|medium|low|info), state, type_code, type_name, message, camera_id, job_id, finding_id, count, escalation_level, escalate_at, acked_by, acked_at, payload{t_sec, filename, norm, link,…}, deliveries[{channel, target, status}]`.
 
-Каналы: `web` (SSE, всегда), `telegram` (бот с кнопками «Принял / Ложное»), `webhook` (JSON с `X-Signature: sha256=HMAC`), `email` (SMTP). Включаются переменными окружения.
+Каналы: `web` (SSE, всегда), `telegram` (бот, см. ниже), `webhook` (JSON с `X-Signature: sha256=HMAC`), `email` (SMTP). Включаются переменными окружения.
+Алерты по видео жюри уходят только в `web` — во внешние каналы тестовые видео не передаются (раздел 10 ТЗ).
+
+**Telegram-бот** (`backend/app/telegram.py`) — только уведомления, решения принимаются на сайте (там клип, таймкод и норма).
+Пользователь привязывает свой Telegram в интерфейсе (меню профиля → Telegram). С учётом камер пользователя:
+
+| Роль | Что приходит |
+| --- | --- |
+| operator | «Найдено возможное нарушение»: тип, камера/видео, таймкод, кадр, кнопка «Открыть в CashGuard» (по загрузкам — только тому, кто загрузил) |
+| supervisor | «Оператор отклонил находку ИИ»: описание ИИ, формулировка и комментарий оператора, ссылка |
+| admin | ничего |
+
+Команды: `/pending` (что ждёт решения на сайте), `/status`, `/lang ru|kk|en`, `/stop`. Кнопка-ссылка появляется, только если
+`PUBLIC_URL` — https. Опрашивать бота может один сервер на токен (`TELEGRAM_POLL=1` в Docker, `0` в `.env` для локальных).
+`TELEGRAM_PHOTOS=0` — без кадров, только текст.
 
 ### Live
 

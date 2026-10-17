@@ -382,6 +382,13 @@ details.tech[open] > summary .i{transform:rotate(90deg)}
 .toast.err{background:var(--bad);color:#fff}
 @keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 
+/* ---- Telegram ---- */
+.tg-what{display:flex;flex-direction:column;gap:4px;margin-top:16px;padding:14px 16px;border-radius:var(--r2);background:var(--surface-2);font-size:14px}
+.tg-what b{color:var(--plum)}
+.tg-state{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.tg-tag{display:inline-flex;align-items:center;gap:4px;color:var(--info)}
+.tg-tag .i{width:13px;height:13px}
+
 /* ---- AI quality ---- */
 .q-stats .stat{cursor:default}
 .q-stats .stat:hover{background:var(--surface-2)}

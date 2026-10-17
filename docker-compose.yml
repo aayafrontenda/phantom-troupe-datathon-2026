@@ -19,6 +19,7 @@ services:
     environment:
       STORAGE_DIR: /app/storage
       ANALYZER: ${ANALYZER_DOCKER:-mock}
+      TELEGRAM_POLL: "1"        # the Docker server owns the bot; dev servers keep TELEGRAM_POLL=0 from .env
     volumes:
       - storage:/app/storage
     ports:
