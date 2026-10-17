@@ -4,80 +4,86 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ t("title") }} · {{ job.filename }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
 <style>
   @page { size: A4; margin: 14mm 14mm 16mm; }
-  :root { --ink:#1C1820; --muted:#6B6472; --line:#E4E0E8; --soft:#F7F6F8; --brand:#C8235F;
-          --warn:#9A4A00; --warn-bg:#FFF4E5; --ok:#166534; --ok-bg:#EAF7EF; --bad:#B42318; --bad-bg:#FDECEA; }
+  :root { --ink:#1D1D1D; --muted:#6C6C6C; --line:#EDEDED; --soft:#F7F6F6; --grey:#EDEDED; --brand:#A31551; --plum:#4A0221; --link:#185AC5;
+          --warn:#9A4A00; --warn-bg:#FEE9E4; --ok:#1B7F4C; --ok-bg:#E3F3EA; --bad:#B3261E; --bad-bg:#FBE7E4; --info-bg:#EEF5FD; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #EEECF0; color: var(--ink); font: 13px/1.5 "Golos Text", -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-  .sheet { max-width: 820px; margin: 24px auto; background: #fff; padding: 36px 40px 28px; border-radius: 4px; box-shadow: 0 2px 16px rgba(0,0,0,.08); }
-  .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  body { margin: 0; background: #F2F1F1; color: var(--ink); font: 13px/1.5 "Open Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  .sheet { max-width: 820px; margin: 24px auto; background: #fff; padding: 36px 40px 28px; border-radius: 16px; }
+  .num-font { font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted); }
-  h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
-  h2 { font-size: 14px; margin: 26px 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  h3 { font-size: 15px; margin: 0; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; color: var(--plum); }
+  h2 { font-size: 13px; margin: 26px 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  h3 { font-size: 15px; margin: 0; color: var(--plum); }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 14px; border-bottom: 3px solid var(--brand); }
-  .brand { font-weight: 700; color: var(--brand); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 4px; }
+  .brand { font-weight: 700; color: var(--brand); font-size: 18px; letter-spacing: -.02em; margin-bottom: 4px; }
   .head .right { text-align: right; font-size: 12px; }
-  .verdict { margin: 18px 0 0; padding: 14px 16px; border-radius: 8px; display: flex; gap: 14px; align-items: center; }
+  .verdict { margin: 18px 0 0; padding: 16px 20px; border-radius: 16px; display: flex; gap: 14px; align-items: center; }
   .verdict.violation { background: var(--warn-bg); }
   .verdict.no_violation { background: var(--ok-bg); }
   .verdict .big { font-size: 18px; font-weight: 700; }
-  .verdict.violation .big { color: var(--warn); }
+  .verdict.violation .big { color: var(--plum); }
   .verdict.no_violation .big { color: var(--ok); }
   .verdict .sub { color: var(--muted); font-size: 12.5px; }
-  .partial { margin-top: 10px; padding: 10px 14px; border-radius: 8px; background: var(--bad-bg); color: var(--bad); font-size: 12.5px; }
+  .partial { margin-top: 10px; padding: 10px 14px; border-radius: 12px; background: var(--bad-bg); color: var(--bad); font-size: 12.5px; }
   table { width: 100%; border-collapse: collapse; }
   .facts td { padding: 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
   .facts td:first-child { color: var(--muted); width: 34%; }
   .summary th, .summary td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  .summary th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--soft); }
-  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .summary th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--soft); font-weight: 700; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
   .pill.confirm { background: var(--bad-bg); color: var(--bad); }
-  .pill.reject { background: var(--soft); color: var(--muted); }
+  .pill.reject { background: var(--grey); color: var(--muted); }
   .pill.none { background: var(--warn-bg); color: var(--warn); }
-  .finding { border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 0 0 14px; page-break-inside: avoid; }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.info { background: var(--info-bg); color: var(--link); }
+  .finding { border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin: 0 0 14px; page-break-inside: avoid; }
   .finding .top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 12px; }
-  .finding .num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; margin-right: 8px; vertical-align: 1px; }
+  .finding .num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 12px; font-weight: 700; margin-right: 8px; vertical-align: 1px; }
   .grid { display: grid; grid-template-columns: 200px 1fr; gap: 16px; }
-  .shots img.key { width: 100%; border-radius: 6px; border: 1px solid var(--line); display: block; }
+  .shots img.key { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
   .shots .row { display: flex; gap: 6px; margin-top: 6px; }
-  .shots .row img { width: calc(50% - 3px); border-radius: 4px; border: 1px solid var(--line); }
+  .shots .row img { width: calc(50% - 3px); border-radius: 8px; border: 1px solid var(--line); }
   .shots .cap { font-size: 11px; color: var(--muted); margin-top: 3px; }
-  .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 4px; }
+  .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 4px; font-weight: 700; }
   .block + .block { margin-top: 12px; }
-  .rule { background: var(--soft); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; }
+  .rule { background: var(--soft); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
   .rule + .rule { margin-top: 6px; }
   .rule q { font-style: italic; }
-  .rule a { color: var(--brand); word-break: break-all; }
+  .rule a { color: var(--link); word-break: break-all; }
   .caveat { font-size: 12px; color: var(--warn); margin-top: 6px; }
+  .op { background: var(--info-bg); border-radius: 10px; padding: 10px 12px; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .sign { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 28px; }
   .sign div { border-top: 1px solid var(--ink); padding-top: 4px; font-size: 11.5px; color: var(--muted); }
   .foot { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
-  .bar { position: sticky; top: 0; z-index: 2; background: #1C1820; color: #fff; padding: 10px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; font-size: 13px; }
-  .bar button, .bar a { font: inherit; border: 0; border-radius: 6px; padding: 7px 14px; background: var(--brand); color: #fff; cursor: pointer; text-decoration: none; }
-  .bar a.ghost { background: transparent; color: #ddd; }
-  .bar .langs { display: flex; gap: 2px; margin-left: 8px; }
-  .bar .langs a { background: transparent; color: #bbb; padding: 7px 9px; font-size: 12px; font-weight: 600; }
-  .bar .langs a.on { background: rgba(255,255,255,.14); color: #fff; }
+  .bar { position: sticky; top: 0; z-index: 2; background: #fff; border-bottom: 1px solid var(--line); color: var(--ink); padding: 10px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; font-size: 13px; flex-wrap: wrap; }
+  .bar button, .bar a { font: inherit; font-weight: 600; border: 0; border-radius: 12px; padding: 9px 16px; background: var(--brand); color: #fff; cursor: pointer; text-decoration: none; }
+  .bar a.ghost { background: var(--grey); color: var(--ink); }
+  .bar .langs { display: flex; gap: 2px; margin-left: 8px; background: var(--grey); border-radius: 999px; padding: 3px; }
+  .bar .langs a { background: transparent; color: var(--muted); padding: 5px 10px; font-size: 12px; border-radius: 999px; }
+  .bar .langs a.on { background: #fff; color: var(--ink); }
   .note-ru { font-size: 11px; color: var(--muted); }
-  @media print { body { background: #fff; } .sheet { box-shadow: none; margin: 0; padding: 0; max-width: none; } .bar { display: none; } }
+  @media print { body { background: #fff; } .sheet { box-shadow: none; margin: 0; padding: 0; max-width: none; border-radius: 0; } .bar { display: none; } }
   @media (max-width: 640px) { .sheet { padding: 20px 16px; margin: 0; border-radius: 0; } .grid { grid-template-columns: 1fr; } .head { flex-direction: column; } .head .right { text-align: left; } .sign { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<div class="bar"><span>{{ t("bar") }}</span><button onclick="window.print()">{{ t("print") }}</button><a class="ghost" href="/?check={{ job.job_id }}">{{ t("back") }}</a>
+<div class="bar"><span>{{ t("bar") }}</span><button onclick="window.print()">{{ t("print") }}</button><a class="ghost" href="/checks/{{ job.job_id }}">{{ t("back") }}</a>
   <span class="langs">{% for l, label in (("ru", "РУС"), ("kk", "ҚАЗ"), ("en", "ENG")) %}<a href="?lang={{ l }}" class="{{ 'on' if l == lang else '' }}" lang="{{ l }}">{{ label }}</a>{% endfor %}</span></div>
 <div class="sheet">
   <div class="head">
     <div>
-      <div class="brand">CashGuard · ForteBank</div>
+      <div class="brand">{{ t("footer_brand") }}</div>
       <h1>{{ t("h1") }}</h1>
       <div class="muted">{{ job.filename }}</div>
     </div>
     <div class="right">
       <div>{{ t("generated") }}: {{ generated_at }}</div>
-      <div class="muted mono">{{ t("check_id") }} {{ job.job_id }}</div>
+      <div class="muted num-font">{{ t("check_id") }} {{ job.job_id }}</div>
     </div>
   </div>
 
@@ -94,24 +100,26 @@
   <h2>{{ t("recording") }}</h2>
   <table class="facts">
     <tr><td>{{ t("file") }}</td><td>{{ job.filename }}</td></tr>
-    <tr><td>{{ t("duration") }}</td><td class="mono">{{ (job.duration_sec or 0)|tc }}</td></tr>
-    <tr><td>{{ t("uploaded") }}</td><td>{{ uploaded_at }}</td></tr>
+    <tr><td>{{ t("duration") }}</td><td class="num-font">{{ (job.duration_sec or 0)|tc }}</td></tr>
+    <tr><td>{{ t("uploaded") }}</td><td>{{ uploaded_at }}{% if job.created_by %} · {{ names.get(job.created_by, job.created_by) }}{% endif %}</td></tr>
     <tr><td>{{ t("analysis") }}</td><td>{{ processing_sec }} {{ t("sec") }} · {{ job.analyzer }}</td></tr>
-    <tr><td>{{ t("sha") }}</td><td class="mono" style="font-size:11px;word-break:break-all">{{ job.sha256 }}</td></tr>
+    <tr><td>{{ t("sha") }}</td><td class="num-font" style="font-size:11px;word-break:break-all">{{ job.sha256 }}</td></tr>
   </table>
 
   {% if result.violations %}
   <h2>{{ t("summary") }}</h2>
   <table class="summary">
-    <thead><tr><th>#</th><th>{{ t("time") }}</th><th>{{ t("possible") }}</th><th>{{ t("decision") }}</th></tr></thead>
+    <thead><tr><th>#</th><th>{{ t("time") }}</th><th>{{ t("possible") }}</th><th>{{ t("decision") }}</th><th>{{ t("verification") }}</th></tr></thead>
     <tbody>
     {% for v in result.violations %}
       {% set d = decisions.get(loop.index0) %}
+      {% set f = findings.get(loop.index0) %}
       <tr>
         <td>{{ loop.index }}</td>
-        <td class="mono">{{ v.timecode_sec|tc }}</td>
+        <td class="num-font">{{ v.timecode_sec|tc }}</td>
         <td>{{ t.type_name(v) }}</td>
         <td>{% if d == 'confirm' %}<span class="pill confirm">{{ t("confirmed") }}</span>{% elif d in ('reject','wrong_type') %}<span class="pill reject">{{ t("rejected") }}</span>{% else %}<span class="pill none">{{ t("none") }}</span>{% endif %}</td>
+        <td>{% if f and f.verified %}<span class="pill {{ 'ok' if f.verify_result == 'agree' else 'confirm' }}">{{ t("v_agree") if f.verify_result == 'agree' else t("v_disagree") }}</span>{% else %}<span class="muted">{{ t("v_none") }}</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>
@@ -120,23 +128,33 @@
   <h2>{{ t("findings") }}</h2>
   {% for v in result.violations %}
     {% set d = decisions.get(loop.index0) %}
+    {% set f = findings.get(loop.index0) %}
     {% set frames = v.evidence_frames %}
-    {% set key = frames|sort(attribute='timestamp_sec')|list %}
     <div class="finding">
       <div class="top">
         <h3><span class="num">{{ loop.index }}</span>{{ t.type_name(v) }}</h3>
-        <span class="mono">{{ v.timecode_sec|tc }}</span>
+        <span class="num-font">{{ v.timecode_sec|tc }}</span>
       </div>
       <div class="grid">
         <div class="shots">
           {% set main = (frames|selectattr('timestamp_sec', 'equalto', v.timecode_sec)|list or [frames[(frames|length)//2]])[0] %}
           <img class="key" src="data:image/jpeg;base64,{{ main.image_base64 }}" alt="{{ t("frame_at") }} {{ main.timestamp_sec|tc }}">
-          <div class="cap mono">{{ main.timestamp_sec|tc }} · {{ main.image_base64|sha8 }}</div>
+          <div class="cap num-font">{{ main.timestamp_sec|tc }} · {{ main.image_base64|sha8 }}</div>
           {% set others = frames|rejectattr('timestamp_sec', 'equalto', main.timestamp_sec)|list %}
-          {% if others %}<div class="row">{% for f in others[:2] %}<img src="data:image/jpeg;base64,{{ f.image_base64 }}" alt="{{ t("frame_at") }} {{ f.timestamp_sec|tc }}">{% endfor %}</div>
-          <div class="cap mono">{% for f in others[:2] %}{{ f.timestamp_sec|tc }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+          {% if others %}<div class="row">{% for fr in others[:2] %}<img src="data:image/jpeg;base64,{{ fr.image_base64 }}" alt="{{ t("frame_at") }} {{ fr.timestamp_sec|tc }}">{% endfor %}</div>
+          <div class="cap num-font">{% for fr in others[:2] %}{{ fr.timestamp_sec|tc }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
         </div>
         <div>
+          {% if f and f.description_edit %}
+          <div class="block op">
+            <p class="label">{{ t("op_desc") }}</p>
+            <div>{{ f.description_edit }}</div>
+          </div>
+          <div class="block">
+            <p class="label">{{ t("ai_desc") }}</p>
+            <div lang="ru" class="muted">{{ v.description|shortdesc }}</div>
+          </div>
+          {% else %}
           {% set ds = t.description(v) %}
           {% if ds.why %}
           <div class="block">
@@ -152,6 +170,7 @@
             <p class="label">{{ t("seen") }}</p>
             <div lang="ru">{{ ds.full }}</div>
           </div>
+          {% endif %}
           {% endif %}
           {% if v.rule and v.rule.refs %}
           <div class="block">
@@ -171,6 +190,13 @@
             <p class="label">{{ t("decision") }}</p>
             {% if d == 'confirm' %}<span class="pill confirm">{{ t("confirmed_long") }}</span>{% elif d in ('reject','wrong_type') %}<span class="pill reject">{{ t("rejected") }}</span>{% else %}<span class="pill none">{{ t("none_long") }}</span>{% endif %}
             {% if v.confidence is defined and v.confidence is not none %}<span class="muted" style="margin-left:8px;font-size:12px">{{ t("confidence", p='%.0f'|format(v.confidence*100)) }}</span>{% endif %}
+            {% if f and f.decided_by %}<div class="meta">{{ t("decided_by") }}: {{ names.get(f.decided_by, f.decided_by) }}{% if f.decision_comment %} · {{ t("comment") }}: {{ f.decision_comment }}{% endif %}</div>{% endif %}
+          </div>
+          <div class="block">
+            <p class="label">{{ t("verification") }}</p>
+            {% if f and f.verified %}<span class="pill {{ 'ok' if f.verify_result == 'agree' else 'confirm' }}">{{ t("v_agree") if f.verify_result == 'agree' else t("v_disagree") }}</span>
+              <div class="meta">{{ t("verified_by") }}: {{ names.get(f.verified_by, f.verified_by) }}{% if f.verify_comment %} · {{ t("comment") }}: {{ f.verify_comment }}{% endif %}</div>
+            {% else %}<span class="muted">{{ t("v_none") }}</span>{% endif %}
           </div>
         </div>
       </div>

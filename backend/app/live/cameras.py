@@ -11,6 +11,7 @@ import logging
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -38,14 +39,17 @@ class CameraState:
     active: list[str] = field(default_factory=list)
     size: tuple[int, int] = (0, 0)
     ms: int = 0
+    buffer: deque = field(default_factory=lambda: deque(maxlen=600))   # (ts, jpeg) ring buffer for clips
 
 
 class CameraManager:
-    def __init__(self, db: Database, bus: EventBus, on_alert: Callable[[dict], None] | None = None,
-                 busy: Callable[[], bool] | None = None):
+    def __init__(self, db: Database, bus: EventBus, on_alert: Callable[[dict], Any] | None = None,
+                 busy: Callable[[], bool] | None = None,
+                 on_clip: Callable[[dict, dict, list, float], Any] | None = None):
         self.db = db
         self.bus = bus
         self.on_alert = on_alert or (lambda a: None)
+        self.on_clip = on_clip          # (alert, camera, [(ts, jpeg)...], alert_ts) -> finding
         self.busy = busy or (lambda: False)
         self._threads: dict[str, threading.Thread] = {}
         self._stops: dict[str, threading.Event] = {}
@@ -214,6 +218,7 @@ class CameraManager:
                 ms = int((time.time() - t0) * 1000)
                 jpeg = la.encode_jpeg(small)
                 st.last_jpeg, st.last_detections, st.active = jpeg, out["detections"], out["active"]
+                st.buffer.append((now, jpeg))
                 st.frames += 1
                 st.last_frame_at, st.ms, st.size = now, ms, (small.shape[1], small.shape[0])
                 win_n += 1
@@ -227,11 +232,14 @@ class CameraManager:
                     "ms": ms, "size": [small.shape[1], small.shape[0]]})
                 for a in out["alerts"]:
                     try:
-                        self.on_alert({"source": "camera", "camera_id": cam_id, "camera_name": cam["name"],
-                                       "type_code": a.get("code"), "type_name": a.get("type"), "message": a.get("message"),
-                                       "norm": a.get("norm"), "t_sec": None, "confidence": None,
-                                       "evidence_b64": base64.b64encode(la.encode_jpeg(la.draw(small, out["detections"]))).decode("ascii"),
-                                       "link": f"/?view=live&camera={cam_id}"})
+                        alert = self.on_alert({"source": "camera", "camera_id": cam_id, "camera_name": cam["name"],
+                                               "type_code": a.get("code"), "type_name": a.get("type"), "message": a.get("message"),
+                                               "norm": a.get("norm"), "t_sec": None, "confidence": a.get("confidence"),
+                                               "severity": a.get("severity") if a.get("severity") in ("info",) else None,
+                                               "evidence_b64": base64.b64encode(la.encode_jpeg(la.draw(small, out["detections"]))).decode("ascii"),
+                                               "link": f"/live?camera={cam_id}"})
+                        if alert and alert.get("new") and self.on_clip and alert.get("severity") != "info" and s.live_findings:
+                            self._schedule_clip(cam, st, alert, now)
                     except Exception:
                         log.exception("camera %s: alert dispatch failed", cam_id)
             cap.release()
@@ -246,6 +254,22 @@ class CameraManager:
             stop.wait(s.camera_reconnect_sec)
         st.status = "stopped"
         self._refresh_gauge()
+
+
+    def _schedule_clip(self, cam: dict, st: CameraState, alert: dict, alert_ts: float) -> None:
+        """Wait for the post-roll, then hand the frames around the alert to the findings service."""
+        s = get_settings()
+
+        def run() -> None:
+            time.sleep(s.camera_clip_post_sec)
+            lo, hi = alert_ts - s.camera_clip_pre_sec, alert_ts + s.camera_clip_post_sec + 0.5
+            frames = [(ts, jpg) for ts, jpg in list(st.buffer) if lo <= ts <= hi]
+            try:
+                self.on_clip(alert, cam, frames, alert_ts)  # type: ignore[misc]
+            except Exception:
+                log.exception("camera %s: finding/clip failed", cam["id"])
+
+        threading.Thread(target=run, name=f"clip-{cam['id']}-{alert.get('id')}", daemon=True).start()
 
 
 def _redact(url: str) -> str:

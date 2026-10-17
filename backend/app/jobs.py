@@ -24,11 +24,12 @@ NO_RESULT = {"verdict": "no_violation", "violations": []}
 
 class JobService:
     def __init__(self, db: Database, pool: WorkerPool, bus: EventBus,
-                 on_result: Callable[[dict, dict], None] | None = None):
+                 on_result: Callable[[dict, dict], None] | None = None, findings=None):
         self.db = db
         self.pool = pool
         self.bus = bus
         self.on_result = on_result            # (job_row, result) -> alerts / clips
+        self.findings = findings
         self._progress_ts: dict[str, float] = {}
         self._lock = threading.Lock()
         self.analyzer_version = get_settings().analyzer
@@ -48,6 +49,7 @@ class JobService:
             "source": source, "filename": up.filename, "sha256": up.sha256, "size_bytes": up.size,
             "duration_sec": round(up.duration_sec, 2), "upload_path": str(path), "analyzer": self.analyzer_version,
             "request_started_at": req_start, "created_at": now, "deadline_at": deadline, "updated_at": now,
+            "created_by": principal,
         }
         dup = self._find_duplicate(up.sha256) if s.dedup else None
         if dup is not None:
@@ -60,6 +62,8 @@ class JobService:
                 self.db.insert("jobs", row)
                 self.db.audit("job.dedup", principal, job_id, {"of": dup["job_id"], "source": source})
                 log.info("job %s: identical to %s (sha256 match) -> instant result", job_id, dup["job_id"])
+                if self.findings is not None:
+                    self.findings.from_job(row, result)
                 self.bus.publish(f"job:{job_id}", {"type": "done", "job_id": job_id})
                 return row
         self.db.insert("jobs", row)
@@ -77,10 +81,11 @@ class JobService:
     def get(self, job_id: str) -> dict | None:
         return self.db.one("SELECT * FROM jobs WHERE job_id=?", (job_id,))
 
-    def list(self, limit: int = 50) -> list[dict]:
+    def list(self, limit: int = 50, source: str | None = None) -> list[dict]:
+        where = "WHERE source=?" if source else ""
         rows = self.db.all("SELECT job_id, status, stage, progress, source, filename, duration_sec, verdict, "
-                           "n_violations, partial, error, created_at, finished_at, request_started_at FROM jobs "
-                           "ORDER BY created_at DESC LIMIT ?", (limit,))
+                           f"n_violations, partial, error, created_at, finished_at, request_started_at, created_by FROM jobs {where} "
+                           "ORDER BY created_at DESC LIMIT ?", ((source, limit) if source else (limit,)))
         for r in rows:
             r["public_status"] = PUBLIC_STATUS.get(r["status"], r["status"])
             if r["status"] in ("queued", "running"):
@@ -94,18 +99,12 @@ class JobService:
         return rows
 
     def decisions(self, job_id: str) -> dict[int, str]:
-        """Latest reviewer decision per violation index ('clear' removes it)."""
-        out: dict[int, str] = {}
-        for f in self.db.all("SELECT violation_index, decision FROM feedback WHERE job_id=? AND violation_index IS NOT NULL "
-                             "ORDER BY id", (job_id,)):
-            if f["decision"] == "clear":
-                out.pop(int(f["violation_index"]), None)
-            else:
-                out[int(f["violation_index"])] = f["decision"]
-        return out
+        """Operator decision per violation index (from the findings table)."""
+        return {int(r["violation_index"]): r["decision"] for r in self.db.all(
+            "SELECT violation_index, decision FROM findings WHERE job_id=? AND decision IS NOT NULL", (job_id,))}
 
     def delete(self, job_id: str, actor: str | None = None) -> bool:
-        """Cancel (if active) and remove a job with its video, result, clips, alerts and events. Feedback stays."""
+        """Cancel (if active) and remove a job with its video, result, clips, findings, alerts and events."""
         job = self.get(job_id)
         if job is None:
             return False
@@ -118,6 +117,8 @@ class JobService:
         import shutil
         shutil.rmtree(s.evidence_dir / job_id, ignore_errors=True)
         alert_ids = [r["id"] for r in self.db.all("SELECT id FROM alerts WHERE job_id=?", (job_id,))]
+        if self.findings is not None:
+            self.findings.delete_for_job(job_id)
         with self.db.tx() as t:
             for aid in alert_ids:
                 t.execute("DELETE FROM alert_deliveries WHERE alert_id=?", (aid,))
@@ -184,6 +185,8 @@ class JobService:
         out["filename"] = job.get("filename")
         out["duration_sec"] = job.get("duration_sec")
         out["created_at"] = job.get("created_at")
+        out["created_by"] = job.get("created_by")
+        out["source"] = job.get("source")
         out["analyzer"] = job.get("analyzer")
         return out
 

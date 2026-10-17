@@ -37,7 +37,7 @@ pytest -q                                                    # 33 теста з�
 | Печатный акт проверки + фрагменты 10 с (ffmpeg) | `reports.py`, `templates/report.html` |
 | Роли и ключи (`ui`/`jury`/`admin`), admin API, журнал аудита | `auth.py`, `routers/admin.py` |
 | `/health`, `/ready`, `/metrics` (Prometheus), `/version`, request-id в логах, ротация `storage/server.log` | `routers/system.py`, `logging_setup.py` |
-| Удаление видео и фрагментов через `VIDEO_TTL_SEC` | `storage.Retention` |
+| Хранение видео: жюри — `JURY_VIDEO_TTL_SEC`, операторы и камеры — `VIDEO_RETENTION_DAYS` | `storage.Retention` |
 | Нагрузочные инструменты: параллельные загрузки, шторм live-сессий, симуляция камер | `tools/loadtest.py`, `tools/simulate_cameras.py` |
 | Docker + compose (профили `gpu`, `vlm`, `public`, `weights`), сеть без интернета для анализа | `deploy/` |
 

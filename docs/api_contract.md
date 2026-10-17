@@ -76,31 +76,57 @@ curl https://<адрес>/api/v1/jobs/<job_id> -H "X-API-Key: <ключ>"
 
 ## API для веб-интерфейса `/ui/api/*`
 
-Без ключа (если `UI_REQUIRE_KEY=0`), формат ответов тот же. Ключ можно передать заголовком или `?key=`.
+Вход по сессии (cookie `cg_session`) под одной из ролей — **operator < supervisor < admin**. Ключ `ADMIN_KEY`
+(заголовок `X-API-Key`) работает как admin для скриптов и тестов. `AUTH_REQUIRED=0` открывает UI без входа
+(только для разработки). Первые пользователи создаются из `SEED_USERS` в `.env`.
 
-### Задачи
+### Вход и пользователи
 
 | Метод | Путь | Что делает |
 | --- | --- | --- |
-| POST | `/ui/api/analyze` | загрузка, как `/api/v1/analyze` (приоритет ниже, чем у жюри) |
-| GET | `/ui/api/jobs` | последние задачи (`?limit=50`) |
-| GET | `/ui/api/jobs/{id}` | статус и результат + `queue_position`, `eta_sec`, `clips` (индексы нарушений, у которых есть фрагмент) |
-| GET | `/ui/api/jobs/{id}/events` | **SSE**: `snapshot` → `progress`… → `done` / `failed`; соединение закрывается после финального события |
-| GET | `/ui/api/jobs/{id}/report.html?lang=ru\|kk\|en` | печатный отчёт (вердикт, решения проверяющего, кадры, нормы, хэши); без `lang` — по Accept-Language, по умолчанию ru |
-| GET | `/ui/api/jobs/{id}/violations/{i}/clip.mp4` | фрагмент 10 с вокруг нарушения (пока видео не удалено по TTL) |
-| POST | `/ui/api/jobs/{id}/feedback` | `{"violation_index": 0, "decision": "confirm" \| "reject" \| "wrong_type", "comment": "...", "correct_type": "T05"}` |
-| GET | `/ui/api/feedback.csv` | выгрузка обратной связи |
-| GET | `/ui/api/info` | типы нарушений, источники, состояние воркеров, включённые функции |
-| GET | `/ui/api/rules` | реестр правил с цитатами и ссылками |
-| GET | `/ui/api/stats` | счётчики задач, алертов, воркеров, камер |
+| POST | `/ui/api/auth/login` | `{"login", "password"}` → cookie сессии + `{"user": {name, login, role, camera_ids}}` |
+| POST | `/ui/api/auth/logout` | закрыть сессию |
+| GET | `/ui/api/auth/me` | текущий пользователь, анализатор, версия, включённые функции |
+| GET | `/ui/api/users` | **admin** · список пользователей |
+| POST | `/ui/api/users` | **admin** · `{"login", "password", "role", "name", "camera_ids": null \| ["cam1"]}` (`null` = все камеры) |
+| PATCH | `/ui/api/users/{id}` | **admin** · `name, role, active, password, camera_ids, all_cameras` |
 
-SSE пример:
+Операторы видят только назначенные им камеры (`camera_ids`), супервайзеры и админы — все.
 
-```js
-const es = new EventSource(`/ui/api/jobs/${id}/events`);
-es.addEventListener('progress', e => { const {stage, progress} = JSON.parse(e.data); });
-es.addEventListener('done', () => { es.close(); fetch(`/ui/api/jobs/${id}`)... });
-```
+### Задачи (загруженные видео)
+
+| Метод | Путь | Что делает |
+| --- | --- | --- |
+| POST | `/ui/api/analyze` | загрузка, как `/api/v1/analyze` (приоритет ниже, чем у жюри); видео хранится `VIDEO_RETENTION_DAYS` (0 = всегда) |
+| GET | `/ui/api/jobs` | последние задачи (`?limit=50&source=ui`) с `created_by`, `reviewed/confirmed/rejected` |
+| GET | `/ui/api/jobs/{id}` | статус и результат + `queue_position`, `eta_sec`, `clips`, `findings[]` (находки с решениями), `video_available` |
+| DELETE | `/ui/api/jobs/{id}` | отменить (если идёт анализ) или удалить задачу с видео, результатом, находками и алертами |
+| GET | `/ui/api/jobs/{id}/events` | **SSE**: `snapshot` → `progress`… → `done` / `failed`; после завершения — `finding_update` |
+| GET | `/ui/api/jobs/{id}/video` | загруженное видео (206 Range) |
+| GET | `/ui/api/jobs/{id}/report.html?lang=ru\|kk\|en` | печатный отчёт: вердикт, кадры, нормы, формулировка оператора, решение, проверка супервайзера |
+| GET | `/ui/api/jobs/{id}/violations/{i}/clip.mp4` | фрагмент 10 с вокруг нарушения |
+| GET | `/ui/api/info`, `/ui/api/rules`, `/ui/api/stats`, `/ui/api/i18n/kb` | типы нарушений и нормы, статистика, переводы типов и норм (en/kk) |
+
+### Находки (findings) — единый объект для проверки
+
+Находка создаётся на каждое нарушение из загруженного видео (`source=upload`, `job_id` + `violation_index`)
+и на каждую тревогу с камеры (`source=camera`, `camera_id`, `alert_id`, кадры и клип ±8/4 с вокруг момента).
+Сценарий: ИИ описал → оператор может уточнить формулировку и решает `confirm` / `reject` → супервайзер
+проверяет решение (`agree` / `disagree`). Все шаги в `history`.
+
+| Метод | Путь | Что делает |
+| --- | --- | --- |
+| GET | `/ui/api/findings?source=&decision=pending\|confirm\|reject\|decided&verified=true\|false&type_code=&camera_id=&decided_by=&edited=&since=&until=&q=&limit=&offset=` | список + `total` + `counts{pending, confirmed, rejected, to_verify, rejected_unverified, verified, disagreed, edited}` |
+| GET | `/ui/api/findings/stream` | **SSE**: `finding`, `finding_update`, `finding_deleted` |
+| GET | `/ui/api/findings/{id}` | находка целиком: `description_ai`, `description_edit`, `rule`, `frames[]` (base64), `video_url` / `clip_url` / `sequence[]` (кадры камеры), `history[]`, `siblings[]`, `alert` |
+| PATCH | `/ui/api/findings/{id}/description` | **operator** · `{"text": "..."}` — формулировка оператора (пустая или равная тексту ИИ = сброс) |
+| POST | `/ui/api/findings/{id}/decision` | **operator** · `{"decision": "confirm" \| "reject" \| null, "comment": ""}`; `null` отменяет решение; смена решения снимает проверку |
+| POST | `/ui/api/findings/{id}/verify` | **supervisor** · `{"result": "agree" \| "disagree" \| null, "comment": ""}` |
+| GET | `/ui/api/findings/{id}/frames/{n}.jpg`, `/clip.mp4` | кадры и фрагмент находки с камеры |
+| GET | `/ui/api/findings.csv` | **supervisor** · выгрузка всех находок с решениями (для дообучения и отчётности) |
+| DELETE | `/ui/api/findings/{id}` | **admin** |
+
+Решение оператора синхронно закрывает алерт (`resolved` / `false_positive`), отмена — открывает заново.
 
 ### Алерты
 
@@ -111,9 +137,9 @@ es.addEventListener('done', () => { es.close(); fetch(`/ui/api/jobs/${id}`)... }
 | GET | `/ui/api/alerts?state=open&camera_id=&limit=100` | список с доставками по каналам |
 | GET | `/ui/api/alerts/summary` | открытые, по серьёзности, по состоянию, среднее время реакции (MTTA) |
 | GET | `/ui/api/alerts/stream` | **SSE**: `alert`, `alert_update`, `alert_escalated` (сначала 20 последних) |
-| POST | `/ui/api/alerts/{id}/ack` | `{"decision": "acknowledged" \| "resolved" \| "false_positive", "comment": ""}`; `false_positive` попадает в feedback |
+| POST | `/ui/api/alerts/{id}/ack` | `{"decision": "acknowledged" \| "resolved" \| "false_positive", "comment": ""}` |
 
-Объект алерта: `id, severity (critical|high|medium|low|info), state, type_code, type_name, message, camera_id, job_id, count, escalation_level, escalate_at, acked_by, acked_at, payload{t_sec, filename, norm, link,…}, deliveries[{channel, target, status}]`.
+Объект алерта: `id, severity (critical|high|medium|low|info), state, type_code, type_name, message, camera_id, job_id, finding_id, count, escalation_level, escalate_at, acked_by, acked_at, payload{t_sec, filename, norm, link,…}, deliveries[{channel, target, status}]`.
 
 Каналы: `web` (SSE, всегда), `telegram` (бот с кнопками «Принял / Ложное»), `webhook` (JSON с `X-Signature: sha256=HMAC`), `email` (SMTP). Включаются переменными окружения.
 

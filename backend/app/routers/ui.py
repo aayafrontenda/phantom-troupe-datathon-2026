@@ -1,8 +1,7 @@
 """Web UI API (same payloads as the jury API plus progress streams, reports, alerts, cameras)."""
 from __future__ import annotations
 
-import csv
-import io
+import json
 import time
 from pathlib import Path
 
@@ -11,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingRes
 from pydantic import BaseModel, Field
 
 from .. import metrics
-from ..auth import Principal, rate_limit_subject, require_role, ui_access
+from ..auth import Principal, rate_limit_subject, require_user, ui_access, ws_principal
 from ..live import browser_session, camera_stream
 from ..i18n import pick_lang
 from ..reports import clip_path, render_report
@@ -54,8 +53,9 @@ async def ui_analyze(request: Request, file: UploadFile = File(...), p: Principa
 
 
 @router.get("/jobs")
-def ui_jobs(request: Request, limit: int = Query(50, ge=1, le=500), p: Principal = Depends(ui_access)):
-    return {"jobs": _st(request).jobs.list(limit)}
+def ui_jobs(request: Request, limit: int = Query(50, ge=1, le=500), source: str | None = None,
+            p: Principal = Depends(ui_access)):
+    return {"jobs": _st(request).jobs.list(limit, source=source)}
 
 
 @router.get("/jobs/{job_id}")
@@ -66,12 +66,13 @@ def ui_job(job_id: str, request: Request, p: Principal = Depends(ui_access)):
     owner = _clip_owner(job)
     view["clips"] = [i for i in range(len(view.get("violations") or [])) if clip_path(owner, i).exists()]
     view["decisions"] = {str(k): v for k, v in st.jobs.decisions(job_id).items()}
+    view["findings"] = st.findings.for_job(job_id)
     view["video_available"] = bool(job.get("upload_path") and Path(job["upload_path"]).exists())
     return view
 
 
 @router.delete("/jobs/{job_id}")
-def ui_job_delete(job_id: str, request: Request, p: Principal = Depends(ui_access)):
+def ui_job_delete(job_id: str, request: Request, p: Principal = Depends(require_user("operator"))):
     """Cancel a queued/running check or remove a finished one (video, result, clips, alerts)."""
     if not _st(request).jobs.delete(job_id, actor=p.name):
         raise HTTPException(status_code=404, detail="Задача не найдена")
@@ -90,70 +91,18 @@ async def ui_job_events(job_id: str, request: Request, p: Principal = Depends(ui
     return sse_response(st.bus, f"job:{job_id}", initial, until=lambda e: e.get("type") in ("done", "failed"))
 
 
-class Feedback(BaseModel):
-    violation_index: int | None = None
-    decision: str = Field(pattern="^(confirm|reject|wrong_type|clear)$")
-    comment: str = ""
-    correct_type: str | None = None
-
-
-@router.post("/jobs/{job_id}/feedback")
-def ui_feedback(job_id: str, body: Feedback, request: Request, p: Principal = Depends(ui_access)):
-    st = _st(request)
-    job = _job_or_404(st, job_id)
-    result = st.jobs.load_result(job_id) or {}
-    viols = result.get("violations") or []
-    rec = {"job_id": job_id, "violation_index": body.violation_index, "decision": body.decision,
-           "comment": (body.comment or "")[:1000] + (f" [correct_type={body.correct_type}]" if body.correct_type else ""),
-           "filename": job.get("filename"), "created_at": time.time()}
-    if body.violation_index is not None and 0 <= body.violation_index < len(viols):
-        v = viols[body.violation_index]
-        rec.update(type_code=v.get("type_code"), timecode_sec=v.get("timecode_sec"))
-    fid = st.db.insert("feedback", rec)
-    st.db.audit("feedback", p.name, job_id, {"id": fid, "decision": body.decision})
-    if rec.get("type_code") is not None or body.violation_index is not None:
-        try:
-            st.alerts.sync_review(job_id, rec.get("type_code"), rec.get("timecode_sec"), body.decision, p.name)
-        except Exception:
-            import logging
-            logging.getLogger("backend.ui").exception("alert sync failed for job %s", job_id)
-    return {"ok": True, "id": fid}
-
-
-@router.get("/jobs/{job_id}/feedback")
-def ui_job_feedback(job_id: str, request: Request, p: Principal = Depends(ui_access)):
-    st = _st(request)
-    _job_or_404(st, job_id)
-    rows = st.db.all("SELECT id, violation_index, decision, comment, created_at FROM feedback WHERE job_id=? ORDER BY id",
-                     (job_id,))
-    return {"feedback": rows}
-
-
 @router.get("/jobs/{job_id}/video")
 def ui_job_video(job_id: str, request: Request, p: Principal = Depends(ui_access)):
-    """The uploaded recording, while it still exists (deleted VIDEO_TTL_SEC after the job finishes)."""
+    """The uploaded recording (operator uploads are kept VIDEO_RETENTION_DAYS; jury uploads JURY_VIDEO_TTL_SEC)."""
     st = _st(request)
     job = _job_or_404(st, job_id)
     path = job.get("upload_path")
     if not path or not Path(path).exists():
-        raise HTTPException(status_code=404, detail="Видео уже удалено по TTL")
+        raise HTTPException(status_code=404, detail="Видео уже удалено по сроку хранения")
     ext = Path(path).suffix.lower()
     media = "video/quicktime" if ext == ".mov" else "video/mp4"
     return FileResponse(path, media_type=media, filename=job.get("filename") or f"{job_id}{ext}",
                         content_disposition_type="inline")
-
-
-@router.get("/feedback.csv")
-def ui_feedback_csv(request: Request, p: Principal = Depends(ui_access)):
-    rows = _st(request).db.all("SELECT * FROM feedback ORDER BY id")
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(["id", "created_at", "job_id", "filename", "violation_index", "type_code", "timecode_sec", "decision", "comment"])
-    for r in rows:
-        w.writerow([r["id"], r["created_at"], r["job_id"], r["filename"], r["violation_index"], r["type_code"],
-                    r["timecode_sec"], r["decision"], r["comment"]])
-    return Response(buf.getvalue(), media_type="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=feedback.csv"})
 
 
 # ----------------------------------------------------------------------------- reports & clips
@@ -170,7 +119,8 @@ def ui_report(job_id: str, request: Request, lang: str | None = None, p: Princip
     clips = {i: f"/ui/api/jobs/{job_id}/violations/{i}/clip.mp4"
              for i in range(len(result.get("violations") or [])) if clip_path(owner, i).exists()}
     lang = pick_lang(lang, request.headers.get("accept-language"))
-    return HTMLResponse(render_report(job, result, clips, decisions, lang))
+    names = {u["login"]: u["name"] for u in st.users.list()}
+    return HTMLResponse(render_report(job, result, clips, decisions, lang, findings=st.findings.for_job(job_id), names=names))
 
 
 @router.get("/jobs/{job_id}/violations/{index}/clip.mp4")
@@ -203,6 +153,14 @@ def ui_info(request: Request, p: Principal = Depends(ui_access)):
     }
 
 
+@router.get("/i18n/kb")
+def ui_i18n_kb(request: Request):
+    """English / Kazakh texts for violation types and regulations (ml/rules_kb.yaml is Russian)."""
+    from ..i18n import kb as kb_i18n
+    return Response(json.dumps(kb_i18n(), ensure_ascii=False), media_type="application/json",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
 @router.get("/rules")
 def ui_rules(request: Request, p: Principal = Depends(ui_access)):
     from ml import kb
@@ -231,7 +189,7 @@ class Ack(BaseModel):
 @router.get("/alerts")
 def ui_alerts(request: Request, state: str | None = None, camera_id: str | None = None,
               limit: int = Query(100, ge=1, le=1000), p: Principal = Depends(ui_access)):
-    return {"alerts": _st(request).alerts.list(state=state, limit=limit, camera_id=camera_id)}
+    return {"alerts": _st(request).alerts.list(state=state, limit=limit, camera_id=camera_id, camera_ids=p.camera_ids)}
 
 
 @router.get("/alerts/summary")
@@ -265,6 +223,9 @@ def ui_alert_ack(alert_id: int, body: Ack, request: Request, p: Principal = Depe
 @router.websocket("/live")
 async def ui_live(ws: WebSocket):
     st = ws.app.state.st
+    if ws_principal(ws) is None:
+        await ws.close(code=4401)
+        return
     await browser_session(ws, on_alert=st._on_live_alert, busy=st.pool.busy)
 
 
@@ -289,11 +250,12 @@ class CameraPatch(BaseModel):
 
 @router.get("/cameras")
 def ui_cameras(request: Request, p: Principal = Depends(ui_access)):
-    return {"cameras": _st(request).cameras.list()}
+    cams = [c for c in _st(request).cameras.list() if p.can_see_camera(c["id"])]
+    return {"cameras": cams}
 
 
 @router.post("/cameras", status_code=201)
-def ui_camera_add(body: CameraIn, request: Request, p: Principal = Depends(require_role("admin"))):
+def ui_camera_add(body: CameraIn, request: Request, p: Principal = Depends(require_user("admin"))):
     st = _st(request)
     if body.id and st.cameras.get(body.id):
         raise HTTPException(status_code=409, detail="Камера с таким id уже есть")
@@ -309,7 +271,7 @@ def ui_camera(cam_id: str, request: Request, p: Principal = Depends(ui_access)):
 
 
 @router.patch("/cameras/{cam_id}")
-def ui_camera_patch(cam_id: str, body: CameraPatch, request: Request, p: Principal = Depends(require_role("admin"))):
+def ui_camera_patch(cam_id: str, body: CameraPatch, request: Request, p: Principal = Depends(require_user("admin"))):
     st = _st(request)
     if st.cameras.get(cam_id) is None:
         raise HTTPException(status_code=404, detail="Камера не найдена")
@@ -317,7 +279,7 @@ def ui_camera_patch(cam_id: str, body: CameraPatch, request: Request, p: Princip
 
 
 @router.delete("/cameras/{cam_id}")
-def ui_camera_delete(cam_id: str, request: Request, p: Principal = Depends(require_role("admin"))):
+def ui_camera_delete(cam_id: str, request: Request, p: Principal = Depends(require_user("admin"))):
     if not _st(request).cameras.remove(cam_id):
         raise HTTPException(status_code=404, detail="Камера не найдена")
     return {"ok": True}
@@ -334,6 +296,10 @@ def ui_camera_snapshot(cam_id: str, request: Request, annotated: bool = True, p:
 @router.websocket("/cameras/{cam_id}/ws")
 async def ui_camera_ws(ws: WebSocket, cam_id: str):
     st = ws.app.state.st
+    p = ws_principal(ws)
+    if p is None or not p.can_see_camera(cam_id):
+        await ws.close(code=4401)
+        return
     if st.cameras.get(cam_id) is None:
         await ws.close(code=4404)
         return

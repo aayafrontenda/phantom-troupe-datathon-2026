@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 files=(-f docker-compose.yml); profiles=(); action=up
 for a in "$@"; do
   case "$a" in
-    --gpu) files+=(-f docker-compose.gpu.yml) ;;
+    --gpu) files+=(-f docker-compose.gpu.yml); grep -qE '^VLM_URL_DOCKER=\S+' .env 2>/dev/null || profiles+=(--profile ollama) ;;
     --tunnel) if grep -qE '^CLOUDFLARE_TUNNEL_TOKEN=\S+' .env 2>/dev/null; then profiles+=(--profile tunnel-named); else profiles+=(--profile tunnel); fi ;;
     --named) profiles+=(--profile tunnel-named) ;;
     --logs) action=logs ;;
@@ -21,7 +21,7 @@ docker info >/dev/null 2>&1 || { echo "Docker is not running. Start Docker Deskt
 [ -f .env ] || { cp .env.example .env; echo "Created .env from .env.example"; }
 
 case "$action" in
-  down) exec docker compose "${files[@]}" --profile tunnel --profile tunnel-named down ;;
+  down) exec docker compose "${files[@]}" --profile ollama --profile tunnel --profile tunnel-named down ;;
   logs) exec docker compose "${files[@]}" ${profiles[@]+"${profiles[@]}"} logs -f --tail 200 ;;
 esac
 

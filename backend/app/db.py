@@ -137,6 +137,77 @@ MIGRATIONS: list[str] = [
         detail   TEXT
     );
     """,
+    # 2 — users, sessions, findings (review workflow), job ownership
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        login         TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL,
+        role          TEXT NOT NULL,                 -- operator | supervisor | admin
+        password_hash TEXT NOT NULL,
+        active        INTEGER NOT NULL DEFAULT 1,
+        camera_ids    TEXT,                          -- JSON list; NULL = all cameras
+        created_at    REAL NOT NULL,
+        last_login_at REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+        token_hash  TEXT PRIMARY KEY,
+        user_id     INTEGER NOT NULL,
+        created_at  REAL NOT NULL,
+        expires_at  REAL NOT NULL,
+        ip          TEXT,
+        user_agent  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS ix_sessions_user ON sessions(user_id);
+
+    CREATE TABLE IF NOT EXISTS findings (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        source           TEXT NOT NULL,              -- upload | camera
+        job_id           TEXT,
+        violation_index  INTEGER,
+        camera_id        TEXT,
+        camera_name      TEXT,
+        alert_id         INTEGER,
+        type_code        TEXT,
+        type_name        TEXT,
+        t_sec            REAL,                       -- position inside the video / clip
+        confidence       REAL,
+        description_ai   TEXT,
+        description_edit TEXT,                       -- operator's wording, NULL = unchanged
+        rule             TEXT,                       -- JSON {kind, refs, caveat}
+        frames_dir       TEXT,                       -- camera findings: JPEG frames on disk
+        clip_path        TEXT,
+        decision         TEXT,                       -- NULL | confirm | reject
+        decided_by       TEXT,
+        decided_at       REAL,
+        decision_comment TEXT,
+        verified         INTEGER NOT NULL DEFAULT 0,
+        verify_result    TEXT,                       -- agree | disagree
+        verified_by      TEXT,
+        verified_at      REAL,
+        verify_comment   TEXT,
+        created_at       REAL NOT NULL,
+        updated_at       REAL NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ix_findings_job ON findings(job_id);
+    CREATE INDEX IF NOT EXISTS ix_findings_camera ON findings(camera_id);
+    CREATE INDEX IF NOT EXISTS ix_findings_created ON findings(created_at);
+    CREATE INDEX IF NOT EXISTS ix_findings_decision ON findings(decision, verified);
+
+    CREATE TABLE IF NOT EXISTS finding_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        finding_id  INTEGER NOT NULL,
+        actor       TEXT,
+        actor_role  TEXT,
+        action      TEXT NOT NULL,                   -- edit | decide | undo | verify | unverify
+        payload     TEXT,
+        created_at  REAL NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ix_fh_finding ON finding_history(finding_id);
+
+    ALTER TABLE jobs ADD COLUMN created_by TEXT;
+    """,
 ]
 
 

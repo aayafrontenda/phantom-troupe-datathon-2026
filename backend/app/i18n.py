@@ -1,5 +1,5 @@
-"""Translations for server-rendered pages (the printable report). UI strings live in backend/static/i18n.js;
-violation types and regulations in backend/static/i18n-kb.json (shared with the UI)."""
+"""Translations for server-rendered pages (the printable report). UI strings live in frontend/src/i18n/strings.ts;
+violation types and regulations in backend/i18n-kb.json (shared with the UI via /ui/api/i18n/kb)."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 
 LANGS = ("ru", "kk", "en")
 DEFAULT_LANG = "ru"
-KB_FILE = Path(__file__).resolve().parents[1] / "static" / "i18n-kb.json"
+KB_FILE = Path(__file__).resolve().parents[1] / "i18n-kb.json"
 
 REPORT = {
     "en": {
@@ -29,6 +29,9 @@ REPORT = {
         "foot": "This report is a hint for human review, not a final legal or disciplinary conclusion. The analysis covers only what is "
                 "visible on the video; transaction records, reconciliations, amounts and identities are not established from video. "
                 "All models run locally on the service; the video was not sent to external services.",
+        "op_desc": "Operator’s wording", "ai_desc": "AI description", "decided_by": "Decided by", "comment": "Comment",
+        "verification": "Supervisor verification", "v_agree": "Verified — agrees with the operator", "v_disagree": "Verified — disagrees with the operator",
+        "v_none": "Not verified", "verified_by": "Verified by", "source_camera": "Camera", "footer_brand": "ForteBank · CashGuard",
         "hash": "Result hash {h} · service {v}.",
     },
     "ru": {
@@ -48,6 +51,9 @@ REPORT = {
         "foot": "Отчёт — подсказка для проверяющего, а не окончательное юридическое или дисциплинарное заключение. Анализ охватывает "
                 "только то, что видно на видео; проводки, сверки, суммы и личности по видео не устанавливаются. "
                 "Все модели работают локально на сервисе; видео не передавалось во внешние сервисы.",
+        "op_desc": "Формулировка оператора", "ai_desc": "Описание ИИ", "decided_by": "Решение принял", "comment": "Комментарий",
+        "verification": "Проверка супервайзера", "v_agree": "Проверено — согласен с оператором", "v_disagree": "Проверено — не согласен с оператором",
+        "v_none": "Не проверено", "verified_by": "Проверил", "source_camera": "Камера", "footer_brand": "ForteBank · CashGuard",
         "hash": "Хэш результата {h} · сервис {v}.",
     },
     "kk": {
@@ -67,6 +73,9 @@ REPORT = {
         "foot": "Бұл есеп — тексерушіге арналған көмекші құрал, түпкілікті заңдық немесе тәртіптік қорытынды емес. Талдау тек бейнеде "
                 "көрінетін нәрсені қамтиды; өткізбелер, салыстырулар, сомалар мен тұлғалар бейне арқылы анықталмайды. "
                 "Барлық модельдер сервисте жергілікті жұмыс істейді; бейне сыртқы сервистерге жіберілмеді.",
+        "op_desc": "Оператордың тұжырымы", "ai_desc": "ЖИ сипаттамасы", "decided_by": "Шешім қабылдаған", "comment": "Пікір",
+        "verification": "Супервайзер тексеруі", "v_agree": "Тексерілді — оператормен келіседі", "v_disagree": "Тексерілді — оператормен келіспейді",
+        "v_none": "Тексерілмеген", "verified_by": "Тексерген", "source_camera": "Камера", "footer_brand": "ForteBank · CashGuard",
         "hash": "Нәтиже хэші {h} · сервис {v}.",
     },
 }

@@ -25,7 +25,9 @@ BASE_ENV = {
     "ANALYZER": "mock", "MOCK_DELAY": "0.2", "API_KEY": "test-key", "ADMIN_KEY": "admin-key",
     "WORKER_MODE": "thread", "WORKERS": "1", "WARMUP": "0", "JOB_HARD_LIMIT_SEC": "60",
     "WATCHDOG_GRACE_SEC": "1", "WORKER_STALL_SEC": "30", "RATE_LIMIT_PER_MIN": "1000", "MAKE_CLIPS": "0",
-    "LOG_LEVEL": "WARNING", "VIDEO_TTL_SEC": "3600", "UI_REQUIRE_KEY": "0",
+    "LOG_LEVEL": "WARNING", "JURY_VIDEO_TTL_SEC": "3600", "AUTH_REQUIRED": "0", "LIVE_FINDINGS": "1",
+    "CAMERA_CLIP_PRE_SEC": "2", "CAMERA_CLIP_POST_SEC": "0.5",
+    "SEED_USERS": "admin:admin123:admin:Admin;operator:op123:operator:Operator One;supervisor:sv123:supervisor:Super Visor",
 }
 
 
@@ -105,3 +107,9 @@ def wait_ready(client, timeout: float = 30) -> None:
             return
         time.sleep(0.1)
     raise AssertionError("service never became ready")
+
+
+def login(client, login: str, password: str):
+    r = client.post("/ui/api/auth/login", json={"login": login, "password": password})
+    assert r.status_code == 200, r.text
+    return r.json()["user"]

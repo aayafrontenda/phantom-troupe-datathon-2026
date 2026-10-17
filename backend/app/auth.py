@@ -1,7 +1,7 @@
-"""API keys, roles and a small token-bucket rate limiter.
+"""Who is calling: API keys (jury / admin / scripts) and user sessions (operator / supervisor / admin).
 
-Roles: admin > jury > ui. The jury key comes from API_KEY (or storage/api_key.txt); extra keys can be
-issued through /admin/api/keys and are stored hashed.
+Key roles: ui < jury < admin (X-API-Key). User roles: operator < supervisor < admin (cookie session).
+An admin key behaves like an admin user on the UI API, so scripts and tests can use it everywhere.
 """
 from __future__ import annotations
 
@@ -10,24 +10,48 @@ import hmac
 import secrets
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from fastapi import Header, HTTPException, Query, Request
+from fastapi import Depends, Header, HTTPException, Query, Request, WebSocket
 
 from .config import get_settings
 from .db import Database
+from .users import SESSION_COOKIE, USER_RANK
 
 ROLE_RANK = {"ui": 0, "jury": 1, "admin": 2}
 
 
 @dataclass
 class Principal:
-    role: str
+    role: str                    # ui | jury | admin | operator | supervisor
     name: str
     key_prefix: str = ""
+    user_id: int | None = None
+    camera_ids: list[str] | None = None
+    kind: str = "key"            # key | user | anon
+    display_name: str = ""
+    extra: dict = field(default_factory=dict)
 
     def allows(self, role: str) -> bool:
-        return ROLE_RANK.get(self.role, -1) >= ROLE_RANK[role]
+        """API-key role check (ui / jury / admin)."""
+        rank = ROLE_RANK.get(self.role)
+        if rank is None:  # user roles: only admins act as API admins
+            rank = 2 if self.role == "admin" else 0
+        return rank >= ROLE_RANK[role]
+
+    @property
+    def user_rank(self) -> int:
+        return USER_RANK.get(self.role, 0)
+
+    def allows_user(self, role: str) -> bool:
+        return self.user_rank >= USER_RANK[role]
+
+    def can_see_camera(self, cam_id: str) -> bool:
+        return self.camera_ids is None or cam_id in self.camera_ids
+
+    def public(self) -> dict:
+        return {"name": self.display_name or self.name, "login": self.name, "role": self.role,
+                "user_id": self.user_id, "camera_ids": self.camera_ids, "kind": self.kind}
 
 
 class KeyStore:
@@ -55,7 +79,7 @@ class KeyStore:
             return None
         for k, p in self._env_keys.items():
             if hmac.compare_digest(k, key):
-                return p
+                return Principal(p.role, p.name, p.key_prefix)
         row = self.db.one("SELECT * FROM api_keys WHERE key_hash=? AND disabled=0", (self._hash(key),))
         if row is None:
             return None
@@ -71,8 +95,7 @@ class KeyStore:
         return key, kid
 
     def list(self) -> list[dict]:
-        rows = self.db.all("SELECT id, prefix, role, name, disabled, created_at, last_used_at FROM api_keys ORDER BY id")
-        return rows
+        return self.db.all("SELECT id, prefix, role, name, disabled, created_at, last_used_at FROM api_keys ORDER BY id")
 
     def revoke(self, kid: int) -> bool:
         return self.db.update("api_keys", "id", kid, {"disabled": 1}) > 0
@@ -101,10 +124,11 @@ class RateLimiter:
             return True
 
 
-# ----------------------------------------------------------------------------- FastAPI deps
+# ----------------------------------------------------------------------------- resolution
 
-def _store(request: Request) -> KeyStore:
-    return request.app.state.st.keys
+def _user_principal(u: dict) -> Principal:
+    return Principal(u["role"], u["login"], user_id=u["id"], camera_ids=u.get("camera_ids"), kind="user",
+                     display_name=u["name"])
 
 
 def _extract(x_api_key: str | None, authorization: str | None, key_q: str | None) -> str | None:
@@ -115,12 +139,29 @@ def _extract(x_api_key: str | None, authorization: str | None, key_q: str | None
     return key_q
 
 
+def resolve_principal(st, cookies: dict, key: str | None, allow_open: bool = True) -> Principal | None:
+    """Session cookie first, then API key, then (UI only) the open-UI fallback for AUTH_REQUIRED=0."""
+    user = st.users.resolve(cookies.get(SESSION_COOKIE))
+    if user is not None:
+        return _user_principal(user)
+    p = st.keys.verify(key) if key else None
+    if p is not None:
+        if p.role == "admin":
+            p.display_name = p.display_name or "API admin"
+        return p
+    if allow_open and not get_settings().auth_required:
+        return Principal("admin", "dev", kind="anon", display_name="Developer")
+    return None
+
+
 def require_role(role: str):
+    """API-key gate (jury API, admin API)."""
     def dep(request: Request,
             x_api_key: str | None = Header(default=None, alias="X-API-Key"),
             authorization: str | None = Header(default=None),
             key: str | None = Query(default=None)) -> Principal:
-        p = _store(request).verify(_extract(x_api_key, authorization, key))
+        st = request.app.state.st
+        p = resolve_principal(st, request.cookies, _extract(x_api_key, authorization, key), allow_open=False)
         if p is None:
             raise HTTPException(status_code=401, detail="Неверный или отсутствующий X-API-Key")
         if not p.allows(role):
@@ -134,18 +175,34 @@ def ui_access(request: Request,
               x_api_key: str | None = Header(default=None, alias="X-API-Key"),
               authorization: str | None = Header(default=None),
               key: str | None = Query(default=None)) -> Principal:
-    """UI endpoints: open by default, any valid key when UI_REQUIRE_KEY=1."""
-    raw = _extract(x_api_key, authorization, key)
-    p = _store(request).verify(raw) if raw else None
-    if get_settings().ui_require_key and p is None:
-        raise HTTPException(status_code=401, detail="Нужен X-API-Key (UI_REQUIRE_KEY=1)")
-    p = p or Principal("ui", "anonymous")
+    """UI API: a signed-in user, an API key, or (AUTH_REQUIRED=0) anyone as admin."""
+    st = request.app.state.st
+    p = resolve_principal(st, request.cookies, _extract(x_api_key, authorization, key))
+    if p is None:
+        raise HTTPException(status_code=401, detail="Требуется вход", headers={"X-Auth": "login"})
     request.state.principal = p
     return p
 
 
+def require_user(role: str):
+    """UI API gate by user role: operator < supervisor < admin. Keys with the admin role pass as admin."""
+    def dep(request: Request, p: Principal = Depends(ui_access)) -> Principal:
+        if not p.allows_user(role):
+            raise HTTPException(status_code=403, detail="Недостаточно прав для этой операции")
+        return p
+    return dep
+
+
+def ws_principal(ws: WebSocket) -> Principal | None:
+    st = ws.app.state.st
+    key = ws.query_params.get("key") or ws.headers.get("x-api-key")
+    return resolve_principal(st, ws.cookies, key)
+
+
 def rate_limit_subject(request: Request) -> str:
     p = getattr(request.state, "principal", None)
+    if p is not None and p.kind == "user":
+        return f"user:{p.name}"
     if p is not None and p.key_prefix:
         return f"key:{p.name}:{p.key_prefix}"
     client = request.client.host if request.client else "unknown"

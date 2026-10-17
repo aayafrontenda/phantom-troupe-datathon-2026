@@ -57,15 +57,22 @@ class MLLiveSession(LiveSession):
 
 
 class MockLiveSession(LiveSession):
-    """No model: background subtraction -> 'motion' boxes, so the UI has something to draw on a laptop."""
+    """No model: background subtraction -> 'motion' boxes, so the UI has something to draw on a laptop.
+
+    Every motion episode raises one demo finding ([MOCK], rotating over a few violation types) so the
+    operator / supervisor workflow can be exercised without the model.
+    """
 
     ON, OFF = 3, 6
+    DEMO_CODES = ("T13", "T15", "T14", "T01")
 
     def __init__(self):
         self.bg = cv2.createBackgroundSubtractorMOG2(history=120, varThreshold=32, detectShadows=False)
         self.on = 0
         self.off = 0
         self.active = False
+        self.episodes = 0
+        self.code: str | None = None
 
     def process(self, img: np.ndarray) -> dict:
         small = resize_max_side(img, 320)
@@ -86,13 +93,25 @@ class MockLiveSession(LiveSession):
             self.on, self.off = self.on + 1, 0
             if not self.active and self.on >= self.ON:
                 self.active = True
-                alerts.append({"code": "MOTION", "type": "Движение в кадре (mock)", "message": "Обнаружено движение",
-                               "norm": None, "severity": "info", "ts": time.time()})
+                self.code = self.DEMO_CODES[self.episodes % len(self.DEMO_CODES)]
+                self.episodes += 1
+                alerts.append(self._demo_alert(self.code))
         else:
             self.off, self.on = self.off + 1, 0
             if self.active and self.off >= self.OFF:
                 self.active = False
-        return {"detections": dets, "alerts": alerts, "active": ["MOTION"] if self.active else []}
+        return {"detections": dets, "alerts": alerts, "active": [self.code] if self.active and self.code else []}
+
+    @staticmethod
+    def _demo_alert(code: str) -> dict:
+        try:
+            from ml import kb
+            rule = kb.rule_of(code)
+            return {"code": code, "type": rule["type_name"], "message": "[MOCK] Движение в кадре — демонстрационная тревога без модели",
+                    "norm": kb.refs_text(code), "severity": "warning", "confidence": 0.5, "ts": time.time()}
+        except Exception:
+            return {"code": "MOTION", "type": "Движение в кадре (mock)", "message": "Обнаружено движение",
+                    "norm": None, "severity": "info", "ts": time.time()}
 
 
 def new_session() -> LiveSession:

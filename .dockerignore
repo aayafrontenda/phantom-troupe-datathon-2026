@@ -18,3 +18,4 @@ frontend/node_modules
 frontend/.agents
 _to_delete
 .DS_Store
+frontend/dist

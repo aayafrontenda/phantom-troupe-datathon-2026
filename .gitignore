@@ -1,15 +1,23 @@
-# данные и артефакты — не в git (видео кейса нельзя публиковать)
+# data and artifacts — not in git (case videos must not be published)
 data/
 storage/
 ml/eval/out/
 *.mov
 *.mp4
-# окружения
+# environments
 .venv/
 venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 node_modules/
+frontend/dist/
+frontend/.vite/
 
 .DS_Store
+# AI-assistant scratch files
+.agents/
+.aider-desk/
+skills-lock.json
+design/
+_to_delete/

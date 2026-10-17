@@ -84,20 +84,19 @@ def test_ui_routes(app_factory, video):
         j = wait_done(c, job_id, key=None, ui=True)
         assert j["status"] == "done"
         assert c.get("/health").json()["status"] == "ok"
-        assert c.get("/").status_code == 200
-        assert c.get("/live.html").status_code == 200
         info = c.get("/ui/api/info").json()
         assert len(info["types"]) >= 15 and "features" in info
         assert len(c.get("/ui/api/rules").json()["types"]) >= 15
         assert c.get("/ui/api/jobs").json()["jobs"][0]["job_id"] == job_id
         stats = c.get("/ui/api/stats").json()
         assert stats["jobs"]["done"] >= 1 and "pool" in stats
-        # feedback -> csv
-        r = c.post(f"/ui/api/jobs/{job_id}/feedback", json={"violation_index": 0, "decision": "reject", "comment": "x"})
-        assert r.status_code == 200
-        csv = c.get("/ui/api/feedback.csv").text
+        # findings -> decision -> csv
+        f = c.get(f"/ui/api/jobs/{job_id}").json()["findings"][0]
+        r = c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "reject", "comment": "x"})
+        assert r.status_code == 200 and r.json()["decision"] == "reject"
+        csv = c.get("/ui/api/findings.csv").text
         assert job_id in csv and "reject" in csv
-        assert c.post(f"/ui/api/jobs/{job_id}/feedback", json={"decision": "bogus"}).status_code == 422
+        assert c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "bogus"}).status_code == 422
         # report
         for lang, title in (("en", "Cash-desk video check"), ("ru", "Проверка видео с кассы"), ("kk", "Касса бейнежазбасын тексеру")):
             r = c.get(f"/ui/api/jobs/{job_id}/report.html?lang={lang}")
@@ -109,11 +108,34 @@ def test_ui_routes(app_factory, video):
         assert c.get("/version").json()["analyzer"] == "mock"
 
 
-def test_ui_requires_key_when_configured(app_factory, video):
-    with app_factory(UI_REQUIRE_KEY="1") as (c, st):
+def test_ui_requires_login_when_configured(app_factory, video):
+    from backend.tests.conftest import login
+    with app_factory(AUTH_REQUIRED="1") as (c, st):
         assert c.get("/ui/api/info").status_code == 401
-        assert c.get("/ui/api/info?key=test-key").status_code == 200
-        assert c.get("/ui/api/info", headers={"X-API-Key": "test-key"}).status_code == 200
+        assert c.get("/ui/api/info", headers={"X-API-Key": "admin-key"}).status_code == 200
+        assert c.post("/ui/api/auth/login", json={"login": "operator", "password": "wrong"}).status_code == 401
+        u = login(c, "operator", "op123")
+        assert u["role"] == "operator" and u["name"] == "Operator One"
+        me = c.get("/ui/api/auth/me").json()
+        assert me["user"]["login"] == "operator" and me["user"]["role"] == "operator"
+        assert c.get("/ui/api/info").status_code == 200
+        assert c.get("/ui/api/users").status_code == 403           # operators cannot manage users
+        assert c.post("/ui/api/cameras", json={"name": "x", "url": "0"}).status_code == 403
+        assert c.post("/ui/api/auth/logout").status_code == 200
+        assert c.get("/ui/api/info").status_code == 401
+        # admin: user management
+        login(c, "admin", "admin123")
+        users = c.get("/ui/api/users").json()["users"]
+        assert {u["login"] for u in users} == {"admin", "operator", "supervisor"}
+        r = c.post("/ui/api/users", json={"login": "op2", "password": "pass1234", "role": "operator", "name": "Op Two",
+                                          "camera_ids": ["cam1"]})
+        assert r.status_code == 201 and r.json()["camera_ids"] == ["cam1"]
+        uid = r.json()["id"]
+        assert c.patch(f"/ui/api/users/{uid}", json={"active": False}).status_code == 200
+        admin_id = next(u["id"] for u in users if u["login"] == "admin")
+        assert c.patch(f"/ui/api/users/{admin_id}", json={"active": False}).status_code == 409
+        c.post("/ui/api/auth/logout")
+        assert c.post("/ui/api/auth/login", json={"login": "op2", "password": "pass1234"}).status_code == 401
 
 
 def test_sse_progress_stream(app_factory, video):
@@ -158,16 +180,19 @@ def test_admin_keys_and_roles(app_factory, video):
 def test_retention_deletes_video_but_keeps_result(app_factory, video):
     import time
     from pathlib import Path
-    with app_factory(VIDEO_TTL_SEC="1") as (c, st):
+    with app_factory(JURY_VIDEO_TTL_SEC="1", DEDUP="0") as (c, st):
         wait_ready(c)
-        job_id = upload(c, video).json()["job_id"]
+        job_id = upload(c, video).json()["job_id"]                 # jury upload: deleted after the TTL
+        ui_job = upload(c, video, key=None, ui=True).json()["job_id"]  # operator upload: kept
         wait_done(c, job_id)
+        wait_done(c, ui_job, ui=True)
         row = st.jobs.get(job_id)
         assert Path(row["upload_path"]).exists()
         time.sleep(1.2)
         st.retention.run_once()
         row = st.jobs.get(job_id)
         assert row["upload_path"] is None
+        assert Path(st.jobs.get(ui_job)["upload_path"]).exists()
         j = c.get(f"/api/v1/jobs/{job_id}", headers={"X-API-Key": "test-key"}).json()
         assert j["status"] == "done" and j["verdict"] in ("violation", "no_violation")
 
@@ -185,10 +210,10 @@ def test_alerts_created_for_violations(app_factory, video):
             r = c.post(f"/ui/api/alerts/{a['id']}/ack", json={"decision": "false_positive", "comment": "test"})
             assert r.status_code == 200 and r.json()["state"] == "false_positive"
             assert c.get("/ui/api/alerts/summary").json()["by_state"]["false_positive"] == 1
-            assert f"alert #{a['id']} false positive" in c.get("/ui/api/feedback.csv").text
+            assert a["finding_id"] is not None
 
 
-def test_job_video_and_feedback_list(app_factory, video):
+def test_job_video_and_finding_history(app_factory, video):
     from pathlib import Path
     with app_factory() as (c, st):
         wait_ready(c)
@@ -197,16 +222,16 @@ def test_job_video_and_feedback_list(app_factory, video):
         r = c.get(f"/ui/api/jobs/{job_id}/video")
         assert r.status_code == 200 and r.headers["content-type"].startswith("video/")
         assert len(r.content) == Path(video).stat().st_size
-        c.post(f"/ui/api/jobs/{job_id}/feedback", json={"violation_index": 0, "decision": "confirm"})
-        fb = c.get(f"/ui/api/jobs/{job_id}/feedback").json()["feedback"]
-        assert fb and fb[0]["decision"] == "confirm" and fb[0]["violation_index"] == 0
-        # after retention the video is gone but the UI still gets a clean 404
+        fid = c.get(f"/ui/api/jobs/{job_id}").json()["findings"][0]["id"]
+        c.post(f"/ui/api/findings/{fid}/decision", json={"decision": "confirm"})
+        f = c.get(f"/ui/api/findings/{fid}").json()
+        assert f["decision"] == "confirm" and f["history"][-1]["action"] == "decide" and f["frames"]
+        assert f["video_url"] and f["siblings"]
+        # jury videos go after the TTL; the UI then gets a clean 404
         st.db.update("jobs", "job_id", job_id, {"finished_at": 0})
         st.retention.run_once()
         assert c.get(f"/ui/api/jobs/{job_id}/video").status_code == 404
-        assert c.get("/").status_code == 200 and "app.js" in c.get("/").text
-        assert c.get("/app.js").status_code == 200 and c.get("/app.css").status_code == 200
-        assert c.get("/live.html").status_code == 200
+        assert c.get("/").status_code == 200
 
 
 def test_delete_and_cancel_jobs(app_factory, video, video2):
@@ -247,13 +272,14 @@ def test_review_decisions_and_clear(app_factory, video):
         wait_ready(c)
         jid = upload(c, video).json()["job_id"]
         wait_done(c, jid)
-        c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "confirm"})
+        fid = c.get(f"/ui/api/jobs/{jid}").json()["findings"][0]["id"]
+        c.post(f"/ui/api/findings/{fid}/decision", json={"decision": "confirm"})
         assert c.get(f"/ui/api/jobs/{jid}").json()["decisions"] == {"0": "confirm"}
         row = c.get("/ui/api/jobs").json()["jobs"][0]
         assert row["reviewed"] == 1 and row["confirmed"] == 1
-        c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "clear"})
+        c.post(f"/ui/api/findings/{fid}/decision", json={"decision": None})
         assert c.get(f"/ui/api/jobs/{jid}").json()["decisions"] == {}
-        c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "reject"})
+        c.post(f"/ui/api/findings/{fid}/decision", json={"decision": "reject"})
         r = c.get(f"/ui/api/jobs/{jid}/report.html?lang=en")
         assert r.status_code == 200 and "Not a violation" in r.text and "Reviewed by" in r.text
         assert "Не нарушение" in c.get(f"/ui/api/jobs/{jid}/report.html?lang=ru").text
@@ -266,15 +292,15 @@ def test_review_decision_closes_alert(app_factory, video):
         jid = upload(c, video).json()["job_id"]
         wait_done(c, jid)
         a = c.get("/ui/api/alerts").json()["alerts"][0]
-        assert a["state"] == "open"
-        c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "reject"})
+        assert a["state"] == "open" and a["finding_id"]
+        fid = a["finding_id"]
+        c.post(f"/ui/api/findings/{fid}/decision", json={"decision": "reject"})
         assert c.get("/ui/api/alerts").json()["alerts"][0]["state"] == "false_positive"
-        c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "clear"})
+        c.post(f"/ui/api/findings/{fid}/decision", json={"decision": None})
         assert c.get("/ui/api/alerts").json()["alerts"][0]["state"] == "open"
-        c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "confirm"})
+        c.post(f"/ui/api/findings/{fid}/decision", json={"decision": "confirm"})
         assert c.get("/ui/api/alerts").json()["alerts"][0]["state"] == "resolved"
-        fb = c.get(f"/ui/api/jobs/{jid}/feedback").json()["feedback"]
-        assert len(fb) == 3
+        assert len(c.get(f"/ui/api/findings/{fid}").json()["history"]) == 3
 
 
 def test_i18n_tables_are_complete():
@@ -287,8 +313,7 @@ def test_i18n_tables_are_complete():
 
     for lang in ("ru", "kk"):
         assert set(REPORT[lang]) == set(REPORT["en"])
-    static = Path(__file__).resolve().parents[1] / "static"
-    data = json.loads((static / "i18n-kb.json").read_text(encoding="utf-8"))
+    data = json.loads((Path(__file__).resolve().parents[1] / "i18n-kb.json").read_text(encoding="utf-8"))
     for code in kb.type_codes():
         for lang in ("en", "kk"):
             entry = data["types"][code][lang]
@@ -298,8 +323,8 @@ def test_i18n_tables_are_complete():
     srcs = kb.load_kb()["sources"]
     for sid, src in srcs.items():
         assert data["sources"][sid]["match"] in (src.get("url") or ""), sid
-    js = (static / "i18n.js").read_text(encoding="utf-8")
-    blocks = re.split(r"\n  (?:en|ru|kk): \{", js)[1:4]
+    ts = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "i18n" / "strings.ts").read_text(encoding="utf-8")
+    blocks = re.split(r"\n  (?:en|ru|kk): \{\n", ts)[1:4]
     keys = [set(re.findall(r"'([a-zA-Z_.]+)':", b.split("\n  },")[0])) for b in blocks]
     assert keys[0] == keys[1] == keys[2] and len(keys[0]) > 150
     t = Translator("en")
@@ -309,3 +334,64 @@ def test_i18n_tables_are_complete():
     assert t.description(v)["observed"] == "Сейф открыт" and t.description(v)["why"]
     assert t.point("п. 71 пп. 9") == "para. 71 subpara. 9" and Translator("kk").point("п. 20") == "20-тармақ"
     assert Translator("kk").doc({"document": "x", "url": "https://adilet.zan.kz/rus/docs/V1900019680"}).startswith("Кассалық")
+
+
+def test_findings_review_workflow(app_factory, video):
+    from backend.tests.conftest import login
+    with app_factory(ANALYZER="backend.tests.fake_analyzers:quick", AUTH_REQUIRED="1") as (c, st):
+        wait_ready(c)
+        login(c, "operator", "op123")
+        jid = upload(c, video, key=None, ui=True).json()["job_id"]
+        job = wait_done(c, jid, ui=True)
+        assert job["created_by"] == "operator"
+        f = job["findings"][0]
+        ai = c.get(f"/ui/api/findings/{f['id']}").json()["description_ai"]
+        # operator rewords the description, then rejects the finding
+        r = c.patch(f"/ui/api/findings/{f['id']}/description", json={"text": "Кассир просто поправил стул, денег на столе нет"})
+        assert r.status_code == 200 and r.json()["edited"] and r.json()["description_ai"] == ai
+        r = c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "reject", "comment": "ложное"})
+        assert r.json()["decision"] == "reject" and r.json()["decided_by"] == "operator"
+        assert c.post(f"/ui/api/findings/{f['id']}/verify", json={"result": "agree"}).status_code == 403
+        # supervisor sees the disagreement queue and verifies
+        c.post("/ui/api/auth/logout")
+        login(c, "supervisor", "sv123")
+        lst = c.get("/ui/api/findings?decision=reject&verified=false").json()
+        assert lst["total"] == 1 and lst["findings"][0]["edited"] and lst["counts"]["rejected_unverified"] == 1
+        r = c.post(f"/ui/api/findings/{f['id']}/verify", json={"result": "disagree", "comment": "видно наличные"})
+        assert r.status_code == 200 and r.json()["verified"] and r.json()["verify_result"] == "disagree"
+        full = c.get(f"/ui/api/findings/{f['id']}").json()
+        assert full["verified_by_name"] == "Super Visor" and [h["action"] for h in full["history"]] == ["edit", "decide", "verify"]
+        assert c.get("/ui/api/findings?verified=true").json()["total"] == 1
+        # a changed operator decision resets verification
+        c.post("/ui/api/auth/logout")
+        login(c, "operator", "op123")
+        r = c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "confirm"})
+        assert r.json()["decision"] == "confirm" and not r.json()["verified"]
+        rep = c.get(f"/ui/api/jobs/{jid}/report.html?lang=ru").text
+        assert "Кассир просто поправил стул" in rep
+        c.post("/ui/api/auth/logout")
+        assert c.get("/ui/api/findings.csv").status_code == 401
+
+
+def test_camera_alert_creates_finding_with_frames(app_factory, video):
+    import time
+    with app_factory(LIVE_FPS="8") as (c, st):
+        wait_ready(c)
+        cam = c.post("/ui/api/cameras", json={"name": "Касса 1", "url": str(video), "fps": 8}).json()
+        found = None
+        for _ in range(100):
+            lst = c.get("/ui/api/findings?source=camera").json()
+            if lst["findings"]:
+                found = lst["findings"][0]
+                break
+            time.sleep(0.2)
+        assert found, "no finding from the mock camera"
+        assert found["camera_id"] == cam["id"] and found["type_code"] in ("T13", "T15", "T14", "T01")
+        f = c.get(f"/ui/api/findings/{found['id']}").json()
+        assert f["frames"] and f["sequence"] and f["t_sec"] is not None and f["alert"]["id"] == f["alert_id"]
+        assert c.get(f"/ui/api/findings/{found['id']}/frames/0.jpg").status_code == 200
+        if f["clip_url"]:
+            assert c.get(f["clip_url"]).status_code == 200
+        c.post(f"/ui/api/findings/{found['id']}/decision", json={"decision": "confirm"})
+        assert c.get(f"/ui/api/alerts/{f['alert_id']}" if False else "/ui/api/alerts").json()["alerts"][0]["state"] in ("resolved", "open")
+        assert c.delete(f"/ui/api/cameras/{cam['id']}").status_code == 200

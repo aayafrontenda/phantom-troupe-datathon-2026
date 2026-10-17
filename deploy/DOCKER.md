@@ -7,7 +7,8 @@
 | Ноутбук Аслана (Windows + RTX) | сервис + настоящая модель на GPU + Ollama (VLM) + туннель Cloudflare | `powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel` |
 | Mac / любой компьютер без NVIDIA | сервис + демо-анализатор (без модели) | `./deploy/docker.sh` |
 
-Интерфейс: http://127.0.0.1:8000. Ключ жюри скрипт печатает в конце (если `API_KEY` в `.env` пустой, он генерируется один раз и хранится в volume).
+Интерфейс: http://127.0.0.1:8000 (вход — пользователи из `SEED_USERS` в `.env`). Интерфейс собирается внутри образа (Node не нужен на машине).
+Ключ жюри скрипт печатает в конце (если `API_KEY` в `.env` пустой, он генерируется один раз и хранится в volume).
 
 ## Ноутбук с GPU (Windows)
 
@@ -20,7 +21,9 @@
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel
 ```
-Первый запуск: сборка образа ~10–20 мин (PyTorch + веса детектора внутри образа) и скачивание VLM (~6 ГБ, один раз, хранится в volume `ollama`).
+Первый запуск: сборка образа ~10–20 мин (PyTorch + веса детектора внутри образа). VLM берётся из Ollama на самой Windows,
+если в `.env` задан `VLM_URL_DOCKER=http://host.docker.internal:11434` (так сейчас у Аслана: `ollama pull qwen3.5:4b` один раз).
+Если `VLM_URL_DOCKER` пустой, поднимается встроенная Ollama в контейнере и сама скачивает `VLM_MODEL` в volume.
 Дальше старт за минуту. Логи: `deploy\docker.ps1 -Logs`, остановка: `deploy\docker.ps1 -Down` (данные остаются).
 
 **Туннель.** Если в `.env` есть `CLOUDFLARE_TUNNEL_TOKEN`, поднимается именованный туннель (постоянный домен).
@@ -28,8 +31,7 @@ powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel
 (cloudflared работает внутри compose и видит сервис по имени `app`). Без токена — быстрый туннель, адрес
 `https://*.trycloudflare.com` скрипт печатает сам (меняется при каждом перезапуске).
 
-**Ollama уже стоит на Windows?** Можно не тянуть модель второй раз: в `.env` `VLM_URL_DOCKER=http://host.docker.internal:11434`
-(тогда контейнер `ollama` всё равно стартует, но не используется).
+**Ollama уже стоит на Windows?** В `.env` `VLM_URL_DOCKER=http://host.docker.internal:11434` — контейнер Ollama тогда не запускается.
 
 **Аслан поменял модель.** Код `ml/` копируется в образ, поэтому после изменений: `deploy\docker.ps1 -Tunnel` (пересоберёт только верхний слой, ~10 с).
 Для быстрой итерации над моделью удобнее без Docker: `deploy\run_server.ps1` (см. `deploy/README.md`).
@@ -46,6 +48,6 @@ powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel
 ## Что внутри
 
 - `docker-compose.yml` — сервис `app` (демо-анализатор), профили `tunnel` (trycloudflare) и `tunnel-named` (токен).
-- `docker-compose.gpu.yml` — поверх него: образ с PyTorch CUDA и весами детектора, `ANALYZER=ml`, GPU, `ollama` + `ollama-pull`.
-- Данные (`/app/storage`: база, результаты, загрузки) — volume `storage`; видео удаляются через `VIDEO_TTL_SEC`.
+- `docker-compose.gpu.yml` — поверх него: образ с PyTorch CUDA и весами детектора, `ANALYZER=ml`, GPU; профиль `ollama` — встроенная Ollama + загрузка `VLM_MODEL`.
+- Данные (`/app/storage`: база, результаты, загрузки) — volume `storage`; видео операторов хранятся `VIDEO_RETENTION_DAYS` (0 = всегда), видео жюри — `JURY_VIDEO_TTL_SEC`.
 - Анализ офлайн: веса детектора в образе, `HF_HUB_OFFLINE=1`, VLM локально в Ollama. Наружу ходит только cloudflared.

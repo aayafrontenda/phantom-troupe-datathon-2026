@@ -113,6 +113,7 @@ class AlertEngine:
                                                                 "message": event.get("message") or existing["message"]})
                 alert = self.get(existing["id"])
                 self.bus.publish("alerts", {"type": "alert_update", "alert": alert})
+                alert["new"] = False
                 return alert
             routing = self._routing(severity)
             esc_after = float(routing.get("escalate_after_sec") or 0)
@@ -132,7 +133,7 @@ class AlertEngine:
         for role in routing.get("notify", []):
             self._deliver(alert, role, 0)
         self.db.audit("alert.create", actor, str(aid), {"severity": severity, "type_code": code, "scope": scope})
-        return {k: v for k, v in alert.items() if k != "evidence_b64"}
+        return {**{k: v for k, v in alert.items() if k != "evidence_b64"}, "new": True}
 
     # ------------------------------------------------------------------ delivery
     def _deliver(self, alert: dict, role: str, level: int) -> None:
@@ -216,6 +217,14 @@ class AlertEngine:
         self.bus.publish("alerts", {"type": "alert_update", "alert": alert})
         return alert
 
+    def reopen(self, alert_id: int) -> dict | None:
+        if self.get(alert_id) is None:
+            return None
+        self.db.update("alerts", "id", alert_id, {"state": "open", "acked_by": None, "acked_at": None, "updated_at": time.time()})
+        alert = self.get(alert_id)
+        self.bus.publish("alerts", {"type": "alert_update", "alert": alert})
+        return alert
+
     def sync_review(self, job_id: str, type_code: str | None, t_sec: float | None, decision: str, by: str) -> None:
         """A reviewer decision on a check finding closes (or reopens) the alert raised for it."""
         rows = self.db.all("SELECT id, payload FROM alerts WHERE job_id=? AND type_code=?", (job_id, type_code or "T99"))
@@ -241,9 +250,16 @@ class AlertEngine:
                 a[k] = a["payload"][k]
         a["deliveries"] = self.db.all("SELECT channel, target, status, attempts, last_error FROM alert_deliveries "
                                       "WHERE alert_id=? ORDER BY id", (alert_id,))
+        f = self.db.one("SELECT id FROM findings WHERE alert_id=?", (alert_id,))
+        if f is None and a.get("job_id") is not None:
+            t = a["payload"].get("t_sec")
+            f = self.db.one("SELECT id FROM findings WHERE job_id=? AND type_code=? AND (? IS NULL OR ABS(t_sec-?)<0.6) LIMIT 1",
+                            (a["job_id"], a.get("type_code"), t, t))
+        a["finding_id"] = f["id"] if f else None
         return a
 
-    def list(self, state: str | None = None, limit: int = 100, camera_id: str | None = None) -> list[dict]:
+    def list(self, state: str | None = None, limit: int = 100, camera_id: str | None = None,
+             camera_ids: list[str] | None = None) -> list[dict]:
         sql, params = "SELECT id FROM alerts", []
         conds = []
         if state:
@@ -252,6 +268,10 @@ class AlertEngine:
         if camera_id:
             conds.append("camera_id=?")
             params.append(camera_id)
+        if camera_ids is not None:
+            marks = ",".join("?" for _ in camera_ids) or "''"
+            conds.append(f"(camera_id IS NULL OR camera_id IN ({marks}))")
+            params.extend(camera_ids)
         if conds:
             sql += " WHERE " + " AND ".join(conds)
         sql += " ORDER BY created_at DESC LIMIT ?"

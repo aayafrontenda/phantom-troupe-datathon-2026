@@ -86,7 +86,8 @@ class Settings:
     # --- uploads ---
     max_upload_mb: int = field(default_factory=lambda: _int("MAX_UPLOAD_MB", 200))
     allowed_ext: set[str] = field(default_factory=lambda: set(_list("ALLOWED_EXT", ".mov,.mp4,.m4v")))
-    video_ttl_sec: int = field(default_factory=lambda: _int("VIDEO_TTL_SEC", 3600))
+    jury_video_ttl_sec: int = field(default_factory=lambda: _int("JURY_VIDEO_TTL_SEC", 3600))  # brief: jury videos are not kept
+    video_retention_days: int = field(default_factory=lambda: _int("VIDEO_RETENTION_DAYS", 0))  # operator uploads + camera clips; 0 = keep
     result_ttl_sec: int = field(default_factory=lambda: _int("RESULT_TTL_SEC", 0))  # 0 = keep results
     dedup: bool = field(default_factory=lambda: _bool("DEDUP", True))
     make_clips: bool = field(default_factory=lambda: _bool("MAKE_CLIPS", True))
@@ -95,7 +96,10 @@ class Settings:
     # --- auth ---
     api_key: str = field(default_factory=lambda: _env("API_KEY", ""))
     admin_key: str = field(default_factory=lambda: _env("ADMIN_KEY", ""))
-    ui_require_key: bool = field(default_factory=lambda: _bool("UI_REQUIRE_KEY", False))
+    auth_required: bool = field(default_factory=lambda: _bool("AUTH_REQUIRED", True))   # 0 = open UI as admin (dev only)
+    session_ttl_sec: int = field(default_factory=lambda: _int("SESSION_TTL_SEC", 7 * 86400))
+    seed_users: str = field(default_factory=lambda: _env("SEED_USERS", "admin:admin:admin:Administrator"))
+    secure_cookies: bool = field(default_factory=lambda: _bool("SECURE_COOKIES", False))
     rate_limit_per_min: int = field(default_factory=lambda: _int("RATE_LIMIT_PER_MIN", 60))
     cors_origins: list[str] = field(default_factory=lambda: _list("CORS_ORIGINS", "*"))
 
@@ -104,6 +108,9 @@ class Settings:
     live_fps_busy: float = field(default_factory=lambda: _float("LIVE_FPS_BUSY", 1))
     camera_reconnect_sec: float = field(default_factory=lambda: _float("CAMERA_RECONNECT_SEC", 5))
     live_max_side: int = field(default_factory=lambda: _int("LIVE_MAX_SIDE", 640))
+    live_findings: bool = field(default_factory=lambda: _bool("LIVE_FINDINGS", True))       # camera alerts -> findings with a clip
+    camera_clip_pre_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_PRE_SEC", 8))
+    camera_clip_post_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_POST_SEC", 4))
 
     # --- alerts ---
     alerts_config: Path = field(default_factory=lambda: Path(_env("ALERTS_CONFIG", str(REPO_DIR / "backend" / "alerts.yaml"))))
@@ -171,7 +178,7 @@ class Settings:
 
     def safe_dict(self) -> dict:
         """Settings without secrets, for /admin/api/config."""
-        hidden = {"api_key", "admin_key", "telegram_bot_token", "alert_webhook_secret", "smtp_password"}
+        hidden = {"api_key", "admin_key", "telegram_bot_token", "alert_webhook_secret", "smtp_password", "seed_users"}
         out = {}
         for k, v in self.__dict__.items():
             if k in hidden:

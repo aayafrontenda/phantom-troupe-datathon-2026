@@ -1,7 +1,15 @@
-# CashGuard service image.
-#   WITH_ML=0 (default): backend + mock analyzer, any machine (Mac, Linux, Windows), ~600 MB.
+# CashGuard service image: web UI built in a Node stage, Python service with ffmpeg.
+#   WITH_ML=0 (default): backend + demo analyzer, any machine (Mac, Linux, Windows), ~600 MB.
 #   WITH_ML=1: + PyTorch (CUDA 12.4 wheels bring their own CUDA runtime) + detector weights baked in.
 #              Needs an NVIDIA GPU at runtime (docker-compose.gpu.yml), ~6 GB.
+
+FROM node:22-alpine AS ui
+WORKDIR /ui
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --silent
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 ARG WITH_ML=0
@@ -26,6 +34,7 @@ RUN if [ "$WITH_ML" = "1" ]; then \
     fi
 
 COPY . .
+COPY --from=ui /ui/dist ./frontend/dist
 RUN mkdir -p /app/storage /app/models \
     && useradd -m -u 10001 app && chown -R app:app /app/storage /app/models
 USER app

@@ -117,12 +117,13 @@ def test_browser_live_websocket_mock(tmp_path):
 
 
 def test_file_camera_streams_frames(tmp_path, video):
-    with make_app(tmp_path, LIVE_FPS="8") as (c, st):
+    with make_app(tmp_path, LIVE_FPS="8", AUTH_REQUIRED="1") as (c, st):
         wait_ready(c)
         admin = {"X-API-Key": "admin-key"}
         assert c.post("/ui/api/cameras", json={"name": "Касса 1", "url": str(video)}).status_code == 401
         assert c.post("/ui/api/cameras", headers={"X-API-Key": "test-key"},
                       json={"name": "Касса 1", "url": str(video)}).status_code == 403
+        c.headers.update(admin)
         r = c.post("/ui/api/cameras", headers=admin, json={"name": "Касса 1", "url": str(video), "id": "cam1", "fps": 8})
         assert r.status_code == 201, r.text
         for _ in range(100):

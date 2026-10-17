@@ -1,7 +1,7 @@
 # Override for the real pipeline on an NVIDIA GPU (Windows + Docker Desktop/WSL2, or Linux + nvidia-container-toolkit):
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
-# Starts Ollama (VLM) on the same GPU and pulls VLM_MODEL on first start (~6 GB, once; kept in a volume).
-# To use an Ollama already installed on Windows instead: VLM_URL_DOCKER=http://host.docker.internal:11434
+# With `--profile ollama` it also starts Ollama (VLM) on the same GPU and pulls VLM_MODEL on first start (kept in a volume).
+# Ollama already installed on the host instead: VLM_URL_DOCKER=http://host.docker.internal:11434 (deploy/docker.ps1 picks the profile by this).
 services:
   app:
     build:
@@ -14,9 +14,8 @@ services:
       HF_HUB_OFFLINE: "1"
       VLM_URL: ${VLM_URL_DOCKER:-http://ollama:11434}
     shm_size: 4gb
-    depends_on:
-      ollama-pull:
-        condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         reservations:
@@ -27,6 +26,7 @@ services:
 
   ollama:
     image: ollama/ollama:0.35.1
+    profiles: [ollama]
     volumes:
       - ollama:/root/.ollama
     environment:
@@ -48,11 +48,12 @@ services:
 
   ollama-pull:
     image: ollama/ollama:0.35.1
+    profiles: [ollama]
     entrypoint: ["/bin/sh", "-c"]
-    command: ["ollama pull \"$${VLM_MODEL:-qwen2.5vl:7b}\""]
+    command: ["ollama pull \"$${VLM_MODEL:-qwen3.5:4b}\""]
     environment:
       OLLAMA_HOST: http://ollama:11434
-      VLM_MODEL: ${VLM_MODEL:-qwen2.5vl:7b}
+      VLM_MODEL: ${VLM_MODEL:-qwen3.5:4b}
     depends_on:
       ollama:
         condition: service_healthy

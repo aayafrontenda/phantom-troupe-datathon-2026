@@ -4,7 +4,7 @@ Jury API (section 10 of the brief), header X-API-Key:
     POST /api/v1/analyze            multipart, field `file` (.mov) -> {"job_id": ...}
     GET  /api/v1/jobs/{job_id}      -> {"job_id", "status", "verdict", "violations", ...extras}
 
-UI API (open unless UI_REQUIRE_KEY=1): /ui/api/*  — see docs/api_contract.md
+UI API (cookie session, roles operator/supervisor/admin): /ui/api/*  — see docs/api_contract.md
 Admin API (admin key): /admin/api/*
 System: /health /ready /metrics /version
 
@@ -16,18 +16,17 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import metrics
 from .config import REPO_DIR, get_settings
 from .logging_setup import request_id_var, setup_logging
-from .routers import admin, jury, system, ui
+from .routers import admin, auth, findings, jury, system, ui
 from .state import AppState
 
 log = logging.getLogger("backend")
@@ -111,14 +110,33 @@ def create_app() -> FastAPI:
                                                       "request_id": request_id_var.get()})
 
     app.include_router(jury.router)
+    app.include_router(auth.router)
+    app.include_router(findings.router)
     app.include_router(ui.router)
     app.include_router(admin.router)
     app.include_router(system.router)
-
-    dist = REPO_DIR / "frontend" / "dist"
-    static = dist if (dist / "index.html").exists() else Path(__file__).resolve().parents[1] / "static"
-    app.mount("/", StaticFiles(directory=str(static), html=True), name="static")
+    _mount_frontend(app)
     return app
+
+
+def _mount_frontend(app: FastAPI) -> None:
+    """Serve the built React app (frontend/dist) with an SPA fallback for client-side routes."""
+    dist = REPO_DIR / "frontend" / "dist"
+    index = dist / "index.html"
+    if not index.exists():
+        @app.get("/", include_in_schema=False)
+        def _no_frontend():
+            return JSONResponse({"detail": "Frontend is not built: run `npm ci && npm run build` in frontend/ "
+                                           "(or ./deploy/run_server.sh). The API is available under /api, /ui/api."})
+        return
+    app.mount("/assets", StaticFiles(directory=str(dist / "assets")), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def _spa(path: str):
+        candidate = (dist / path) if path else index
+        if path and candidate.is_file() and dist in candidate.resolve().parents:
+            return FileResponse(str(candidate))
+        return FileResponse(str(index), headers={"Cache-Control": "no-cache"})
 
 
 def _plain(errors: list) -> list:

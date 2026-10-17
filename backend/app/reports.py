@@ -39,17 +39,20 @@ _env.filters["sha8"] = _sha8
 
 
 def render_report(job: dict, result: dict, clips: dict[int, str] | None = None,
-                  decisions: dict[int, str] | None = None, lang: str = "ru") -> str:
+                  decisions: dict[int, str] | None = None, lang: str = "ru",
+                  findings: list[dict] | None = None, names: dict[str, str] | None = None) -> str:
     s = get_settings()
     tpl = _env.get_template("report.html")
     processing = round((job.get("finished_at") or time.time()) - (job.get("request_started_at") or job["created_at"]), 1)
     result_hash = hashlib.sha256(json.dumps(result, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
-    decisions = decisions or {}
+    by_index = {int(f["violation_index"]): f for f in (findings or []) if f.get("violation_index") is not None}
+    decisions = decisions or {i: f["decision"] for i, f in by_index.items() if f.get("decision")}
     n = len(result.get("violations") or [])
     reviewed = sum(1 for i in range(n) if i in decisions)
     tr = Translator(lang)
+    names = names or {}
     return tpl.render(job=job, result=result, clips=clips or {}, processing_sec=processing, decisions=decisions,
-                      reviewed=reviewed, t=tr, lang=tr.lang, langs=LANGS,
+                      findings=by_index, names=names, reviewed=reviewed, t=tr, lang=tr.lang, langs=LANGS,
                       service_version=s.version, result_hash=result_hash,
                       generated_at=datetime.now().strftime("%d.%m.%Y %H:%M"),
                       uploaded_at=datetime.fromtimestamp(job["created_at"]).strftime("%d.%m.%Y %H:%M"))

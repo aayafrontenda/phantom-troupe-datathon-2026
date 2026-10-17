@@ -83,7 +83,12 @@ def place_upload(up: Upload, job_id: str) -> Path:
 
 
 class Retention:
-    """Background cleaner: deletes uploaded videos and clips after VIDEO_TTL_SEC, old results after RESULT_TTL_SEC."""
+    """Background cleaner.
+
+    Jury uploads (POST /api/v1/analyze) are deleted JURY_VIDEO_TTL_SEC after the check — the brief forbids keeping
+    them. Operator uploads and camera clips are kept for VIDEO_RETENTION_DAYS (0 = forever). Old results go after
+    RESULT_TTL_SEC (0 = keep).
+    """
 
     def __init__(self, db: Database, interval_sec: float = 60.0):
         self.db = db
@@ -110,11 +115,17 @@ class Retention:
         s = get_settings()
         now = now or time.time()
         removed = 0
-        rows = self.db.all("SELECT job_id, upload_path, finished_at, status FROM jobs "
+        rows = self.db.all("SELECT job_id, upload_path, finished_at, status, source FROM jobs "
                            "WHERE status IN ('done','failed') AND upload_path IS NOT NULL")
         for r in rows:
             fin = r["finished_at"] if r["finished_at"] is not None else now
-            if now - fin < s.video_ttl_sec:
+            if r.get("source") == "jury":
+                ttl = float(s.jury_video_ttl_sec)
+            elif s.video_retention_days > 0:
+                ttl = s.video_retention_days * 86400.0
+            else:
+                continue
+            if now - fin < ttl:
                 continue
             p = Path(r["upload_path"])
             if p.exists():
@@ -128,6 +139,13 @@ class Retention:
             if clips.exists():
                 shutil.rmtree(clips, ignore_errors=True)
             self.db.update("jobs", "job_id", r["job_id"], {"upload_path": None, "updated_at": now})
+        if s.video_retention_days > 0:
+            old_cam = self.db.all("SELECT id, frames_dir FROM findings WHERE source='camera' AND frames_dir IS NOT NULL "
+                                  "AND created_at < ?", (now - s.video_retention_days * 86400.0,))
+            for f in old_cam:
+                shutil.rmtree(f["frames_dir"], ignore_errors=True)
+                self.db.update("findings", "id", f["id"], {"frames_dir": None, "clip_path": None, "updated_at": now})
+                removed += 1
         if s.result_ttl_sec > 0:
             old = self.db.all("SELECT job_id, result_path FROM jobs WHERE finished_at IS NOT NULL AND finished_at < ?",
                               (now - s.result_ttl_sec,))

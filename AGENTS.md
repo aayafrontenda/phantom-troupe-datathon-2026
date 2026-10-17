@@ -20,7 +20,7 @@
 4. **Не больше 5 минут** от загрузки до результата, включая очередь. Цель — ≤ 60 с на видео: жюри может прислать 5 видео одновременно, а GPU одна.
 5. **Не утверждать невидимое**: проводки, сверки, документы вне кадра. Формулировки: «на видео не зафиксировано…», «возможное нарушение».
 6. **Не выдумывать нормы.** Ссылки на НПА — только из `ml/rules_kb.yaml`. Нет прямой нормы — так и пишем («внутренний регламент банка»).
-7. **Тестовые видео жюри** нельзя использовать для обучения и хранить: сервис удаляет загрузки через `VIDEO_TTL_SEC` (1 час).
+7. **Тестовые видео жюри** нельзя использовать для обучения и хранить: загрузки через `/api/v1` удаляются через `JURY_VIDEO_TTL_SEC` (1 час). Видео операторов и фрагменты с камер — это данные банка, они хранятся `VIDEO_RETENTION_DAYS` (0 = всегда).
 
 ## Как устроен код
 
@@ -39,17 +39,20 @@ ml/
   eval/evaluate.py оценка на 42 метках обучающего датасета
   eval/labels_typed.csv  разметка + тип нарушения (T01–T15) + ракурс камеры (A–E)
 backend/app/         (подробно — docs/backend.md; контракт — docs/api_contract.md)
-  main.py          FastAPI: роутеры, middleware (request-id, метрики), статика
-  routers/         jury (/api/v1), ui (/ui/api), admin (/admin/api), system (/health /ready /metrics)
+  main.py          FastAPI: роутеры, middleware (request-id, метрики), отдача frontend/dist (SPA)
+  routers/         jury (/api/v1), auth (вход, пользователи), findings (находки), ui (/ui/api), admin (/admin/api), system
   worker.py        пул воркеров-процессов: приоритет жюри, сторожевой таймер (дедлайн/зависание), ретраи
   jobs.py          жизненный цикл задачи, дедуп по SHA-256, починка результата по схеме, восстановление после рестарта
+  findings.py      находки: из результата задачи и из тревог камер (кадры + клип), правка описания, решение оператора,
+                   проверка супервайзера, история, фильтры для контроля
+  users.py, auth.py  пользователи (operator < supervisor < admin), пароли PBKDF2, cookie-сессии; API-ключи жюри/админа
   analyzers.py     контракт с ML: analyze(path, on_progress, deadline); on_progress.partial(result); warmup()
-  db.py, storage.py, auth.py, events.py, sse.py, metrics.py, reports.py, state.py
+  db.py, storage.py, events.py, sse.py, metrics.py, reports.py, i18n.py, state.py
   alerts/          policy engine (backend/alerts.yaml), каналы web/telegram/webhook/email
-  live/            WebSocket браузера, RTSP/файл-камеры, live-анализатор
-backend/static/    интерфейс (index.html, app.css, app.js, i18n.js) — SPA без сборки, RU/KK/EN; i18n-kb.json — переводы типов и норм
-backend/templates/ печатный акт проверки
-frontend/          (опционально) React-сборка в frontend/dist подхватывается вместо backend/static
+  live/            WebSocket браузера, RTSP/файл-камеры (кольцевой буфер кадров → клип при тревоге), live-анализатор
+backend/i18n-kb.json  переводы типов нарушений и норм (en, kk); источник правды по-русски — ml/rules_kb.yaml
+backend/templates/ печатный отчёт проверки (ru/kk/en)
+frontend/          интерфейс: React + Vite + TS, дизайн forte.kz; роли оператор / супервайзер / админ — docs/tasks/FRONTEND.md
 tools/smoke_test.py       проверка «как жюри»: N видео параллельно, время и схема
 tools/loadtest.py         нагрузка: параллельные загрузки / шторм live-сессий
 tools/simulate_cameras.py камеры-симуляторы из файлов датасета
@@ -93,15 +96,23 @@ deploy/                   run_server.sh/.ps1, docker.ps1/.sh, Dockerfile (compos
 ```bash
 pip install -r requirements.txt                    # база: backend, mock, видео
 pip install -r ml/requirements-ml.txt              # модель (на ROG), torch с CUDA — см. docs/tasks/ML.md
-pytest -q                                          # тесты (backend 33 + ml)
-ANALYZER=mock uvicorn backend.app.main:app --port 8000 --reload
+pytest -q                                          # тесты (backend 38 + ml)
+./deploy/run_server.sh                             # mock + hot reload; собирает frontend/dist при необходимости (Node 20+)
+(cd frontend && npm run dev)                       # интерфейс с горячей перезагрузкой на :5173
 ANALYZER=ml   uvicorn backend.app.main:app --port 8000
 python -m ml.cli data/open/videos/X-1.mov --no-images
 python -m ml.eval.evaluate --videos data/open/videos
 python tools/smoke_test.py --url http://127.0.0.1:8000 --key <KEY> --dir data/open/videos --limit 5
 ```
 
-## Роли
+## Пользователи сервиса
+
+- **Оператор** — мониторинг своих камер и лента событий; открывает момент, уточняет описание, решает «нарушение / нет»; загружает видео на проверку.
+- **Супервайзер** — раздел «Контроль»: все решения операторов рядом с описанием ИИ и правкой оператора; фильтр «ИИ увидел нарушение, оператор отклонил» (антикоррупционный контроль); отметка «проверено: согласен / не согласен».
+- **Администратор** — пользователи, роли, камеры по операторам, состояние сервиса.
+Учётные записи: `SEED_USERS` в `.env` при первом запуске, дальше — раздел «Администрирование».
+
+## Роли в команде
 
 - ML (ROG, RTX 4070 8 ГБ): `ml/` — `docs/tasks/ML.md`
 - Backend + live (MacBook Pro M5 Pro): `backend/`, `deploy/`, `tools/` — `docs/tasks/BACKEND.md`

@@ -13,10 +13,12 @@ from .auth import KeyStore, RateLimiter
 from .config import Settings
 from .db import Database
 from .events import EventBus
+from .findings import FindingService
 from .jobs import JobService
 from .live import CameraManager
 from .reports import make_clips
 from .storage import Retention
+from .users import UserStore
 from .worker import WorkerPool
 
 log = logging.getLogger("backend.state")
@@ -27,10 +29,12 @@ class AppState:
     settings: Settings
     db: Database
     keys: KeyStore
+    users: UserStore
     bus: EventBus
     pool: WorkerPool
     jobs: JobService
     alerts: AlertEngine
+    findings: FindingService
     cameras: CameraManager
     retention: Retention
     limiter: RateLimiter
@@ -43,18 +47,20 @@ class AppState:
         db = Database(settings.db_path)
         bus = EventBus()
         keys = KeyStore(db)
+        users = UserStore(db)
         alerts = AlertEngine(db, bus, settings)
+        findings = FindingService(db, bus, alerts)
         pool = WorkerPool(settings.analyzer, mode=settings.worker_mode, workers=settings.workers,
                           warmup=settings.warmup, grace_sec=settings.watchdog_grace_sec,
                           stall_sec=settings.worker_stall_sec, max_attempts=settings.max_attempts,
                           retry_on_error=settings.retry_on_error, log_file=log_file)
-        state = cls(settings=settings, db=db, keys=keys, bus=bus, pool=pool, jobs=None, alerts=alerts,  # type: ignore[arg-type]
-                    cameras=None, retention=Retention(db), limiter=RateLimiter(settings.rate_limit_per_min),  # type: ignore[arg-type]
+        state = cls(settings=settings, db=db, keys=keys, users=users, bus=bus, pool=pool, jobs=None, alerts=alerts,  # type: ignore[arg-type]
+                    findings=findings, cameras=None, retention=Retention(db), limiter=RateLimiter(settings.rate_limit_per_min),  # type: ignore[arg-type]
                     log_file=log_file)
-        state.jobs = JobService(db, pool, bus, on_result=state._on_result)
+        state.jobs = JobService(db, pool, bus, on_result=state._on_result, findings=findings)
         pool.on_finish = state._on_finish
         pool.on_progress = state.jobs.on_progress
-        state.cameras = CameraManager(db, bus, on_alert=state._on_live_alert, busy=pool.busy)
+        state.cameras = CameraManager(db, bus, on_alert=state._on_live_alert, busy=pool.busy, on_clip=findings.from_camera)
         return state
 
     # ------------------------------------------------------------------ lifecycle
@@ -102,7 +108,11 @@ class AppState:
             metrics.JOB_TOTAL_SECONDS.observe(done["finished_at"] - (done.get("request_started_at") or done["created_at"]))
 
     def _on_result(self, job: dict, result: dict) -> None:
-        """After a job is stored: clips in the background, alerts for every violation."""
+        """After a job is stored: findings for the review workflow, clips in the background, alerts."""
+        try:
+            self.findings.from_job(job, result)
+        except Exception:
+            log.exception("job %s: findings failed", job["job_id"])
         threading.Thread(target=self._clips, args=(job, result), name=f"clips-{job['job_id']}", daemon=True).start()
         for v in result.get("violations") or []:
             frames = v.get("evidence_frames") or []
@@ -112,7 +122,7 @@ class AppState:
                 "t_sec": v.get("timecode_sec"), "confidence": v.get("confidence"),
                 "message": (v.get("description") or "")[:400],
                 "norm": _norm_text(v), "evidence_b64": frames[0].get("image_base64") if frames else None,
-                "link": f"/?job={job['job_id']}",
+                "link": f"/checks/{job['job_id']}",
             }, actor=job.get("source"))
 
     def _clips(self, job: dict, result: dict) -> None:
@@ -123,8 +133,8 @@ class AppState:
         except Exception:
             log.exception("job %s: clips failed", job["job_id"])
 
-    def _on_live_alert(self, event: dict) -> None:
-        self.alerts.handle(event, actor="live")
+    def _on_live_alert(self, event: dict) -> dict | None:
+        return self.alerts.handle(event, actor="live")
 
 
 def _norm_text(v: dict) -> str | None:

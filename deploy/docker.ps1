@@ -15,12 +15,14 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env; Write-Host "Created .e
 $files = @("-f", "docker-compose.yml")
 if (-not $Cpu) { $files += @("-f", "docker-compose.gpu.yml") }
 $profiles = @()
+$hostVlm = Select-String -Path .env -Pattern '^VLM_URL_DOCKER=\S+' -Quiet
+if (-not $Cpu -and -not $hostVlm) { $profiles += @("--profile", "ollama") }
 $token = Select-String -Path .env -Pattern '^CLOUDFLARE_TUNNEL_TOKEN=\S+' -Quiet
 if ($Tunnel -and $token) { $Named = $true; $Tunnel = $false }
 if ($Tunnel) { $profiles += @("--profile", "tunnel") }
 if ($Named) { $profiles += @("--profile", "tunnel-named") }
 
-if ($Down) { docker compose @files --profile tunnel --profile tunnel-named down; exit $LASTEXITCODE }
+if ($Down) { docker compose @files --profile ollama --profile tunnel --profile tunnel-named down; exit $LASTEXITCODE }
 if ($Logs) { docker compose @files @profiles logs -f --tail 200; exit 0 }
 
 $port = 8000
@@ -36,7 +38,7 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-Write-Host "Waiting for the service (the first start also downloads the VLM, ~6 GB)..."
+Write-Host "Waiting for the service (the first start may also download the VLM)..."
 $ready = $false
 for ($i = 0; $i -lt 360; $i++) {
   try { if ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://127.0.0.1:$port/ready").StatusCode -eq 200) { $ready = $true; break } } catch { }
