@@ -38,13 +38,22 @@ ml/
   schema.py        проверка ответа по ТЗ
   eval/evaluate.py оценка на 42 метках обучающего датасета
   eval/labels_typed.csv  разметка + тип нарушения (T01–T15) + ракурс камеры (A–E)
-backend/app/
-  main.py          FastAPI: /api/v1/* (ключ) и /ui/api/* (интерфейс), статика
-  jobs.py          очередь (один воркер), хранение задач на диске, удаление видео по TTL
-  live.py          WebSocket /ui/api/live
-backend/static/    резервный интерфейс (index.html, live.html) — работает, пока нет frontend/dist
-frontend/          React-приложение (делает Frontend), сборка в frontend/dist подхватывается автоматически
-tools/smoke_test.py   проверка «как жюри»: N видео параллельно, время и схема
+backend/app/         (подробно — docs/backend.md; контракт — docs/api_contract.md)
+  main.py          FastAPI: роутеры, middleware (request-id, метрики), статика
+  routers/         jury (/api/v1), ui (/ui/api), admin (/admin/api), system (/health /ready /metrics)
+  worker.py        пул воркеров-процессов: приоритет жюри, сторожевой таймер (дедлайн/зависание), ретраи
+  jobs.py          жизненный цикл задачи, дедуп по SHA-256, починка результата по схеме, восстановление после рестарта
+  analyzers.py     контракт с ML: analyze(path, on_progress, deadline); on_progress.partial(result); warmup()
+  db.py, storage.py, auth.py, events.py, sse.py, metrics.py, reports.py, state.py
+  alerts/          policy engine (backend/alerts.yaml), каналы web/telegram/webhook/email
+  live/            WebSocket браузера, RTSP/файл-камеры, live-анализатор
+backend/static/    интерфейс (index.html, app.css, app.js) — SPA без сборки, подключён к /ui/api
+backend/templates/ печатный акт проверки
+frontend/          (опционально) React-сборка в frontend/dist подхватывается вместо backend/static
+tools/smoke_test.py       проверка «как жюри»: N видео параллельно, время и схема
+tools/loadtest.py         нагрузка: параллельные загрузки / шторм live-сессий
+tools/simulate_cameras.py камеры-симуляторы из файлов датасета
+deploy/                   run_server.sh/.ps1, Dockerfile, docker-compose.yml
 ```
 
 Пайплайн: кадры 2 fps → детектор → сигналы → кандидаты (вход/выход людей, перемещение, появление
@@ -84,7 +93,7 @@ tools/smoke_test.py   проверка «как жюри»: N видео пар�
 ```bash
 pip install -r requirements.txt                    # база: backend, mock, видео
 pip install -r ml/requirements-ml.txt              # модель (на ROG), torch с CUDA — см. docs/tasks/ML.md
-pytest -q                                          # тесты
+pytest -q                                          # тесты (backend 33 + ml)
 ANALYZER=mock uvicorn backend.app.main:app --port 8000 --reload
 ANALYZER=ml   uvicorn backend.app.main:app --port 8000
 python -m ml.cli data/open/videos/X-1.mov --no-images

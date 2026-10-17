@@ -2,89 +2,86 @@
 
 **Кто:** MacBook Pro M5 Pro.
 **Отвечаешь за:** `backend/`, `deploy/`, `tools/` — API строго по ТЗ, надёжность, публичный адрес на ROG,
-live-режим с камеры (главная «вау»-функция для питча).
+live-режим, алерты, отчёты.
 
-Контекст задачи — `AGENTS.md`, контракт — `docs/api_contract.md`.
+Контекст задачи — `AGENTS.md`, контракт — `docs/api_contract.md`, устройство сервиса — `docs/backend.md`.
 
 ---
 
 ## 0. Подготовка (Mac)
 
 ```bash
-git clone <repo> && cd forte-cashguard
+git clone <repo> && cd phantom-troupe-datathon-2026
 python3.11 -m venv .venv && source .venv/bin/activate      # или python3.12
 pip install -r requirements.txt
 cp .env.example .env                                         # ANALYZER=mock
-pytest -q                                                    # 7 тестов зелёные
-./deploy/run_server.sh                                       # http://127.0.0.1:8000
+pytest -q                                                    # 33 теста зелёные
+./deploy/run_server.sh                                       # http://127.0.0.1:8000, /docs — Swagger
 ```
 
-Положи пару видео из датасета в `data/open/videos/` и загрузи через интерфейс — mock вернёт ответ с настоящими кадрами.
+Положи видео из датасета в `data/open/videos/` и загрузи через интерфейс — mock вернёт ответ с настоящими кадрами.
 
-## 1. Что уже сделано — проверь и доведи
+## 1. Что сделано
 
 | Что | Где |
 | --- | --- |
-| `POST /api/v1/analyze`, `GET /api/v1/jobs/{id}`, ключ `X-API-Key`, 401 | `backend/app/main.py` |
-| Те же ручки без ключа для интерфейса: `/ui/api/*` | `main.py` |
-| Очередь на одну GPU, задачи на диске, восстановление после перезапуска | `backend/app/jobs.py` |
-| Удаление видео через `VIDEO_TTL_SEC` (видео жюри хранить нельзя) | `jobs.py` → `_clean` |
-| Жёсткий лимит от загрузки `JOB_HARD_LIMIT_SEC=280` (передаётся в пайплайн) | `jobs.py` |
-| Обратная связь проверяющего → `storage/feedback.jsonl` | `POST /ui/api/jobs/{id}/feedback` |
-| Резервный интерфейс и live-страница | `backend/static/index.html`, `live.html` |
-| WebSocket live: кадры → детектор → алерты | `backend/app/live.py`, `ml/live.py` |
-| Проверка «как жюри» | `tools/smoke_test.py` |
-| Автоперезапуск, лог `storage/server.log` | `deploy/run_server.ps1`, `.sh` |
+| `POST /api/v1/analyze`, `GET /api/v1/jobs/{id}`, ключ `X-API-Key` (+Bearer), 401/400/413/429, `/api/v1/rules` | `routers/jury.py` |
+| Загрузка потоком с SHA-256; дедуп одинаковых файлов → мгновенный результат | `storage.py`, `jobs.py` |
+| Очередь с приоритетами (жюри → UI → replay), воркер в отдельном процессе, сторожевой таймер (дедлайн + зависание), ретрай после падения, респавн | `worker.py` |
+| Anytime-результат: к 5-й минуте всегда `done` (частичный результат вместо `failed`) | `jobs.py` (`ON_DEADLINE`, `ON_FAILURE`) |
+| Проверка и починка ответа по схеме ТЗ перед выдачей | `jobs.sanitize_result` |
+| SQLite: задачи, алерты, камеры, ключи, feedback, аудит; восстановление незаконченных задач после рестарта | `db.py`, `jobs.recover` |
+| SSE прогресса `/ui/api/jobs/{id}/events`, список задач, статистика | `routers/ui.py`, `sse.py` |
+| Алерты: серьёзность по типу, дедуп, эскалация оператор → супервайзер, ack, Telegram-бот с кнопками, webhook с HMAC, e-mail | `alerts/`, `backend/alerts.yaml` |
+| Live: WebSocket браузера; RTSP/файл-камеры с реконнектом; снижение fps при занятой GPU; снимок с рамками; WS/MJPEG трансляция | `live/` |
+| Печатный акт проверки + фрагменты 10 с (ffmpeg) | `reports.py`, `templates/report.html` |
+| Роли и ключи (`ui`/`jury`/`admin`), admin API, журнал аудита | `auth.py`, `routers/admin.py` |
+| `/health`, `/ready`, `/metrics` (Prometheus), `/version`, request-id в логах, ротация `storage/server.log` | `routers/system.py`, `logging_setup.py` |
+| Удаление видео и фрагментов через `VIDEO_TTL_SEC` | `storage.Retention` |
+| Нагрузочные инструменты: параллельные загрузки, шторм live-сессий, симуляция камер | `tools/loadtest.py`, `tools/simulate_cameras.py` |
+| Docker + compose (профили `gpu`, `vlm`, `public`, `weights`), сеть без интернета для анализа | `deploy/` |
 
-## 2. Задачи
+## 2. Что осталось
 
-### 2.1. API строго по ТЗ (критерии 1–3 считаются автоматически по нему)
-- Пройди раздел 10 ТЗ построчно против `docs/api_contract.md` и реального ответа.
-- Крайние случаи: неизвестный `job_id` (404), пустой файл, не видео, файл 200+ МБ, обрыв загрузки,
-  два одинаковых файла подряд, перезапуск сервера посреди обработки.
-- `failed` должен быть редкостью: если пайплайн упал на части — лучше `done` с тем, что успели (обсуди с ML).
+### 2.1. Деплой на ROG (вместе с ML)
+По `deploy/README.md`: `.env` с `ANALYZER=ml`, явные `API_KEY` и `ADMIN_KEY`, `HF_HUB_OFFLINE=1`, `run_server.ps1`, `cloudflared`.
+Проверить `GET /ready` = 200 (воркер прогрет) до того, как отдавать адрес жюри. `PUBLIC_URL` в `.env` — для ссылок в алертах.
 
-### 2.2. Развёртывание на ROG (вместе с ML)
-По `deploy/README.md`: настройки сна, `.env` с `ANALYZER=ml` и явным `API_KEY`, `run_server.ps1`, `cloudflared`.
-Проверка с телефона через мобильный интернет. Публичный URL + ключ → в чек-лист сдачи.
-
-### 2.3. Нагрузочная проверка
+### 2.2. Проверка «как жюри» на ROG
 ```bash
 python tools/smoke_test.py --url https://<адрес> --key <ключ> --dir data/open/videos --limit 5
+python tools/loadtest.py  --url https://<адрес> --key <ключ> --dir data/open/videos --uploads 10 --unique --json loadtest.json
 ```
-Пять видео одновременно, каждое должно вернуть `done` < 300 с от загрузки и пройти схему.
-Если не укладываемся — к ML: уменьшать `MAX_VLM_CALLS` / размер кадров.
+Все `done` < 300 с, `partial 0`. Если появляются `partial` — к ML: уменьшать `MAX_VLM_CALLS` / `VLM_TIMEOUT`, или поднимать
+`JOB_HARD_LIMIT_SEC` нельзя (жюри ждёт 300 с от начала загрузки). Сам сервис уже никогда не возвращает «ничего».
 
-### 2.4. Live-режим (уникальная функция)
-Работает уже сейчас: `http://127.0.0.1:8000/live.html` (на Mac с `ANALYZER=mock` — без детекций).
-Доделать:
-1. Проверить на ROG с `ANALYZER=ml`: FPS, задержка, алерты (телефон, стакан, сумка, >2 человек, экран без присмотра).
-2. **IP-камера (RTSP).** `POST /ui/api/live/source {"url": "rtsp://..."}` → фоновый поток читает `cv2.VideoCapture(url)`,
-   прогоняет детектор и шлёт клиенту по WebSocket кадр (JPEG base64) + детекции. Для питча: «подключается к существующей CCTV».
-3. **Приоритет жюри.** Пока в очереди есть задачи (`worker.queue_size() > 0` или идёт обработка), live снижает частоту
-   до 1 кадра/с — анализ видео важнее.
-4. Журнал live-событий в `storage/live_events.jsonl` и выгрузка `GET /ui/api/live/events`.
+### 2.3. Цифры для презентации
+1. `tools/loadtest.py --ws 200 --fps 2 --seconds 60` на ROG — серверные ms на кадр и доставленный fps → слайд «control plane держит N кабинетов».
+2. Пропускная способность детектора (fps при batch 1/8/16, FP16) — от ML; пересчёт в число GPU на 1000 камер.
+3. `tools/simulate_cameras.py --count 20` + страница live — живой дашборд на питче; `/metrics` в Grafana на втором экране.
+4. Chaos-демо: `kill -9 <pid воркера>` из `/health` посреди задачи → задача доделывается другим процессом (`meta.attempts: 2`).
 
-### 2.5. Обратная связь → «дообучение» (критерий 7, развитие)
-`GET /ui/api/feedback.csv` — выгрузка подтверждений/ложных срабатываний. На питче: «проверяющий отмечает ошибки,
-мы калибруем пороги по этим данным». Видео в обратную связь не пишем.
+### 2.4. Telegram
+Создать бота у @BotFather, добавить в групповые чаты операторов/супервайзеров, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_*` в `.env`.
+Кнопки «Принял / Ложное» под сообщением работают через long-polling — отдельного сервера не нужно.
 
-### 2.6. Помощь ML: VLM на Mac
-Ollama есть и для macOS: `ollama pull qwen2.5vl:7b`. С `ANALYZER=ml` пайплайн на Mac запустится
-(детектор на `mps`) — можно параллельно с ROG гонять оценку на части видео и пробовать промпты:
-`python -m ml.eval.evaluate --videos data/open/videos --only 1,2,17,20 --force`.
+### 2.5. Фронт (Алдияр)
+Новые данные для интерфейса: SSE прогресса, `queue_position`/`eta_sec`, `partial`/`warning`, `clips`, отчёт `report.html`,
+центр алертов (`/ui/api/alerts`, `/ui/api/alerts/stream`, ack), камеры (`/ui/api/cameras/{id}/ws`). Всё описано в `docs/api_contract.md`.
 
 ## 3. Готово, когда
 
-- [ ] `pytest` зелёный; ответы проходят `ml/schema.py`
-- [ ] Публичный HTTPS-адрес работает с мобильного интернета; без ключа — 401
-- [ ] `smoke_test.py` на 5 видео одновременно: все `done` < 300 с
-- [ ] Сервис сам поднимается после падения; после перезапуска незаконченные задачи доделываются
-- [ ] Live-режим на ROG показывает рамки и алерты; есть RTSP-источник или понятное «будет так» на питче
-- [ ] Видео удаляются через час, в логах нет API-ключа целиком
+- [x] `pytest` зелёный; ответы проходят `ml/schema.py`
+- [ ] Публичный HTTPS-адрес работает с мобильного интернета; без ключа — 401; `/ready` = 200
+- [ ] `loadtest.py --uploads 10 --unique` на ROG: все `done` < 300 с, `partial 0`
+- [x] Сервис сам поднимается после падения; незаконченные задачи доделываются; зависший анализ убивается
+- [ ] Live-режим на ROG показывает рамки и алерты; камеры-симуляторы для питча
+- [x] Видео удаляются через час, в логах нет API-ключа целиком
 
 ## Подводные камни
 
-- Не меняй имена и типы обязательных полей ответа — оценка автоматическая.
-- Один воркер на GPU — не запускай несколько `uvicorn --workers`: каждая копия загрузит модели в 8 ГБ VRAM.
+- Не меняй имена и типы обязательных полей ответа — оценка автоматическая. `jobs.sanitize_result` страхует, но не заменяет ML.
+- `WORKERS=1` на одну GPU: каждый воркер загружает модели. `uvicorn --workers N` не использовать (состояние в процессе).
+- `WORKER_MODE=process` на Windows использует spawn: функция анализа должна быть импортируемой (`ml.pipeline.analyze` — ок).
 - Адрес `trycloudflare.com` меняется при перезапуске `cloudflared` — после сдачи не перезапускать.
+- Камеры добавляются только admin-ключом (файл-источник = чтение с диска сервера).

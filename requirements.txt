@@ -1,4 +1,4 @@
-# Базовые зависимости: backend + mock + чтение видео (Mac/Windows/Linux)
+# Base: backend + mock analyzer + video I/O (Mac / Windows / Linux). Model deps: ml/requirements-ml.txt
 fastapi>=0.110
 uvicorn[standard]>=0.29
 python-multipart>=0.0.9
@@ -6,4 +6,6 @@ opencv-python-headless>=4.9
 numpy>=1.26
 pyyaml>=6.0
 httpx>=0.27
+jinja2>=3.1
+prometheus-client>=0.20
 pytest>=8.0
