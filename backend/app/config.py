@@ -31,26 +31,27 @@ def load_dotenv(path: Path | None = None) -> None:
 
 
 def _env(name: str, default: str) -> str:
-    return os.getenv(name, default)
+    v = os.getenv(name)
+    return default if v is None or v.strip() == "" else v
 
 
 def _int(name: str, default: int) -> int:
-    return int(float(os.getenv(name, default)))
+    return int(float(_env(name, str(default))))
 
 
 def _float(name: str, default: float) -> float:
-    return float(os.getenv(name, default))
+    return float(_env(name, str(default)))
 
 
 def _bool(name: str, default: bool) -> bool:
     v = os.getenv(name)
-    if v is None:
+    if v is None or v.strip() == "":
         return default
     return v.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _list(name: str, default: str) -> list[str]:
-    return [x.strip() for x in os.getenv(name, default).split(",") if x.strip()]
+    return [x.strip() for x in _env(name, default).split(",") if x.strip()]
 
 
 def _git_sha() -> str:

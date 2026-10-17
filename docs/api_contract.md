@@ -85,7 +85,7 @@ curl https://<адрес>/api/v1/jobs/<job_id> -H "X-API-Key: <ключ>"
 | GET | `/ui/api/jobs` | последние задачи (`?limit=50`) |
 | GET | `/ui/api/jobs/{id}` | статус и результат + `queue_position`, `eta_sec`, `clips` (индексы нарушений, у которых есть фрагмент) |
 | GET | `/ui/api/jobs/{id}/events` | **SSE**: `snapshot` → `progress`… → `done` / `failed`; соединение закрывается после финального события |
-| GET | `/ui/api/jobs/{id}/report.html` | печатный акт проверки (вердикт, шкала времени, кадры, нормы, хэши) |
+| GET | `/ui/api/jobs/{id}/report.html?lang=ru\|kk\|en` | печатный отчёт (вердикт, решения проверяющего, кадры, нормы, хэши); без `lang` — по Accept-Language, по умолчанию ru |
 | GET | `/ui/api/jobs/{id}/violations/{i}/clip.mp4` | фрагмент 10 с вокруг нарушения (пока видео не удалено по TTL) |
 | POST | `/ui/api/jobs/{id}/feedback` | `{"violation_index": 0, "decision": "confirm" \| "reject" \| "wrong_type", "comment": "...", "correct_type": "T05"}` |
 | GET | `/ui/api/feedback.csv` | выгрузка обратной связи |

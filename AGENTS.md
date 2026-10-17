@@ -47,13 +47,13 @@ backend/app/         (подробно — docs/backend.md; контракт —
   db.py, storage.py, auth.py, events.py, sse.py, metrics.py, reports.py, state.py
   alerts/          policy engine (backend/alerts.yaml), каналы web/telegram/webhook/email
   live/            WebSocket браузера, RTSP/файл-камеры, live-анализатор
-backend/static/    интерфейс (index.html, app.css, app.js) — SPA без сборки, подключён к /ui/api
+backend/static/    интерфейс (index.html, app.css, app.js, i18n.js) — SPA без сборки, RU/KK/EN; i18n-kb.json — переводы типов и норм
 backend/templates/ печатный акт проверки
 frontend/          (опционально) React-сборка в frontend/dist подхватывается вместо backend/static
 tools/smoke_test.py       проверка «как жюри»: N видео параллельно, время и схема
 tools/loadtest.py         нагрузка: параллельные загрузки / шторм live-сессий
 tools/simulate_cameras.py камеры-симуляторы из файлов датасета
-deploy/                   run_server.sh/.ps1, Dockerfile, docker-compose.yml
+deploy/                   run_server.sh/.ps1, docker.ps1/.sh, Dockerfile (compose — в корне, см. deploy/DOCKER.md)
 ```
 
 Пайплайн: кадры 2 fps → детектор → сигналы → кандидаты (вход/выход людей, перемещение, появление

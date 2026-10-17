@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from .. import metrics
 from ..auth import Principal, rate_limit_subject, require_role, ui_access
 from ..live import browser_session, camera_stream
+from ..i18n import pick_lang
 from ..reports import clip_path, render_report
 from ..sse import sse_response
 from ..storage import save_upload
@@ -158,7 +159,7 @@ def ui_feedback_csv(request: Request, p: Principal = Depends(ui_access)):
 # ----------------------------------------------------------------------------- reports & clips
 
 @router.get("/jobs/{job_id}/report.html", response_class=HTMLResponse)
-def ui_report(job_id: str, request: Request, p: Principal = Depends(ui_access)):
+def ui_report(job_id: str, request: Request, lang: str | None = None, p: Principal = Depends(ui_access)):
     st = _st(request)
     job = _job_or_404(st, job_id)
     if job["status"] != "done":
@@ -168,7 +169,8 @@ def ui_report(job_id: str, request: Request, p: Principal = Depends(ui_access)):
     owner = _clip_owner(job)
     clips = {i: f"/ui/api/jobs/{job_id}/violations/{i}/clip.mp4"
              for i in range(len(result.get("violations") or [])) if clip_path(owner, i).exists()}
-    return HTMLResponse(render_report(job, result, clips, decisions))
+    lang = pick_lang(lang, request.headers.get("accept-language"))
+    return HTMLResponse(render_report(job, result, clips, decisions, lang))
 
 
 @router.get("/jobs/{job_id}/violations/{index}/clip.mp4")

@@ -25,8 +25,7 @@ powershell -ExecutionPolicy Bypass -File deploy\run_server.ps1
 Проверка: http://127.0.0.1:8000 (интерфейс), http://127.0.0.1:8000/health, http://127.0.0.1:8000/ready
 (200 — воркер прогрет, можно отдавать адрес жюри; 503 — ещё грузит модели или анализатор не стартовал — см. storage/server.log).
 
-Альтернатива на Linux/с Docker: `docker compose -f deploy/docker-compose.yml --profile gpu --profile vlm --profile public up -d`
-(сначала `--profile weights run --rm weights`, чтобы скачать веса в volume; после этого сервис анализа без интернета).
+Или всё в Docker одной командой (GPU + Ollama + туннель): `powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel` — см. `deploy/DOCKER.md`.
 
 ## 3. Публичный адрес (Cloudflare Tunnel)
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
-<script>try{const t=localStorage.getItem('cg_theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+<script>try{const t=localStorage.getItem('cg_theme');if(t)document.documentElement.dataset.theme=t;const l=localStorage.getItem('cg_lang');if(l)document.documentElement.lang=l;}catch(e){}</script>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -40,14 +40,15 @@
     <span class="lens" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></svg></span>
     <b>CashGuard</b>
   </a>
-  <nav class="tabs" aria-label="Sections">
-    <a href="/" class="tab" data-nav="checks">Checks</a>
-    <a href="/?view=live" class="tab" data-nav="live">Live monitoring <span class="badge" id="alertBadge" hidden></span></a>
-    <a href="/?view=rules" class="tab" data-nav="rules">Rules</a>
+  <nav class="tabs" aria-label="Sections" data-i18n-aria="nav.sections">
+    <a href="/" class="tab" data-nav="checks"><span data-i18n="nav.checks">Checks</span></a>
+    <a href="/?view=live" class="tab" data-nav="live"><span data-i18n="nav.live">Live monitoring</span> <span class="badge" id="alertBadge" hidden></span></a>
+    <a href="/?view=rules" class="tab" data-nav="rules"><span data-i18n="nav.rules">Rules</span></a>
   </nav>
   <div class="top-right">
-    <span class="status" id="status" title="Server status"><i class="dot"></i><span>Connecting…</span></span>
-    <button class="icon-btn ghost" id="themeBtn" aria-label="Switch theme"><svg class="i"><use href="#i-moon"/></svg></button>
+    <span class="status" id="status" data-i18n-title="status.title"><i class="dot"></i><span data-i18n="status.connecting">Connecting…</span></span>
+    <div class="lang-sw" role="group" aria-label="Language" data-i18n-aria="lang"><button data-lang="ru" lang="ru">РУС</button><button data-lang="kk" lang="kk">ҚАЗ</button><button data-lang="en" lang="en">ENG</button></div>
+    <button class="icon-btn ghost" id="themeBtn" aria-label="Switch theme" data-i18n-aria="theme" data-i18n-title="theme"><svg class="i"><use href="#i-moon"/></svg></button>
   </div>
 </header>
 
@@ -58,6 +59,7 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <input type="file" id="filePick" accept=".mov,.mp4,.m4v,video/quicktime,video/mp4" multiple hidden>
 
+<script src="/i18n.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

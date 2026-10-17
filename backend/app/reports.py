@@ -13,6 +13,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .config import get_settings
+from .i18n import LANGS, Translator, short_desc
 
 log = logging.getLogger("backend.reports")
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
@@ -32,20 +33,13 @@ def _sha8(b64: str) -> str:
     return hashlib.sha256(b64.encode("ascii", "ignore")).hexdigest()[:8]
 
 
-def _shortdesc(d) -> str:
-    """Description without the trailing norm reference (the report shows the regulation separately)."""
-    import re
-    d = re.split(r"\s*Основание:", str(d or ""))[0]
-    return re.sub(r"\s*Прямой публичной нормы не установлено\.?$", "", d).strip()
-
-
 _env.filters["tc"] = _tc
-_env.filters["shortdesc"] = _shortdesc
+_env.filters["shortdesc"] = short_desc
 _env.filters["sha8"] = _sha8
 
 
 def render_report(job: dict, result: dict, clips: dict[int, str] | None = None,
-                  decisions: dict[int, str] | None = None) -> str:
+                  decisions: dict[int, str] | None = None, lang: str = "ru") -> str:
     s = get_settings()
     tpl = _env.get_template("report.html")
     processing = round((job.get("finished_at") or time.time()) - (job.get("request_started_at") or job["created_at"]), 1)
@@ -53,8 +47,9 @@ def render_report(job: dict, result: dict, clips: dict[int, str] | None = None,
     decisions = decisions or {}
     n = len(result.get("violations") or [])
     reviewed = sum(1 for i in range(n) if i in decisions)
+    tr = Translator(lang)
     return tpl.render(job=job, result=result, clips=clips or {}, processing_sec=processing, decisions=decisions,
-                      reviewed=reviewed,
+                      reviewed=reviewed, t=tr, lang=tr.lang, langs=LANGS,
                       service_version=s.version, result_hash=result_hash,
                       generated_at=datetime.now().strftime("%d.%m.%Y %H:%M"),
                       uploaded_at=datetime.fromtimestamp(job["created_at"]).strftime("%d.%m.%Y %H:%M"))

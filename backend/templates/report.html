@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Check report · {{ job.filename }}</title>
+<title>{{ t("title") }} · {{ job.filename }}</title>
 <style>
   @page { size: A4; margin: 14mm 14mm 16mm; }
   :root { --ink:#1C1820; --muted:#6B6472; --line:#E4E0E8; --soft:#F7F6F8; --brand:#C8235F;
@@ -57,102 +57,120 @@
   .bar { position: sticky; top: 0; z-index: 2; background: #1C1820; color: #fff; padding: 10px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; font-size: 13px; }
   .bar button, .bar a { font: inherit; border: 0; border-radius: 6px; padding: 7px 14px; background: var(--brand); color: #fff; cursor: pointer; text-decoration: none; }
   .bar a.ghost { background: transparent; color: #ddd; }
+  .bar .langs { display: flex; gap: 2px; margin-left: 8px; }
+  .bar .langs a { background: transparent; color: #bbb; padding: 7px 9px; font-size: 12px; font-weight: 600; }
+  .bar .langs a.on { background: rgba(255,255,255,.14); color: #fff; }
+  .note-ru { font-size: 11px; color: var(--muted); }
   @media print { body { background: #fff; } .sheet { box-shadow: none; margin: 0; padding: 0; max-width: none; } .bar { display: none; } }
   @media (max-width: 640px) { .sheet { padding: 20px 16px; margin: 0; border-radius: 0; } .grid { grid-template-columns: 1fr; } .head { flex-direction: column; } .head .right { text-align: left; } .sign { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<div class="bar"><span>Check report — print it or save as PDF</span><button onclick="window.print()">Print / Save PDF</button><a class="ghost" href="/?check={{ job.job_id }}">Back to the check</a></div>
+<div class="bar"><span>{{ t("bar") }}</span><button onclick="window.print()">{{ t("print") }}</button><a class="ghost" href="/?check={{ job.job_id }}">{{ t("back") }}</a>
+  <span class="langs">{% for l, label in (("ru", "РУС"), ("kk", "ҚАЗ"), ("en", "ENG")) %}<a href="?lang={{ l }}" class="{{ 'on' if l == lang else '' }}" lang="{{ l }}">{{ label }}</a>{% endfor %}</span></div>
 <div class="sheet">
   <div class="head">
     <div>
       <div class="brand">CashGuard · ForteBank</div>
-      <h1>Cash-desk video check</h1>
+      <h1>{{ t("h1") }}</h1>
       <div class="muted">{{ job.filename }}</div>
     </div>
     <div class="right">
-      <div>Report generated {{ generated_at }}</div>
-      <div class="muted mono">Check ID {{ job.job_id }}</div>
+      <div>{{ t("generated") }}: {{ generated_at }}</div>
+      <div class="muted mono">{{ t("check_id") }} {{ job.job_id }}</div>
     </div>
   </div>
 
   <div class="verdict {{ result.verdict }}">
     <div>
-      <div class="big">{% if result.verdict == 'violation' %}Signs of possible violations detected{% else %}No violation detected{% endif %}</div>
+      <div class="big">{{ t("v_bad") if result.verdict == 'violation' else t("v_ok") }}</div>
       <div class="sub">
-        {% if result.verdict == 'violation' %}{{ result.violations|length }} finding{{ '' if result.violations|length == 1 else 's' }} · reviewed {{ reviewed }} of {{ result.violations|length }}{% else %}No visually observable sign of a cash-handling violation{% endif %}
+        {% if result.verdict == 'violation' %}{{ t("v_bad_sub", n=result.violations|length, r=reviewed) }}{% else %}{{ t("v_ok_sub") }}{% endif %}
       </div>
     </div>
   </div>
-  {% if job.partial %}<div class="partial">Partial result: the analysis reached its time limit before checking the whole recording.</div>{% endif %}
+  {% if job.partial %}<div class="partial">{{ t("partial") }}</div>{% endif %}
 
-  <h2>Recording</h2>
+  <h2>{{ t("recording") }}</h2>
   <table class="facts">
-    <tr><td>File</td><td>{{ job.filename }}</td></tr>
-    <tr><td>Duration</td><td class="mono">{{ (job.duration_sec or 0)|tc }}</td></tr>
-    <tr><td>Uploaded</td><td>{{ uploaded_at }}</td></tr>
-    <tr><td>Analysis time</td><td>{{ processing_sec }} s · {{ job.analyzer }}</td></tr>
-    <tr><td>Video fingerprint (SHA-256)</td><td class="mono" style="font-size:11px;word-break:break-all">{{ job.sha256 }}</td></tr>
+    <tr><td>{{ t("file") }}</td><td>{{ job.filename }}</td></tr>
+    <tr><td>{{ t("duration") }}</td><td class="mono">{{ (job.duration_sec or 0)|tc }}</td></tr>
+    <tr><td>{{ t("uploaded") }}</td><td>{{ uploaded_at }}</td></tr>
+    <tr><td>{{ t("analysis") }}</td><td>{{ processing_sec }} {{ t("sec") }} · {{ job.analyzer }}</td></tr>
+    <tr><td>{{ t("sha") }}</td><td class="mono" style="font-size:11px;word-break:break-all">{{ job.sha256 }}</td></tr>
   </table>
 
   {% if result.violations %}
-  <h2>Summary</h2>
+  <h2>{{ t("summary") }}</h2>
   <table class="summary">
-    <thead><tr><th>#</th><th>Time</th><th>Possible violation</th><th>Reviewer decision</th></tr></thead>
+    <thead><tr><th>#</th><th>{{ t("time") }}</th><th>{{ t("possible") }}</th><th>{{ t("decision") }}</th></tr></thead>
     <tbody>
     {% for v in result.violations %}
       {% set d = decisions.get(loop.index0) %}
       <tr>
         <td>{{ loop.index }}</td>
         <td class="mono">{{ v.timecode_sec|tc }}</td>
-        <td>{{ v.type }}</td>
-        <td>{% if d == 'confirm' %}<span class="pill confirm">Confirmed</span>{% elif d in ('reject','wrong_type') %}<span class="pill reject">Not a violation</span>{% else %}<span class="pill none">Not reviewed</span>{% endif %}</td>
+        <td>{{ t.type_name(v) }}</td>
+        <td>{% if d == 'confirm' %}<span class="pill confirm">{{ t("confirmed") }}</span>{% elif d in ('reject','wrong_type') %}<span class="pill reject">{{ t("rejected") }}</span>{% else %}<span class="pill none">{{ t("none") }}</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 
-  <h2>Findings</h2>
+  <h2>{{ t("findings") }}</h2>
   {% for v in result.violations %}
     {% set d = decisions.get(loop.index0) %}
     {% set frames = v.evidence_frames %}
     {% set key = frames|sort(attribute='timestamp_sec')|list %}
     <div class="finding">
       <div class="top">
-        <h3><span class="num">{{ loop.index }}</span>{{ v.type }}</h3>
+        <h3><span class="num">{{ loop.index }}</span>{{ t.type_name(v) }}</h3>
         <span class="mono">{{ v.timecode_sec|tc }}</span>
       </div>
       <div class="grid">
         <div class="shots">
           {% set main = (frames|selectattr('timestamp_sec', 'equalto', v.timecode_sec)|list or [frames[(frames|length)//2]])[0] %}
-          <img class="key" src="data:image/jpeg;base64,{{ main.image_base64 }}" alt="Frame at {{ main.timestamp_sec }} s">
+          <img class="key" src="data:image/jpeg;base64,{{ main.image_base64 }}" alt="{{ t("frame_at") }} {{ main.timestamp_sec|tc }}">
           <div class="cap mono">{{ main.timestamp_sec|tc }} · {{ main.image_base64|sha8 }}</div>
           {% set others = frames|rejectattr('timestamp_sec', 'equalto', main.timestamp_sec)|list %}
-          {% if others %}<div class="row">{% for f in others[:2] %}<img src="data:image/jpeg;base64,{{ f.image_base64 }}" alt="Frame at {{ f.timestamp_sec }} s">{% endfor %}</div>
+          {% if others %}<div class="row">{% for f in others[:2] %}<img src="data:image/jpeg;base64,{{ f.image_base64 }}" alt="{{ t("frame_at") }} {{ f.timestamp_sec|tc }}">{% endfor %}</div>
           <div class="cap mono">{% for f in others[:2] %}{{ f.timestamp_sec|tc }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
         </div>
         <div>
+          {% set ds = t.description(v) %}
+          {% if ds.why %}
           <div class="block">
-            <p class="label">What is seen and why it may be a violation</p>
-            <div lang="ru">{{ v.description|shortdesc }}</div>
+            <p class="label">{{ t("why") }}</p>
+            <div>{{ ds.why }}</div>
           </div>
+          {% if ds.observed %}<div class="block">
+            <p class="label">{{ t("model_note") }}</p>
+            <div lang="ru" class="muted">{{ ds.observed }}.</div>
+          </div>{% endif %}
+          {% else %}
+          <div class="block">
+            <p class="label">{{ t("seen") }}</p>
+            <div lang="ru">{{ ds.full }}</div>
+          </div>
+          {% endif %}
           {% if v.rule and v.rule.refs %}
           <div class="block">
-            <p class="label">Regulation</p>
+            <p class="label">{{ t("regulation") }}</p>
             {% for r in v.rule.refs %}
-            <div class="rule" lang="ru">
-              <b>{{ r.document }}</b>{% if r.point %}, {{ r.point }}{% endif %}
-              {% if r.quote %}<div><q>{{ r.quote }}</q></div>{% endif %}
-              {% if r.url %}<div><a href="{{ r.url }}">{{ r.url }}</a></div>{% endif %}
+            <div class="rule">
+              <b>{{ t.doc(r) }}</b>{% if r.point %}, {{ t.point(r.point) }}{% endif %}
+              {% if r.quote %}<div><q lang="ru">{{ r.quote }}</q>{% if t("quote_note") %} <span class="note-ru">({{ t("quote_note") }})</span>{% endif %}</div>{% endif %}
+              {% if r.url %}<div><a href="{{ t.url(r.url) }}">{{ t.url(r.url) }}</a></div>{% endif %}
             </div>
             {% endfor %}
-            {% if v.rule.caveat %}<div class="caveat" lang="ru">{{ v.rule.caveat }}</div>{% endif %}
+            {% set cav = t.caveat(v) %}
+            {% if cav %}<div class="caveat">{{ cav }}</div>{% endif %}
           </div>
           {% endif %}
           <div class="block">
-            <p class="label">Reviewer decision</p>
-            {% if d == 'confirm' %}<span class="pill confirm">Confirmed as a violation</span>{% elif d in ('reject','wrong_type') %}<span class="pill reject">Not a violation</span>{% else %}<span class="pill none">Not reviewed yet</span>{% endif %}
-            {% if v.confidence is defined and v.confidence is not none %}<span class="muted" style="margin-left:8px;font-size:12px">model confidence {{ '%.0f'|format(v.confidence*100) }}%</span>{% endif %}
+            <p class="label">{{ t("decision") }}</p>
+            {% if d == 'confirm' %}<span class="pill confirm">{{ t("confirmed_long") }}</span>{% elif d in ('reject','wrong_type') %}<span class="pill reject">{{ t("rejected") }}</span>{% else %}<span class="pill none">{{ t("none_long") }}</span>{% endif %}
+            {% if v.confidence is defined and v.confidence is not none %}<span class="muted" style="margin-left:8px;font-size:12px">{{ t("confidence", p='%.0f'|format(v.confidence*100)) }}</span>{% endif %}
           </div>
         </div>
       </div>
@@ -161,15 +179,13 @@
   {% endif %}
 
   <div class="sign">
-    <div>Reviewed by (name)</div>
-    <div>Position</div>
-    <div>Date and signature</div>
+    <div>{{ t("sign_name") }}</div>
+    <div>{{ t("sign_pos") }}</div>
+    <div>{{ t("sign_date") }}</div>
   </div>
 
   <div class="foot">
-    This report is a hint for human review, not a final legal or disciplinary conclusion. The analysis covers only what is visible
-    on the video; transaction records, reconciliations, amounts and identities are not established from video.
-    All models run locally on the service; the video was not sent to external services. Result hash {{ result_hash }} · service {{ service_version }}.
+    {{ t("foot") }} {{ t("hash", h=result_hash, v=service_version) }}
   </div>
 </div>
 </body>

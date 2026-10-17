@@ -99,8 +99,11 @@ def test_ui_routes(app_factory, video):
         assert job_id in csv and "reject" in csv
         assert c.post(f"/ui/api/jobs/{job_id}/feedback", json={"decision": "bogus"}).status_code == 422
         # report
-        r = c.get(f"/ui/api/jobs/{job_id}/report.html")
-        assert r.status_code == 200 and "Cash-desk video check" in r.text
+        for lang, title in (("en", "Cash-desk video check"), ("ru", "Проверка видео с кассы"), ("kk", "Касса бейнежазбасын тексеру")):
+            r = c.get(f"/ui/api/jobs/{job_id}/report.html?lang={lang}")
+            assert r.status_code == 200 and title in r.text and f'<html lang="{lang}">' in r.text
+        assert "Проверка видео с кассы" in c.get(f"/ui/api/jobs/{job_id}/report.html").text
+        assert "Cash-desk video check" in c.get(f"/ui/api/jobs/{job_id}/report.html", headers={"Accept-Language": "en-US,en;q=0.9"}).text
         assert c.get("/metrics").status_code == 200
         assert b"cashguard_jobs_total" in c.get("/metrics").content
         assert c.get("/version").json()["analyzer"] == "mock"
@@ -251,8 +254,9 @@ def test_review_decisions_and_clear(app_factory, video):
         c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "clear"})
         assert c.get(f"/ui/api/jobs/{jid}").json()["decisions"] == {}
         c.post(f"/ui/api/jobs/{jid}/feedback", json={"violation_index": 0, "decision": "reject"})
-        r = c.get(f"/ui/api/jobs/{jid}/report.html")
+        r = c.get(f"/ui/api/jobs/{jid}/report.html?lang=en")
         assert r.status_code == 200 and "Not a violation" in r.text and "Reviewed by" in r.text
+        assert "Не нарушение" in c.get(f"/ui/api/jobs/{jid}/report.html?lang=ru").text
         assert c.get("/").headers.get("cache-control") == "no-cache"
 
 
@@ -271,3 +275,37 @@ def test_review_decision_closes_alert(app_factory, video):
         assert c.get("/ui/api/alerts").json()["alerts"][0]["state"] == "resolved"
         fb = c.get(f"/ui/api/jobs/{jid}/feedback").json()["feedback"]
         assert len(fb) == 3
+
+
+def test_i18n_tables_are_complete():
+    import json
+    import re
+    from pathlib import Path
+
+    from backend.app.i18n import REPORT, Translator
+    from ml import kb
+
+    for lang in ("ru", "kk"):
+        assert set(REPORT[lang]) == set(REPORT["en"])
+    static = Path(__file__).resolve().parents[1] / "static"
+    data = json.loads((static / "i18n-kb.json").read_text(encoding="utf-8"))
+    for code in kb.type_codes():
+        for lang in ("en", "kk"):
+            entry = data["types"][code][lang]
+            assert entry["name"] and entry["visual"] and entry["why"], (code, lang)
+            if kb.rule_of(code).get("caveat"):
+                assert entry.get("caveat"), (code, lang)
+    srcs = kb.load_kb()["sources"]
+    for sid, src in srcs.items():
+        assert data["sources"][sid]["match"] in (src.get("url") or ""), sid
+    js = (static / "i18n.js").read_text(encoding="utf-8")
+    blocks = re.split(r"\n  (?:en|ru|kk): \{", js)[1:4]
+    keys = [set(re.findall(r"'([a-zA-Z_.]+)':", b.split("\n  },")[0])) for b in blocks]
+    assert keys[0] == keys[1] == keys[2] and len(keys[0]) > 150
+    t = Translator("en")
+    v = {"type": "Сейф", "type_code": "T03", "description": "Сейф открыт. Это может указывать на нарушение: x. Основание: п. 20 — y.",
+         "rule": {"caveat": None}}
+    assert t.type_name(v) == "Safe left open and unattended"
+    assert t.description(v)["observed"] == "Сейф открыт" and t.description(v)["why"]
+    assert t.point("п. 71 пп. 9") == "para. 71 subpara. 9" and Translator("kk").point("п. 20") == "20-тармақ"
+    assert Translator("kk").doc({"document": "x", "url": "https://adilet.zan.kz/rus/docs/V1900019680"}).startswith("Кассалық")

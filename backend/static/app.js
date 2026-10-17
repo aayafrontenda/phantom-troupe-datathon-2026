@@ -1,4 +1,4 @@
-/* CashGuard UI — plain JS over /ui/api (docs/api_contract.md). Views: checks list, check, live, rules. */
+/* CashGuard UI — plain JS over /ui/api (docs/api_contract.md). Views: checks list, check, live, rules. Strings: i18n.js */
 'use strict';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -8,13 +8,14 @@ const icon = (id, cls = '') => `<svg class="i ${cls}"><use href="#i-${id}"/></sv
 const tc = t => { t = Math.max(0, +t || 0); const m = Math.floor(t / 60); return `${String(m).padStart(2, '0')}:${(t - m * 60).toFixed(1).padStart(4, '0')}`; };
 const ago = ts => {
   const s = Math.max(0, Date.now() / 1000 - ts);
-  if (s < 60) return 'just now'; if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 60) return t('ago.now'); if (s < 3600) return t('ago.min', { n: Math.floor(s / 60) });
   const d = new Date(ts * 1000), today = new Date();
   const hm = d.toTimeString().slice(0, 5);
-  return d.toDateString() === today.toDateString() ? `today ${hm}` : `${d.toLocaleDateString()} ${hm}`;
+  return d.toDateString() === today.toDateString() ? t('ago.today', { t: hm }) : `${d.toLocaleDateString(LANGS[LANG].locale)} ${hm}`;
 };
-const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-const KIND = { direct: 'Direct rule', indirect: 'Indirect rule', internal: 'Internal regulation' };
+const tx = (key, fallback) => (I18N[LANG][key] != null ? t(key) : fallback);
+const kindLabel = k => tx(`kind.${k}`, k || '');
+const reportUrl = id => `/ui/api/jobs/${id}/report.html?lang=${LANG}`;
 const LIVE_CODES = new Set(['T01', 'T05', 'T13', 'T14', 'T15']);
 
 /* ---------- api / ui helpers ---------- */
@@ -48,7 +49,7 @@ function modal(html, onMount) {
 }
 const confirmBox = (title, text, okLabel, danger = true) => modal(`
   <h3>${esc(title)}</h3><p>${text}</p>
-  <div class="acts"><button class="btn" data-close>Cancel</button><button class="btn ${danger ? 'danger-solid' : 'primary'}" id="mOk">${esc(okLabel)}</button></div>`,
+  <div class="acts"><button class="btn" data-close>${t('cancel')}</button><button class="btn ${danger ? 'danger-solid' : 'primary'}" id="mOk">${esc(okLabel)}</button></div>`,
   (c, close) => { $('#mOk', c).onclick = () => close(true); });
 function zoom(src, cap) { const lb = $('#lightbox'); $('img', lb).src = src; $('#lbCap').textContent = cap; lb.hidden = false; }
 $('#lightbox').onclick = () => { $('#lightbox').hidden = true; };
@@ -100,10 +101,22 @@ async function pollStatus() {
     const h = await api('/health');
     const busy = (h.running || []).length;
     el.className = `status ${busy ? 'busy' : 'ok'}`;
-    $('span', el).textContent = busy ? `Analyzing · ${h.queue} in queue` : `Ready · ${h.analyzer === 'mock' ? 'demo model' : 'local model'}`;
-    el.title = `Analyzer: ${h.analyzer} · version ${h.version}`;
-  } catch (_) { el.className = 'status bad'; $('span', el).textContent = 'Server unreachable'; }
+    $('span', el).textContent = busy ? t('status.busy', { n: h.queue }) : t('status.ready', { model: t(h.analyzer === 'mock' ? 'status.demo' : 'status.local') });
+    el.title = t('status.tip', { a: h.analyzer, v: h.version });
+  } catch (_) { el.className = 'status bad'; $('span', el).textContent = t('status.down'); }
 }
+function applyStatic() {
+  $$('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  $$('[data-i18n-aria]').forEach(el => el.setAttribute('aria-label', t(el.dataset.i18nAria)));
+  $$('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  $$('[data-lang]').forEach(b => { b.classList.toggle('on', b.dataset.lang === LANG); b.setAttribute('aria-pressed', b.dataset.lang === LANG); });
+}
+$$('[data-lang]').forEach(b => b.onclick = () => {
+  if (b.dataset.lang === LANG) return;
+  setLang(b.dataset.lang); applyStatic(); pollStatus(); drawAlerts();
+  if (route().view === 'check' && S.job) { if (S.job.status === 'processing') renderProcessing(); else renderResultKeepPlayer(); }
+  else render();
+});
 function applyTheme() {
   const dark = document.documentElement.dataset.theme === 'dark';
   $('#themeBtn').innerHTML = icon(dark ? 'sun' : 'moon');
@@ -119,7 +132,7 @@ $('#filePick').onchange = e => { uploadFiles([...e.target.files]); e.target.valu
 function pickFiles() { $('#filePick').click(); }
 function uploadFiles(files) {
   const ok = files.filter(f => /\.(mov|mp4|m4v)$/i.test(f.name));
-  files.filter(f => !ok.includes(f)).forEach(f => toast(`“${f.name}” is not a video (.mov)`, 'err'));
+  files.filter(f => !ok.includes(f)).forEach(f => toast(t('up.notVideo', { name: f.name }), 'err'));
   if (!ok.length) return;
   const single = ok.length === 1;
   ok.forEach(f => uploadOne(f, single));
@@ -135,11 +148,11 @@ function uploadOne(file, openAfter) {
   xhr.onload = () => {
     delete S.uploads[key];
     let body = {}; try { body = JSON.parse(xhr.responseText); } catch (_) { }
-    if (xhr.status !== 200) { toast(`${file.name}: ${body.detail || 'upload failed'}`, 'err'); refreshJobs(); return; }
+    if (xhr.status !== 200) { toast(`${file.name}: ${body.detail || t('up.failed')}`, 'err'); refreshJobs(); return; }
     S.local[body.job_id] = URL.createObjectURL(file);
     if (openAfter) go(`/?check=${body.job_id}`); else refreshJobs();
   };
-  xhr.onerror = () => { delete S.uploads[key]; toast(`${file.name}: network error`, 'err'); refreshJobs(); };
+  xhr.onerror = () => { delete S.uploads[key]; toast(`${file.name}: ${t('up.network')}`, 'err'); refreshJobs(); };
   xhr.send(fd);
 }
 function bindDrop(el) {
@@ -166,8 +179,8 @@ async function refreshJobs() {
 function renderChecks() {
   $('#main').innerHTML = `<div class="page">
     <div class="page-head">
-      <div><h1>Video checks</h1><p>Upload a cash-desk recording. CashGuard finds moments that may break cash-handling rules and shows the frame, the time and the regulation for each.</p></div>
-      <button class="btn primary lg" id="upBtn">${icon('up')}Upload video</button>
+      <div><h1>${t('checks.title')}</h1><p>${t('checks.lead')}</p></div>
+      <button class="btn primary lg" id="upBtn">${icon('up')}${t('checks.upload')}</button>
     </div>
     <div id="checksBody"></div>
   </div>`;
@@ -180,20 +193,20 @@ function drawChecks() {
   clearTimeout(S.listTimer);
   S.listTimer = setTimeout(refreshJobs, jobs.some(isActive) || nUp ? 2000 : 15000);
   if (!jobs.length && !nUp) {
-    body.innerHTML = `<div class="drop big" id="drop"><span class="up">${icon('up')}</span><b>Drop a .mov recording here</b>
-      <small>Overhead cash-desk camera, up to 200 MB. You can drop several files at once. Analysis usually takes under a minute.</small>
-      <button class="btn primary" id="dropBtn">Choose files</button></div>
-      <p class="muted" style="display:flex;gap:8px;align-items:center;justify-content:center">${icon('lock')}All models run on this server. Videos are deleted one hour after analysis; results stay.</p>`;
+    body.innerHTML = `<div class="drop big" id="drop"><span class="up">${icon('up')}</span><b>${t('drop.bigTitle')}</b>
+      <small>${t('drop.bigHint')}</small>
+      <button class="btn primary" id="dropBtn">${t('drop.choose')}</button></div>
+      <p class="muted" style="display:flex;gap:8px;align-items:center;justify-content:center">${icon('lock')}${t('drop.privacy')}</p>`;
     bindDrop($('#drop')); $('#dropBtn').onclick = pickFiles; return;
   }
   const cnt = k => jobs.filter(FILTERS[k]).length;
   body.innerHTML = `
-    <div class="drop" id="drop"><span class="up">${icon('up')}</span><div><b>Drop .mov files here to check them</b><small>or use “Upload video”. Several files at once are fine.</small></div></div>
+    <div class="drop" id="drop"><span class="up">${icon('up')}</span><div><b>${t('drop.title')}</b><small>${t('drop.hint')}</small></div></div>
     <div class="stats">
-      ${[['all', 'All checks', ''], ['review', 'Need review', 'attn'], ['violation', 'With violations', 'warn'], ['clear', 'No violation', 'ok']]
-        .map(([k, l, c]) => `<button class="stat ${c} ${S.filter === k ? 'on' : ''}" data-f="${k}"><div class="n">${cnt(k)}</div><div class="l">${l}</div></button>`).join('')}
+      ${[['all', ''], ['review', 'attn'], ['violation', 'warn'], ['clear', 'ok']]
+        .map(([k, c]) => `<button class="stat ${c} ${S.filter === k ? 'on' : ''}" data-f="${k}"><div class="n">${cnt(k)}</div><div class="l">${t(`f.${k}`)}</div></button>`).join('')}
     </div>
-    <div class="toolbar"><label class="search">${icon('search')}<input class="field" id="q" placeholder="Search by file name" value="${esc(S.q)}"></label></div>
+    <div class="toolbar"><label class="search">${icon('search')}<input class="field" id="q" placeholder="${t('search')}" value="${esc(S.q)}"></label></div>
     <div class="card" id="tableCard"></div>`;
   bindDrop($('#drop'));
   $$('[data-f]', body).forEach(b => b.onclick = () => { S.filter = b.dataset.f; drawChecks(); });
@@ -203,17 +216,18 @@ function drawChecks() {
 function statusCell(j) {
   if (j.public_status === 'processing') {
     const queued = j.status === 'queued';
-    return `<span class="pill info">${queued ? `Queued${j.queue_position ? ` · ${j.queue_position} ahead` : ''}` : `Analyzing ${Math.round((j.progress || 0) * 100)}%`}</span>
+    return `<span class="pill info">${queued ? `${t('pill.queued')}${j.queue_position ? ` · ${t('pill.ahead', { n: j.queue_position })}` : ''}` : t('pill.analyzing', { p: Math.round((j.progress || 0) * 100) })}</span>
       <div class="minibar"><i style="width:${queued ? 3 : Math.max(4, (j.progress || 0) * 100)}%"></i></div>`;
   }
-  if (j.public_status === 'failed') return `<span class="pill bad">${icon('x')}Not analysed</span>`;
-  if (j.verdict === 'violation') return `<span class="pill warn">${icon('alert')}${plural(j.n_violations, 'possible violation')}</span>${j.partial ? ' <span class="pill neutral">partial</span>' : ''}`;
-  return `<span class="pill ok">${icon('shield')}No violation</span>${j.partial ? ' <span class="pill neutral">partial</span>' : ''}`;
+  const part = j.partial ? ` <span class="pill neutral">${t('pill.partial')}</span>` : '';
+  if (j.public_status === 'failed') return `<span class="pill bad">${icon('x')}${t('pill.failed')}</span>`;
+  if (j.verdict === 'violation') return `<span class="pill warn">${icon('alert')}${t('pill.violations', { n: j.n_violations })}</span>${part}`;
+  return `<span class="pill ok">${icon('shield')}${t('pill.clear')}</span>${part}`;
 }
 function reviewCell(j) {
   if (j.public_status !== 'done' || j.verdict !== 'violation') return '<span class="muted">—</span>';
-  if ((j.reviewed || 0) >= j.n_violations) return `<span class="pill ok">${icon('check')}Reviewed</span>`;
-  return `<span class="muted">${j.reviewed || 0} of ${j.n_violations} reviewed</span>`;
+  if ((j.reviewed || 0) >= j.n_violations) return `<span class="pill ok">${icon('check')}${t('pill.reviewed')}</span>`;
+  return `<span class="muted">${t('rev.progress', { a: j.reviewed || 0, b: j.n_violations })}</span>`;
 }
 function drawTable() {
   const card = $('#tableCard'); if (!card) return;
@@ -221,20 +235,20 @@ function drawTable() {
   const ups = Object.values(S.uploads);
   const rows = S.jobs.filter(FILTERS[S.filter]).filter(j => !q || (j.filename || '').toLowerCase().includes(q));
   if (!rows.length && !ups.length) {
-    card.innerHTML = `<div class="empty"><b>${S.filter === 'review' ? 'Nothing waiting for review' : 'No checks here'}</b>${S.filter === 'all' && !q ? 'Upload a recording to start.' : 'Try another filter.'}</div>`; return;
+    card.innerHTML = `<div class="empty"><b>${t(S.filter === 'review' ? 'empty.review' : 'empty.none')}</b>${t(S.filter === 'all' && !q ? 'empty.start' : 'empty.other')}</div>`; return;
   }
-  card.innerHTML = `<table class="table"><thead><tr><th>Recording</th><th class="c-when">Uploaded</th><th>Result</th><th>Review</th><th></th></tr></thead><tbody>
-    ${ups.map(u => `<tr><td><div class="fname"><span class="ic">${icon('up')}</span><div><b>${esc(u.name)}</b><small>Uploading ${(u.sent / 1e6).toFixed(1)} of ${(u.total / 1e6).toFixed(1)} MB</small></div></div></td>
-      <td class="c-when muted">now</td><td><span class="pill info">Uploading ${Math.round(u.sent / Math.max(1, u.total) * 100)}%</span><div class="minibar"><i style="width:${u.sent / Math.max(1, u.total) * 100}%"></i></div></td><td></td><td></td></tr>`).join('')}
+  card.innerHTML = `<table class="table"><thead><tr><th>${t('th.recording')}</th><th class="c-when">${t('th.uploaded')}</th><th>${t('th.result')}</th><th>${t('th.review')}</th><th></th></tr></thead><tbody>
+    ${ups.map(u => `<tr><td><div class="fname"><span class="ic">${icon('up')}</span><div><b>${esc(u.name)}</b><small>${t('row.uploading', { a: (u.sent / 1e6).toFixed(1), b: (u.total / 1e6).toFixed(1) })}</small></div></div></td>
+      <td class="c-when muted">${t('now')}</td><td><span class="pill info">${t('pill.uploading', { p: Math.round(u.sent / Math.max(1, u.total) * 100) })}</span><div class="minibar"><i style="width:${u.sent / Math.max(1, u.total) * 100}%"></i></div></td><td></td><td></td></tr>`).join('')}
     ${rows.map(j => `<tr data-open="${j.job_id}">
-      <td><div class="fname"><span class="ic">${icon('film')}</span><div><b title="${esc(j.filename)}">${esc(j.filename)}</b><small class="mono">${j.duration_sec ? tc(j.duration_sec) : ''}${j.processing_sec ? ` · analysed in ${j.processing_sec} s` : ''}</small></div></div></td>
+      <td><div class="fname"><span class="ic">${icon('film')}</span><div><b title="${esc(j.filename)}">${esc(j.filename)}</b><small class="mono">${j.duration_sec ? tc(j.duration_sec) : ''}${j.processing_sec ? ` · ${t('row.analysedIn', { s: j.processing_sec })}` : ''}</small></div></div></td>
       <td class="c-when muted">${ago(j.created_at)}</td>
       <td>${statusCell(j)}</td>
       <td>${reviewCell(j)}</td>
       <td class="c-acts"><div class="row-acts">
-        ${needsReview(j) ? `<a class="btn sm primary" href="/?check=${j.job_id}">Review</a>` : `<a class="btn sm" href="/?check=${j.job_id}">Open</a>`}
-        ${j.public_status === 'done' ? `<a class="icon-btn" href="/ui/api/jobs/${j.job_id}/report.html" target="_blank" rel="noopener" title="Report" aria-label="Open report">${icon('doc')}</a>` : ''}
-        <button class="icon-btn danger" data-del="${j.job_id}" title="${isActive(j) ? 'Cancel and delete' : 'Delete'}" aria-label="Delete">${icon('trash')}</button>
+        ${needsReview(j) ? `<a class="btn sm primary" href="/?check=${j.job_id}">${t('act.review')}</a>` : `<a class="btn sm" href="/?check=${j.job_id}">${t('act.open')}</a>`}
+        ${j.public_status === 'done' ? `<a class="icon-btn" href="${reportUrl(j.job_id)}" target="_blank" rel="noopener" title="${t('act.report')}" aria-label="${t('act.openReport')}">${icon('doc')}</a>` : ''}
+        <button class="icon-btn danger" data-del="${j.job_id}" title="${t(isActive(j) ? 'act.cancelDelete' : 'act.delete')}" aria-label="${t('act.delete')}">${icon('trash')}</button>
       </div></td></tr>`).join('')}
   </tbody></table>`;
   $$('tr[data-open]', card).forEach(tr => tr.onclick = e => { if (!e.target.closest('a,button')) go(`/?check=${tr.dataset.open}`); });
@@ -243,14 +257,14 @@ function drawTable() {
 async function deleteJob(j, after) {
   if (!j) return;
   const active = j.public_status === 'processing' || j.status === 'queued' || j.status === 'running';
-  const ok = await confirmBox(active ? 'Cancel this check?' : 'Delete this check?',
-    `<b>${esc(j.filename)}</b><br>${active ? 'The analysis stops and the uploaded video is removed.' : 'The result, frames, clips and the video are removed. Reviewer decisions stay in the feedback log.'}`,
-    active ? 'Cancel check' : 'Delete');
+  const ok = await confirmBox(t(active ? 'del.cancelTitle' : 'del.deleteTitle'),
+    `<b>${esc(j.filename)}</b><br>${t(active ? 'del.cancelText' : 'del.deleteText')}`,
+    t(active ? 'del.cancelBtn' : 'act.delete'));
   if (!ok) return;
   try {
     await api(`/ui/api/jobs/${j.job_id}`, { method: 'DELETE' });
     S.jobs = S.jobs.filter(x => x.job_id !== j.job_id);
-    toast(active ? 'Check cancelled' : 'Check deleted');
+    toast(t(active ? 'del.cancelled' : 'del.deleted'));
     after ? after() : drawChecks();
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -260,11 +274,11 @@ const viols = () => (S.job && S.job.violations) || [];
 const dur = () => Math.max(0.1, +(S.job && S.job.duration_sec) || +(((S.job || {}).meta || {}).duration_sec) || 0.1);
 async function openCheck(id, keepPosition) {
   const fresh = !S.job || S.job.job_id !== id;
-  if (fresh) { leaveCheck(); $('#main').innerHTML = '<div class="page"><p class="muted">Loading…</p></div>'; }
+  if (fresh) { leaveCheck(); $('#main').innerHTML = `<div class="page"><p class="muted">${t('loading')}</p></div>`; }
   let j;
   try { j = await api(`/ui/api/jobs/${id}`); }
   catch (e) {
-    $('#main').innerHTML = `<div class="page"><a class="crumb" href="/">${icon('back')}All checks</a><div class="card empty"><b>${e.status === 404 ? 'This check no longer exists' : 'Could not load the check'}</b>${e.status === 404 ? 'It may have been deleted.' : esc(e.message)}</div></div>`;
+    $('#main').innerHTML = `<div class="page"><a class="crumb" href="/">${icon('back')}${t('crumb')}</a><div class="card empty"><b>${t(e.status === 404 ? 'chk.gone' : 'chk.loadErr')}</b>${e.status === 404 ? t('chk.goneHint') : esc(e.message)}</div></div>`;
     return;
   }
   S.job = j;
@@ -293,22 +307,22 @@ async function finish(id) {
   if (!S.job || S.job.job_id !== id) return;
   S.job = null;
   await openCheck(id);
-  if (S.job) toast(S.job.verdict === 'violation' ? `${plural(viols().length, 'possible violation')} found` : 'No violation detected');
+  if (S.job) toast(S.job.verdict === 'violation' ? t('toast.found', { n: viols().length }) : t('toast.clear'));
 }
 function checkHead(j, extra = '') {
-  const meta = [j.duration_sec ? `${tc(j.duration_sec)} long` : '', j.created_at ? `uploaded ${ago(j.created_at)}` : '', j.processing_sec ? `analysed in ${j.processing_sec} s` : ''].filter(Boolean).join(' · ');
-  return `<a class="crumb" href="/">${icon('back')}All checks</a>
+  const meta = [j.duration_sec ? t('meta.long', { t: tc(j.duration_sec) }) : '', j.created_at ? t('meta.uploaded', { ago: ago(j.created_at) }) : '', j.processing_sec ? t('meta.analysed', { s: j.processing_sec }) : ''].filter(Boolean).join(' · ');
+  return `<a class="crumb" href="/">${icon('back')}${t('crumb')}</a>
     <div class="check-head"><div><h1>${esc(j.filename)}</h1><div class="meta">${meta}</div></div>
-      <div class="acts">${extra}<button class="btn danger" id="delBtn">${icon('trash')}${j.status === 'processing' ? 'Cancel check' : 'Delete'}</button></div></div>`;
+      <div class="acts">${extra}<button class="btn danger" id="delBtn">${icon('trash')}${t(j.status === 'processing' ? 'del.cancelBtn' : 'act.delete')}</button></div></div>`;
 }
-const STEPS = [['queued', 'Queue'], ['frames', 'Frames'], ['detection', 'Detection'], ['vlm', 'Model checks'], ['report', 'Report'], ['done', 'Done']];
+const STEPS = ['queued', 'frames', 'detection', 'vlm', 'report', 'done'];
 function renderProcessing() {
   const j = S.job;
   $('#main').innerHTML = `<div class="page">${checkHead(j)}
-    <div class="card proc"><h2 id="pTitle">Analyzing the recording…</h2><p class="muted" id="pSub">You can leave this page. The result appears in “All checks” when ready.</p>
+    <div class="card proc"><h2 id="pTitle">${t('proc.title')}</h2><p class="muted" id="pSub">${t('proc.sub')}</p>
       <div class="bigbar"><i id="pBar"></i></div>
-      <div class="steps">${STEPS.map(([k, l]) => `<div class="step" data-step="${k}"><b>${l}</b><span class="st"></span></div>`).join('')}</div>
-      <div class="proc-foot"><span id="pEta"></span><span class="sp"></span>${S.local[j.job_id] ? '<span>Preview below</span>' : ''}</div>
+      <div class="steps">${STEPS.map(k => `<div class="step" data-step="${k}"><b>${t(`step.${k}`)}</b><span class="st"></span></div>`).join('')}</div>
+      <div class="proc-foot"><span id="pEta"></span><span class="sp"></span>${S.local[j.job_id] ? `<span>${t('proc.preview')}</span>` : ''}</div>
       ${S.local[j.job_id] ? `<video src="${S.local[j.job_id]}" controls muted playsinline style="width:100%;max-height:360px;border-radius:9px;background:#0D0B10;margin-top:12px"></video>` : ''}
     </div></div>`;
   $('#delBtn').onclick = () => deleteJob({ ...j, public_status: 'processing' }, () => go('/'));
@@ -317,33 +331,33 @@ function renderProcessing() {
 function updateProcessing() {
   const j = S.job; if (!j || !$('#pBar')) return;
   const stage = j.stage === 'started' || j.stage === 'retry' ? 'queued' : (j.stage || 'queued');
-  const order = STEPS.map(s => s[0]); const ci = Math.max(0, order.indexOf(stage));
+  const ci = Math.max(0, STEPS.indexOf(stage));
   $('#pBar').style.width = `${Math.max(3, (j.progress || 0) * 100)}%`;
   $$('.step').forEach((el, i) => { el.className = 'step' + (i < ci ? ' done' : i === ci ? ' now' : ''); $('.st', el).textContent = i === ci && i > 0 ? `${Math.round((j.progress || 0) * 100)}%` : ''; });
-  $('#pTitle').textContent = j.status === 'processing' && stage === 'queued' ? (j.queue_position ? `Waiting in queue · ${j.queue_position} ahead` : 'Starting…') : 'Analyzing the recording…';
-  $('#pEta').textContent = j.eta_sec != null ? `About ${j.eta_sec} s left` : '';
-  if (j.stage === 'retry') $('#pSub').textContent = 'The analyzer restarted on this recording and is trying once more.';
+  $('#pTitle').textContent = j.status === 'processing' && stage === 'queued' ? (j.queue_position ? t('proc.queue', { n: j.queue_position }) : t('proc.starting')) : t('proc.title');
+  $('#pEta').textContent = j.eta_sec != null ? t('proc.eta', { s: j.eta_sec }) : '';
+  if (j.stage === 'retry') $('#pSub').textContent = t('proc.retry');
 }
 
 function renderResult() {
   const j = S.job, vs = viols(), n = vs.length, failed = j.status === 'failed';
   const dec = j.decisions || {}, reviewed = vs.filter((_, i) => dec[i]).length;
   let verdict;
-  if (failed) verdict = `<div class="verdict fail"><span class="vi">${icon('x')}</span><div><h2>The recording was not analysed</h2><p>${esc(j.error || 'Unknown error')}. Delete it and upload again, or ask the administrator.</p></div></div>`;
+  if (failed) verdict = `<div class="verdict fail"><span class="vi">${icon('x')}</span><div><h2>${t('v.failTitle')}</h2><p>${t('v.failText', { err: esc(j.error || t('v.unknownErr')) })}</p></div></div>`;
   else if (n) verdict = `<div class="verdict ${reviewed === n ? 'done' : 'bad'}"><span class="vi">${icon(reviewed === n ? 'check' : 'alert')}</span>
-      <div><h2>${reviewed === n ? 'Review complete' : 'Signs of possible violations detected'}</h2><p>${reviewed === n ? `${plural(vs.filter((_, i) => dec[i] === 'confirm').length, 'violation')} confirmed, ${vs.filter((_, i) => dec[i] && dec[i] !== 'confirm').length} dismissed. Download the report for the record.` : `${plural(n, 'moment')} to check. For each one, look at the frames and decide: is it a violation?`}</p></div>
-      <div class="rv"><b>${reviewed} of ${n} reviewed</b><div class="minibar"><i style="width:${reviewed / n * 100}%"></i></div></div></div>`;
-  else verdict = `<div class="verdict ok"><span class="vi">${icon('shield')}</span><div><h2>No violation detected</h2><p>Nothing in this recording matched a known violation type. No action needed.</p></div></div>`;
-  const note = j.partial ? `<div class="note">${icon('alert')}<span>Partial result: the analysis reached its time limit before checking the whole recording.</span></div>` : '';
+      <div><h2>${t(reviewed === n ? 'v.doneTitle' : 'v.badTitle')}</h2><p>${reviewed === n ? t('v.doneText', { c: vs.filter((_, i) => dec[i] === 'confirm').length, d: vs.filter((_, i) => dec[i] && dec[i] !== 'confirm').length }) : t('v.badText', { n })}</p></div>
+      <div class="rv"><b>${t('rev.progress', { a: reviewed, b: n })}</b><div class="minibar"><i style="width:${reviewed / n * 100}%"></i></div></div></div>`;
+  else verdict = `<div class="verdict ok"><span class="vi">${icon('shield')}</span><div><h2>${t('v.okTitle')}</h2><p>${t('v.okText')}</p></div></div>`;
+  const note = j.partial ? `<div class="note">${icon('alert')}<span>${t('v.partial')}</span></div>` : '';
   $('#main').innerHTML = `<div class="page">
-    ${checkHead(j, j.status === 'done' ? `<a class="btn ${n && reviewed === n ? 'primary' : ''}" href="/ui/api/jobs/${j.job_id}/report.html" target="_blank" rel="noopener">${icon('doc')}Report</a>` : '')}
+    ${checkHead(j, j.status === 'done' ? `<a class="btn ${n && reviewed === n ? 'primary' : ''}" href="${reportUrl(j.job_id)}" target="_blank" rel="noopener">${icon('doc')}${t('act.report')}</a>` : '')}
     ${verdict}${note}
     <div class="layout">
       <div class="card player-card">
         <div class="player" id="player"></div>
         <div class="scrub" id="scrub"></div>
-        <div class="pctrl"><button class="icon-btn" id="pp" aria-label="Play">${icon('play')}</button><span class="time"><b id="tnow">${tc(S.t)}</b> / ${tc(dur())}</span></div>
-        ${n ? '<div class="keys-hint"><kbd>Space</kbd> play · <kbd>N</kbd> next · <kbd>C</kbd> confirm · <kbd>R</kbd> not a violation</div>' : ''}
+        <div class="pctrl"><button class="icon-btn" id="pp" aria-label="${t('p.play')}">${icon('play')}</button><span class="time"><b id="tnow">${tc(S.t)}</b> / ${tc(dur())}</span></div>
+        ${n ? `<div class="keys-hint">${t('keys')}</div>` : ''}
       </div>
       <div><div class="findings" id="findings"></div>${techHtml(j)}</div>
     </div></div>`;
@@ -352,36 +366,44 @@ function renderResult() {
   $('#pp').onclick = togglePlay;
 }
 const shortDesc = d => String(d || '').split(/\s*Основание:/)[0].replace(/\s*Прямой публичной нормы не установлено\.?$/, '').trim();
+const observedPart = d => { const p = shortDesc(d).split(/\s*Это может указывать на нарушение:\s*/); return p.length > 1 ? p[0].replace(/\.$/, '') : ''; };
+function descHtml(v) {
+  const why = typeField(v.type_code, 'why');
+  if (LANG === 'ru' || !why) return `<p class="label">${t('f.seen')}</p><p class="desc" lang="ru">${esc(shortDesc(v.description))}</p>`;
+  const obs = observedPart(v.description);
+  return `<p class="label">${t('f.why')}</p><p class="desc">${esc(why)}</p>${obs ? `<p class="label">${t('f.modelNote')}</p><p class="desc muted" lang="ru">${esc(obs)}.</p>` : ''}`;
+}
+const refHtml = r => `<div><b>${esc(docName(r))}</b>${r.point ? `, ${esc(pointName(r.point))}` : ''}${r.quote ? `<br><q lang="ru">${esc(r.quote)}</q>${LANG !== 'ru' ? ` <small class="muted">(${t('f.quoteRu')})</small>` : ''}` : ''}${r.url ? `<br><a href="${esc(docUrl(r.url))}" target="_blank" rel="noopener">${t('f.openAdilet')} ${icon('link')}</a>` : ''}</div>`;
 function drawFindings() {
   const box = $('#findings'); if (!box) return;
   const j = S.job, vs = viols(), dec = j.decisions || {};
   if (!vs.length) {
     const scenes = ((j.meta || {}).scenes || []);
-    box.innerHTML = `<div class="card clear-card"><h3>${j.status === 'failed' ? 'No result' : 'What was checked'}</h3>
-      <p class="muted">${j.status === 'failed' ? '' : scenes.length ? `The model looked at ${plural(scenes.length, 'moment')} picked by the detector:` : 'The recording was scanned end to end. No moment matched a violation type.'}</p>
+    box.innerHTML = `<div class="card clear-card"><h3>${t(j.status === 'failed' ? 'c.noResult' : 'c.whatChecked')}</h3>
+      <p class="muted">${j.status === 'failed' ? '' : scenes.length ? t('c.scenes', { n: scenes.length }) : t('c.scanned')}</p>
       ${scenes.length ? `<ul class="scenes">${scenes.map(s => `<li><button data-seek="${s.t}"><span class="t">${tc(s.t)}</span><span lang="ru">${esc(s.scene)}</span></button></li>`).join('')}</ul>` : ''}</div>`;
     $$('[data-seek]', box).forEach(b => b.onclick = () => seek(+b.dataset.seek, true));
     return;
   }
   box.innerHTML = vs.map((v, i) => {
     const d = dec[i], rule = v.rule || {}, refs = rule.refs || [], frames = v.evidence_frames || [];
-    const ruleTitle = refs.length ? `${refs[0].point ? refs[0].point + ' · ' : ''}${refs[0].document}` : 'Bank internal regulation';
+    const ruleTitle = refs.length ? `${refs[0].point ? pointName(refs[0].point) + ' · ' : ''}${docName(refs[0])}` : t('f.internalReg');
+    const caveat = typeField(v.type_code, 'caveat', rule.caveat);
     return `<article class="card find ${i === S.sel ? 'on' : ''} ${d === 'confirm' ? 'confirm' : d ? 'reject' : ''}" data-i="${i}">
-      <div class="find-h"><span class="num">${i + 1}</span><h3>${esc(v.type)}</h3>
+      <div class="find-h"><span class="num">${i + 1}</span><h3>${esc(typeName(v.type_code, v.type))}</h3>
         <div class="tc"><button class="btn sm" data-seek="${v.timecode_sec}">${icon('play')}<span class="mono">${tc(v.timecode_sec)}</span></button></div></div>
       <div class="find-b">
-        <div class="frames">${frames.map((f, k) => `<button class="frame ${Math.abs(f.timestamp_sec - v.timecode_sec) < .3 ? 'key' : ''}" data-zoom="${i}:${k}" title="Enlarge"><img src="data:image/jpeg;base64,${f.image_base64}" alt="Frame at ${tc(f.timestamp_sec)}"><span>${tc(f.timestamp_sec)}</span></button>`).join('')}</div>
+        <div class="frames">${frames.map((f, k) => `<button class="frame ${Math.abs(f.timestamp_sec - v.timecode_sec) < .3 ? 'key' : ''}" data-zoom="${i}:${k}" title="${t('f.enlarge')}"><img src="data:image/jpeg;base64,${f.image_base64}" alt="${t('f.frameAt', { t: tc(f.timestamp_sec) })}"><span>${tc(f.timestamp_sec)}</span></button>`).join('')}</div>
         <div>
-          <p class="label">What is seen</p>
-          <p class="desc" lang="ru">${esc(shortDesc(v.description))}</p>
-          <details class="rule"><summary>${icon('chev')}<span>Rule: <b lang="ru">${esc(ruleTitle)}</b></span>${rule.kind ? ` <span class="kind ${esc(rule.kind)}">${KIND[rule.kind] || esc(rule.kind)}</span>` : ''}</summary>
-            <div class="rb">${refs.map(r => `<div lang="ru"><b>${esc(r.document)}</b>${r.point ? `, ${esc(r.point)}` : ''}${r.quote ? `<br><q>${esc(r.quote)}</q>` : ''}${r.url ? `<br><a href="${esc(r.url)}" target="_blank" rel="noopener">Open on adilet.zan.kz ${icon('link')}</a>` : ''}</div>`).join('') || '<div>No public regulation covers this case directly.</div>'}
-            ${rule.caveat ? `<div class="caveat" lang="ru">${esc(rule.caveat)}</div>` : ''}${(j.clips || []).includes(i) ? `<a href="/ui/api/jobs/${j.job_id}/violations/${i}/clip.mp4" target="_blank" rel="noopener">${icon('clip')} Download 10-second clip</a>` : ''}</div></details>
+          ${descHtml(v)}
+          <details class="rule"><summary>${icon('chev')}<span>${t('f.rule')}: <b>${esc(ruleTitle)}</b></span>${rule.kind ? ` <span class="kind ${esc(rule.kind)}">${esc(kindLabel(rule.kind))}</span>` : ''}</summary>
+            <div class="rb">${refs.map(refHtml).join('') || `<div>${t('f.noPublic')}</div>`}
+            ${caveat ? `<div class="caveat">${esc(caveat)}</div>` : ''}${(j.clips || []).includes(i) ? `<a href="/ui/api/jobs/${j.job_id}/violations/${i}/clip.mp4" target="_blank" rel="noopener">${icon('clip')} ${t('f.clip')}</a>` : ''}</div></details>
         </div>
       </div>
-      <div class="find-f">${d ? `<div class="decided">${d === 'confirm' ? `<span class="pill bad">${icon('check')}Confirmed violation</span>` : `<span class="pill neutral">${icon('x')}Not a violation</span>`}<button class="btn sm ghost" data-dec="${i}:clear">Undo</button></div>`
-        : `<span class="q">Is this a violation?</span><button class="btn sm yes" data-dec="${i}:confirm">${icon('check')}Yes, confirm</button><button class="btn sm no" data-dec="${i}:reject">${icon('x')}No, dismiss</button>`}
-        <span class="sp"></span>${v.confidence != null ? `<span class="muted" style="font-size:12.5px">model confidence ${Math.round(v.confidence * 100)}%</span>` : ''}</div>
+      <div class="find-f">${d ? `<div class="decided">${d === 'confirm' ? `<span class="pill bad">${icon('check')}${t('f.confirmed')}</span>` : `<span class="pill neutral">${icon('x')}${t('f.notViolation')}</span>`}<button class="btn sm ghost" data-dec="${i}:clear">${t('f.undo')}</button></div>`
+        : `<span class="q">${t('f.question')}</span><button class="btn sm yes" data-dec="${i}:confirm">${icon('check')}${t('f.yes')}</button><button class="btn sm no" data-dec="${i}:reject">${icon('x')}${t('f.no')}</button>`}
+        <span class="sp"></span>${v.confidence != null ? `<span class="muted" style="font-size:12.5px">${t('f.confidence', { p: Math.round(v.confidence * 100) })}</span>` : ''}</div>
     </article>`;
   }).join('');
   $$('[data-seek]', box).forEach(b => b.onclick = e => { e.stopPropagation(); const i = +b.closest('[data-i]').dataset.i; select(i, false); seek(Math.max(0, +b.dataset.seek - 1), true); });
@@ -398,8 +420,8 @@ async function decide(i, d) {
     const next = vs.findIndex((_, k) => k > i && !dec[k]);
     renderResultKeepPlayer();
     if (d !== 'clear' && next >= 0) select(next, true);
-    else if (d !== 'clear' && vs.every((_, k) => dec[k])) toast('All findings reviewed — the report is ready');
-  } catch (e) { toast(`Could not save: ${e.message}`, 'err'); }
+    else if (d !== 'clear' && vs.every((_, k) => dec[k])) toast(t('toast.allReviewed'));
+  } catch (e) { toast(t('toast.saveErr', { e: e.message }), 'err'); }
 }
 function renderResultKeepPlayer() {
   const vid = $('#vid'), t = vid ? vid.currentTime : S.t;
@@ -415,7 +437,7 @@ function select(i, jump) {
 }
 function techHtml(j) {
   const m = j.meta || {}, tl = j.timeline && Array.isArray(j.timeline.t) ? j.timeline : null;
-  const lanes = [['people', 'People'], ['screen_on', 'Screen on'], ['phone', 'Phone'], ['drink', 'Food / drink'], ['bag', 'Bag']].filter(([k]) => tl && Array.isArray(tl[k]));
+  const lanes = ['people', 'screen_on', 'phone', 'drink', 'bag'].filter(k => tl && Array.isArray(tl[k])).map(k => [k, t(`lane.${k}`)]);
   const D = dur();
   const lane = k => {
     const vals = tl[k]; let inner = '', start = null;
@@ -428,10 +450,10 @@ function techHtml(j) {
     }
     return `<svg viewBox="0 0 1000 16" preserveAspectRatio="none">${inner}</svg>`;
   };
-  return `<details class="tech card"><summary style="padding:12px 18px">${icon('chev')}Technical details</summary><div class="tech-body">
-    <div class="kv"><div>Analyzer<b>${esc(j.analyzer || '—')}</b></div><div>Frames sampled<b>${m.frames ?? '—'}</b></div><div>Moments checked<b>${(m.candidates || []).length || '—'}</b></div><div>Model calls<b>${m.vlm_calls ?? '—'}</b></div><div>Analysis time<b>${j.processing_sec ?? '—'} s</b></div><div>Check ID<b>${esc(j.job_id)}</b></div></div>
-    ${lanes.length ? `<div><p class="label">Signals over time</p><div class="lanes">${lanes.map(([k, l]) => `<div class="lrow"><span class="lab">${l}</span><div class="track">${lane(k)}</div></div>`).join('')}</div></div>` : ''}
-    ${(m.scenes || []).length ? `<div><p class="label">What the model saw</p><ul class="scenes">${m.scenes.map(s => `<li><button data-seek="${s.t}"><span class="t">${tc(s.t)}</span><span lang="ru">${esc(s.scene)}</span></button></li>`).join('')}</ul></div>` : ''}
+  return `<details class="tech card"><summary style="padding:12px 18px">${icon('chev')}${t('tech.title')}</summary><div class="tech-body">
+    <div class="kv"><div>${t('kv.analyzer')}<b>${esc(j.analyzer || '—')}</b></div><div>${t('kv.frames')}<b>${m.frames ?? '—'}</b></div><div>${t('kv.moments')}<b>${(m.candidates || []).length || '—'}</b></div><div>${t('kv.calls')}<b>${m.vlm_calls ?? '—'}</b></div><div>${t('kv.time')}<b>${j.processing_sec ?? '—'} ${t('sec')}</b></div><div>${t('kv.id')}<b>${esc(j.job_id)}</b></div></div>
+    ${lanes.length ? `<div><p class="label">${t('tech.signals')}</p><div class="lanes">${lanes.map(([k, l]) => `<div class="lrow"><span class="lab">${l}</span><div class="track">${lane(k)}</div></div>`).join('')}</div></div>` : ''}
+    ${(m.scenes || []).length ? `<div><p class="label">${t('tech.saw')}</p><ul class="scenes">${m.scenes.map(s => `<li><button data-seek="${s.t}"><span class="t">${tc(s.t)}</span><span lang="ru">${esc(s.scene)}</span></button></li>`).join('')}</ul></div>` : ''}
     ${j.warning ? `<div class="muted" style="font-size:12.5px">${esc(j.warning)}</div>` : ''}
   </div></details>`;
 }
@@ -442,11 +464,11 @@ function renderPlayer() {
   const j = S.job, v = viols()[S.sel];
   const poster = v && v.evidence_frames && v.evidence_frames.length ? `data:image/jpeg;base64,${v.evidence_frames[0].image_base64}` : '';
   const src = S.local[j.job_id] || (j.video_available !== false ? `/ui/api/jobs/${j.job_id}/video` : '');
-  if (!src) { p.innerHTML = `${poster ? `<img src="${poster}" alt="" style="width:100%;height:100%;object-fit:contain">` : ''}<div class="no-video">${icon('film')}<b>Video removed</b><span>Recordings are deleted one hour after analysis. Frames and the report stay.</span></div>`; return; }
+  if (!src) { p.innerHTML = `${poster ? `<img src="${poster}" alt="" style="width:100%;height:100%;object-fit:contain">` : ''}<div class="no-video">${icon('film')}<b>${t('p.removed')}</b><span>${t('p.removedHint')}</span></div>`; return; }
   p.innerHTML = `<video id="vid" playsinline preload="auto" muted ${poster ? `poster="${poster}"` : ''}></video>`;
   const vid = $('#vid'); vid.src = src;
   vid.addEventListener('loadedmetadata', () => { vid.currentTime = Math.max(0.01, S.t); });
-  vid.addEventListener('error', () => p.insertAdjacentHTML('beforeend', `<div class="no-video">${icon('film')}<b>This browser cannot play the recording</b><span>Open it in Chrome or Safari. Frames and the report work everywhere.</span></div>`));
+  vid.addEventListener('error', () => p.insertAdjacentHTML('beforeend', `<div class="no-video">${icon('film')}<b>${t('p.cantPlay')}</b><span>${t('p.cantPlayHint')}</span></div>`));
   vid.addEventListener('timeupdate', () => { S.t = vid.currentTime; tick(); });
   vid.addEventListener('play', () => { S.playing = true; syncPlay(); });
   vid.addEventListener('pause', () => { S.playing = false; syncPlay(); });
@@ -456,7 +478,7 @@ function drawScrub() {
   const s = $('#scrub'); if (!s) return;
   const D = dur(), dec = (S.job && S.job.decisions) || {};
   s.innerHTML = `<div class="rail"></div><div class="fill" id="fill" style="width:${S.t / D * 100}%"></div>
-    ${viols().map((v, i) => `<button class="mk ${i === S.sel ? 'on' : ''} ${dec[i] === 'confirm' ? 'confirm' : dec[i] ? 'done' : ''}" style="left:${v.timecode_sec / D * 100}%" data-mk="${i}" title="${esc(v.type)} · ${tc(v.timecode_sec)}">${i + 1}</button>`).join('')}
+    ${viols().map((v, i) => `<button class="mk ${i === S.sel ? 'on' : ''} ${dec[i] === 'confirm' ? 'confirm' : dec[i] ? 'done' : ''}" style="left:${v.timecode_sec / D * 100}%" data-mk="${i}" title="${esc(typeName(v.type_code, v.type))} · ${tc(v.timecode_sec)}">${i + 1}</button>`).join('')}
     <div class="head" id="head" style="left:${S.t / D * 100}%"></div>`;
   $$('[data-mk]', s).forEach(b => b.onclick = e => { e.stopPropagation(); select(+b.dataset.mk, true); });
   const at = e => { const r = s.getBoundingClientRect(); seek(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * D, true); };
@@ -479,7 +501,7 @@ function seek(t, play) {
   tick();
 }
 function togglePlay() { const v = $('#vid'); if (!v) return; if (v.paused) { if (v.ended) v.currentTime = 0; v.play().catch(() => { }); } else v.pause(); }
-function syncPlay() { const b = $('#pp'); if (b) { b.innerHTML = icon(S.playing ? 'pause' : 'play'); b.setAttribute('aria-label', S.playing ? 'Pause' : 'Play'); } }
+function syncPlay() { const b = $('#pp'); if (b) { b.innerHTML = icon(S.playing ? 'pause' : 'play'); b.setAttribute('aria-label', t(S.playing ? 'p.pause' : 'p.play')); } }
 document.addEventListener('keydown', e => {
   if (e.target.closest('input,textarea,select') || !$('#modal').hidden) return;
   if (e.key === 'Escape') { $('#lightbox').hidden = true; return; }
@@ -498,10 +520,10 @@ document.addEventListener('keydown', e => {
 /* ---------- live monitoring ---------- */
 async function renderLive() {
   $('#main').innerHTML = `<div class="page">
-    <div class="page-head"><div><h1>Live monitoring</h1><p>Cameras are analysed in real time. Alerts appear on the right; acknowledge them or mark false alarms.</p></div>
-      <div style="display:flex;gap:8px"><button class="btn" id="lapBtn">${icon('cam')}Use this computer’s camera</button><button class="btn primary" id="addCamBtn">${icon('plus')}Add camera</button></div></div>
+    <div class="page-head"><div><h1>${t('live.title')}</h1><p>${t('live.lead')}</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="lapBtn">${icon('cam')}${t('live.useCam')}</button><button class="btn primary" id="addCamBtn">${icon('plus')}${t('live.addCam')}</button></div></div>
     <div class="live-grid"><div class="wall" id="wall"></div>
-      <aside class="card alerts"><div class="alerts-h"><h2>Alerts</h2><div class="seg"><button data-at="open">Open</button><button data-at="all">All</button></div></div><div class="alert-list" id="alertList"></div></aside></div></div>`;
+      <aside class="card alerts"><div class="alerts-h"><h2>${t('live.alerts')}</h2><div class="seg"><button data-at="open">${t('live.open')}</button><button data-at="all">${t('live.all')}</button></div></div><div class="alert-list" id="alertList"></div></aside></div></div>`;
   $('#addCamBtn').onclick = addCamera;
   $('#lapBtn').onclick = () => S.laptop ? stopLaptop() : startLaptop();
   $$('[data-at]').forEach(b => b.onclick = () => { S.alertsTab = b.dataset.at; drawAlerts(); });
@@ -518,42 +540,42 @@ function drawWall() {
   const ids = new Set(S.cams.map(c => c.id));
   Object.keys(S.camWs).forEach(id => { if (!ids.has(id)) { S.camWs[id].onclose = null; S.camWs[id].close(); delete S.camWs[id]; } });
   const tiles = S.cams.map(c => `<div class="tile" id="tile-${c.id}"><canvas id="cv-${c.id}"></canvas>
-      <div class="tile-bar"><span class="rec ${c.state.status === 'online' ? '' : 'off'}"></span><span>${esc(c.name)}</span><span class="sp"></span><small id="st-${c.id}">${c.state.status}</small><button class="icon-btn" data-rm="${c.id}" title="Remove camera">${icon('x')}</button></div>
+      <div class="tile-bar"><span class="rec ${c.state.status === 'online' ? '' : 'off'}"></span><span>${esc(c.name)}</span><span class="sp"></span><small id="st-${c.id}">${esc(tx(`cam.${c.state.status}`, c.state.status))}</small><button class="icon-btn" data-rm="${c.id}" title="${t('live.removeCam')}">${icon('x')}</button></div>
       <div class="tile-foot" id="ft-${c.id}"></div></div>`);
-  if (S.laptop) tiles.unshift(`<div class="tile" id="tile-laptop"><canvas id="cv-laptop"></canvas><div class="tile-bar"><span class="rec"></span><span>This computer</span><span class="sp"></span><small id="st-laptop">—</small><button class="icon-btn" id="lapStop" title="Stop">${icon('x')}</button></div><div class="tile-foot" id="ft-laptop"></div></div>`);
-  if (!tiles.length) tiles.push(`<div class="tile-add"><span class="ic">${icon('cam')}</span><b>No cameras yet</b><span>Add an IP camera by its RTSP address, or use this computer’s camera to try it out.</span><button class="btn primary" id="addCam2">${icon('plus')}Add camera</button></div>`);
+  if (S.laptop) tiles.unshift(`<div class="tile" id="tile-laptop"><canvas id="cv-laptop"></canvas><div class="tile-bar"><span class="rec"></span><span>${t('live.thisComputer')}</span><span class="sp"></span><small id="st-laptop">—</small><button class="icon-btn" id="lapStop" title="${t('live.stop')}">${icon('x')}</button></div><div class="tile-foot" id="ft-laptop"></div></div>`);
+  if (!tiles.length) tiles.push(`<div class="tile-add"><span class="ic">${icon('cam')}</span><b>${t('live.noCams')}</b><span>${t('live.noCamsHint')}</span><button class="btn primary" id="addCam2">${icon('plus')}${t('live.addCam')}</button></div>`);
   wall.innerHTML = tiles.join('');
   S.cams.forEach(c => { if (!S.camWs[c.id]) openCamWs(c.id); });
   $$('[data-rm]', wall).forEach(b => b.onclick = () => removeCamera(b.dataset.rm));
   const a2 = $('#addCam2'); if (a2) a2.onclick = addCamera;
   const ls = $('#lapStop'); if (ls) ls.onclick = () => stopLaptop();
-  $('#lapBtn').innerHTML = S.laptop ? `${icon('x')}Stop this computer’s camera` : `${icon('cam')}Use this computer’s camera`;
+  $('#lapBtn').innerHTML = S.laptop ? `${icon('x')}${t('live.stopCam')}` : `${icon('cam')}${t('live.useCam')}`;
 }
-function adminField() { return adminKey() ? '' : '<label for="mKey">Admin key</label><input class="field mono" id="mKey" placeholder="ADMIN_KEY or storage/api_key.txt" autocomplete="off"><small class="muted">Saved in this browser only.</small>'; }
+function adminField() { return adminKey() ? '' : `<label for="mKey">${t('adm.label')}</label><input class="field mono" id="mKey" placeholder="ADMIN_KEY · storage/api_key.txt" autocomplete="off"><small class="muted">${t('adm.saved')}</small>`; }
 function saveAdminKey(c) { const k = $('#mKey', c); if (k && k.value.trim()) { try { localStorage.setItem('cg_admin_key', k.value.trim()); } catch (_) { } } }
 async function addCamera() {
-  await modal(`<h3>Add camera</h3><p>An IP camera address (RTSP), a webcam number, or a video file on the server to replay as a camera.</p>
-    <div class="form"><label for="mName">Name</label><input class="field" id="mName" placeholder="Desk 3">
-      <label for="mUrl">Address</label><input class="field mono" id="mUrl" placeholder="rtsp://10.20.4.17:554/stream1" spellcheck="false">${adminField()}</div>
-    <div class="acts"><button class="btn" data-close>Cancel</button><button class="btn primary" id="mOk">Connect</button></div>`, (c, close) => {
+  await modal(`<h3>${t('live.addCam')}</h3><p>${t('cam.addText')}</p>
+    <div class="form"><label for="mName">${t('cam.name')}</label><input class="field" id="mName" placeholder="${t('cam.namePh')}">
+      <label for="mUrl">${t('cam.address')}</label><input class="field mono" id="mUrl" placeholder="rtsp://10.20.4.17:554/stream1" spellcheck="false">${adminField()}</div>
+    <div class="acts"><button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="mOk">${t('cam.connect')}</button></div>`, (c, close) => {
     $('#mOk', c).onclick = async () => {
-      const name = $('#mName', c).value.trim() || 'Camera', url = $('#mUrl', c).value.trim();
+      const name = $('#mName', c).value.trim() || t('cam.default'), url = $('#mUrl', c).value.trim();
       if (!url) { $('#mUrl', c).focus(); return; }
       saveAdminKey(c);
-      try { await api('/ui/api/cameras', { method: 'POST', admin: true, json: { name, url, fps: 4 } }); close(true); toast(`Camera “${name}” added`); loadCameras(true); }
-      catch (e) { if (e.status === 401 || e.status === 403) { try { localStorage.removeItem('cg_admin_key'); } catch (_) { } } toast(e.status === 401 || e.status === 403 ? 'Wrong admin key' : e.message, 'err'); }
+      try { await api('/ui/api/cameras', { method: 'POST', admin: true, json: { name, url, fps: 4 } }); close(true); toast(t('cam.added', { n: name })); loadCameras(true); }
+      catch (e) { if (e.status === 401 || e.status === 403) { try { localStorage.removeItem('cg_admin_key'); } catch (_) { } } toast(e.status === 401 || e.status === 403 ? t('cam.wrongKey') : e.message, 'err'); }
     };
   });
 }
 async function removeCamera(id) {
   const cam = S.cams.find(c => c.id === id);
-  const ok = await confirmBox('Remove camera?', `<b>${esc(cam ? cam.name : id)}</b> stops streaming. You can add it again later.`, 'Remove');
+  const ok = await confirmBox(t('cam.removeTitle'), t('cam.removeText', { name: `<b>${esc(cam ? cam.name : id)}</b>` }), t('cam.remove'));
   if (!ok) return;
   if (!adminKey()) {
-    const done = await modal(`<h3>Admin key needed</h3><div class="form">${adminField()}</div><div class="acts"><button class="btn" data-close>Cancel</button><button class="btn primary" id="mOk">Continue</button></div>`, (c, close) => { $('#mOk', c).onclick = () => { saveAdminKey(c); close(true); }; });
+    const done = await modal(`<h3>${t('adm.needed')}</h3><div class="form">${adminField()}</div><div class="acts"><button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="mOk">${t('continue')}</button></div>`, (c, close) => { $('#mOk', c).onclick = () => { saveAdminKey(c); close(true); }; });
     if (!done) return;
   }
-  try { await api(`/ui/api/cameras/${id}`, { method: 'DELETE', admin: true }); toast('Camera removed'); loadCameras(true); }
+  try { await api(`/ui/api/cameras/${id}`, { method: 'DELETE', admin: true }); toast(t('cam.removed')); loadCameras(true); }
   catch (e) { if (e.status === 401 || e.status === 403) { try { localStorage.removeItem('cg_admin_key'); } catch (_) { } } toast(e.message, 'err'); }
 }
 function drawBoxes(ctx, dets, sx, sy) {
@@ -565,7 +587,7 @@ function drawBoxes(ctx, dets, sx, sy) {
     ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(x1 * sx - 1, y1 * sy - 18, ctx.measureText(label).width + 10, 17); ctx.fillStyle = '#120F14'; ctx.fillText(label, x1 * sx + 4, y1 * sy - 5);
   });
 }
-const tags = active => (active || []).map(c => `<span class="pill ${['MOTION', 'EMPTY'].includes(c) ? 'neutral' : 'bad'}">${esc(c)}</span>`).join('');
+const tags = active => (active || []).map(c => `<span class="pill ${['MOTION', 'EMPTY'].includes(c) ? 'neutral' : 'bad'}" title="${esc(typeName(c, c))}">${esc(c)}</span>`).join('');
 function openCamWs(id) {
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ui/api/cameras/${id}/ws`);
   S.camWs[id] = ws; const img = new Image();
@@ -582,7 +604,7 @@ function openCamWs(id) {
 async function startLaptop() {
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 } }, audio: false }); }
-  catch (e) { toast(`Camera access denied: ${e.message}`, 'err'); return; }
+  catch (e) { toast(t('cam.denied', { e: e.message }), 'err'); return; }
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ui/api/live`);
   const video = document.createElement('video'); video.srcObject = stream; video.muted = true; video.playsInline = true; await video.play();
   S.laptop = { stream, ws, video, canvas: document.createElement('canvas'), busy: false, timer: null, dets: [], size: null };
@@ -592,7 +614,7 @@ async function startLaptop() {
     const m = JSON.parse(e.data), L = S.laptop; if (!L) return; L.busy = false;
     if (m.error) { toast(m.error, 'err'); return; } if (m.skipped) return;
     L.dets = m.detections || []; L.size = m.size;
-    const st = $('#st-laptop'); if (st) st.textContent = `${m.ms} ms${m.busy ? ' · busy' : ''}`;
+    const st = $('#st-laptop'); if (st) st.textContent = `${m.ms} ms${m.busy ? ` · ${t('busy')}` : ''}`;
     const ft = $('#ft-laptop'); if (ft) ft.innerHTML = tags(m.active);
     const tile = $('#tile-laptop'); if (tile) tile.classList.toggle('alarmed', (m.active || []).some(c => !['MOTION', 'EMPTY'].includes(c)));
   };
@@ -625,7 +647,7 @@ async function loadAlerts() {
   if (!S.alertsSse) {
     try {
       const es = new EventSource('/ui/api/alerts/stream'); S.alertsSse = es;
-      const on = e => { const d = JSON.parse(e.data), a = d.alert; if (!a) return; const i = S.alerts.findIndex(x => x.id === a.id); if (i >= 0) S.alerts[i] = a; else { S.alerts.unshift(a); if (d.type === 'alert' && a.severity === 'critical') toast(`Critical alert: ${a.type_name || a.type_code}`, 'err'); } drawAlerts(); };
+      const on = e => { const d = JSON.parse(e.data), a = d.alert; if (!a) return; const i = S.alerts.findIndex(x => x.id === a.id); if (i >= 0) S.alerts[i] = a; else { S.alerts.unshift(a); if (d.type === 'alert' && a.severity === 'critical') toast(t('alert.critical', { n: typeName(a.type_code, a.type_name) }), 'err'); } drawAlerts(); };
       ['alert', 'alert_update', 'alert_escalated'].forEach(t => es.addEventListener(t, on));
     } catch (_) { }
   }
@@ -637,17 +659,16 @@ function drawAlerts() {
   const el = $('#alertList'); if (!el) return;
   $$('[data-at]').forEach(b => b.classList.toggle('on', b.dataset.at === S.alertsTab));
   const list = (S.alertsTab === 'open' ? open : visible).slice(0, 60);
-  if (!list.length) { el.innerHTML = `<div class="empty"><b>${S.alertsTab === 'open' ? 'No open alerts' : 'No alerts yet'}</b>Alerts come from live cameras and from uploaded recordings with violations.</div>`; return; }
-  const SEV = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+  if (!list.length) { el.innerHTML = `<div class="empty"><b>${t(S.alertsTab === 'open' ? 'alerts.noneOpen' : 'alerts.none')}</b>${t('alerts.hint')}</div>`; return; }
   el.innerHTML = list.map(a => {
     const where = a.camera_name || (a.filename ? a.filename : a.camera_id) || '';
     return `<div class="al ${esc(a.severity)} ${a.state !== 'open' ? 'closed' : ''}">
-      <div class="t1"><span class="pill ${a.severity === 'critical' ? 'bad' : a.severity === 'high' ? 'warn' : 'neutral'}">${SEV[a.severity] || esc(a.severity)}</span><span class="sp"></span><span>${ago(a.created_at)}</span></div>
-      <b lang="ru">${esc(a.type_name || a.type_code)}</b>
-      <div class="where">${esc(where)}${a.t_sec != null ? ` · at ${tc(a.t_sec)}` : ''}${a.count > 1 ? ` · ×${a.count}` : ''}${a.escalation_level ? ' · escalated to supervisor' : ''}</div>
-      <div class="acts">${a.state === 'open' ? `<button class="btn sm primary" data-ack="${a.id}:acknowledged">${icon('check')}Acknowledge</button><button class="btn sm" data-ack="${a.id}:false_positive">False alarm</button>`
-        : `<span class="muted" style="font-size:12.5px">${a.state === 'false_positive' ? 'Marked false alarm' : 'Acknowledged'}${a.acked_by ? ` by ${esc(a.acked_by)}` : ''}</span>`}
-        ${a.job_id ? `<a class="btn sm ghost" href="/?check=${a.job_id}">Open check</a>` : ''}</div></div>`;
+      <div class="t1"><span class="pill ${a.severity === 'critical' ? 'bad' : a.severity === 'high' ? 'warn' : 'neutral'}">${esc(tx(`sev.${a.severity}`, a.severity))}</span><span class="sp"></span><span>${ago(a.created_at)}</span></div>
+      <b>${esc(typeName(a.type_code, a.type_name))}</b>
+      <div class="where">${esc(where)}${a.t_sec != null ? ` · ${t('alert.at', { t: tc(a.t_sec) })}` : ''}${a.count > 1 ? ` · ×${a.count}` : ''}${a.escalation_level ? ` · ${t('alert.escalated')}` : ''}</div>
+      <div class="acts">${a.state === 'open' ? `<button class="btn sm primary" data-ack="${a.id}:acknowledged">${icon('check')}${t('alert.ack')}</button><button class="btn sm" data-ack="${a.id}:false_positive">${t('alert.false')}</button>`
+        : `<span class="muted" style="font-size:12.5px">${t(a.state === 'false_positive' ? 'alert.markedFalse' : 'alert.acked')}${a.acked_by ? ` ${t('alert.by', { n: esc(a.acked_by) })}` : ''}</span>`}
+        ${a.job_id ? `<a class="btn sm ghost" href="/?check=${a.job_id}">${t('alert.openCheck')}</a>` : ''}</div></div>`;
   }).join('');
   $$('[data-ack]', el).forEach(b => b.onclick = async () => {
     const [id, d] = b.dataset.ack.split(':');
@@ -658,18 +679,18 @@ function drawAlerts() {
 
 /* ---------- rules ---------- */
 async function renderRules() {
-  $('#main').innerHTML = `<div class="page"><div class="page-head"><div><h1>What CashGuard checks</h1><p>Each violation type is tied to a published Kazakhstan regulation. Where no public rule covers a case directly, it is marked as indirect or internal.</p></div></div><div class="card" id="rulesCard"><div class="empty">Loading…</div></div><p class="muted" id="rulesSrc" style="margin-top:12px;font-size:13px"></p></div>`;
-  if (!S.rules) { try { S.rules = await api('/ui/api/rules'); } catch (e) { $('#rulesCard').innerHTML = `<div class="empty"><b>Could not load rules</b>${esc(e.message)}</div>`; return; } }
+  $('#main').innerHTML = `<div class="page"><div class="page-head"><div><h1>${t('rules.title')}</h1><p>${t('rules.lead')}</p></div></div><div class="card" id="rulesCard"><div class="empty">${t('loading')}</div></div><p class="muted" id="rulesSrc" style="margin-top:12px;font-size:13px"></p></div>`;
+  if (!S.rules) { try { S.rules = await api('/ui/api/rules'); } catch (e) { $('#rulesCard').innerHTML = `<div class="empty"><b>${t('rules.loadErr')}</b>${esc(e.message)}</div>`; return; } }
   const { types, sources } = S.rules;
-  $('#rulesCard').innerHTML = `<div style="overflow-x:auto"><table class="table rules-table"><thead><tr><th>Code</th><th>Violation</th><th>What it looks like on video</th><th>Regulation</th><th>Live</th></tr></thead><tbody>
-    ${types.map(t => `<tr style="cursor:default"><td><span class="code">${esc(t.code)}</span></td><td lang="ru"><b>${esc(t.type)}</b><div style="margin-top:6px"><span class="kind ${esc(t.norm_kind || 'direct')}">${KIND[t.norm_kind] || ''}</span></div></td><td class="vis" lang="ru">${esc(t.visual || '')}</td>
-      <td lang="ru" style="font-size:13px">${(t.refs || []).map(r => `${r.point ? `<b>${esc(r.point)}</b> — ` : ''}${esc(r.document)}${r.url ? ` <a href="${esc(r.url)}" target="_blank" rel="noopener">${icon('link')}</a>` : ''}`).join('<br>') || '<span class="muted">—</span>'}</td>
-      <td>${LIVE_CODES.has(t.code) ? '<span class="pill ok">Yes</span>' : '<span class="muted">Recordings</span>'}</td></tr>`).join('')}</tbody></table></div>`;
-  $('#rulesSrc').innerHTML = `Sources: ${Object.values(sources || {}).filter(s => s.url).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label || s.short)}</a>`).join(' · ')}`;
+  $('#rulesCard').innerHTML = `<div style="overflow-x:auto"><table class="table rules-table"><thead><tr><th>${t('th.code')}</th><th>${t('th.violation')}</th><th>${t('th.looks')}</th><th>${t('th.regulation')}</th><th>${t('th.live')}</th></tr></thead><tbody>
+    ${types.map(ty => `<tr style="cursor:default"><td><span class="code">${esc(ty.code)}</span></td><td><b>${esc(typeName(ty.code, ty.type))}</b><div style="margin-top:6px"><span class="kind ${esc(ty.norm_kind || 'direct')}">${esc(kindLabel(ty.norm_kind || 'direct'))}</span></div></td><td class="vis">${esc(typeField(ty.code, 'visual', ty.visual))}</td>
+      <td style="font-size:13px">${(ty.refs || []).map(r => `${r.point ? `<b>${esc(pointName(r.point))}</b> — ` : ''}${esc(docName(r))}${r.url ? ` <a href="${esc(docUrl(r.url))}" target="_blank" rel="noopener">${icon('link')}</a>` : ''}`).join('<br>') || '<span class="muted">—</span>'}</td>
+      <td>${LIVE_CODES.has(ty.code) ? `<span class="pill ok">${t('yes')}</span>` : `<span class="muted">${t('rules.recordings')}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
+  $('#rulesSrc').innerHTML = `${t('rules.sources')} ${Object.values(sources || {}).filter(s => s.url).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label || s.short)}</a>`).join(' · ')}`;
 }
 
 /* ---------- boot ---------- */
-applyTheme(); pollStatus(); setInterval(pollStatus, 5000);
+applyStatic(); applyTheme(); pollStatus(); setInterval(pollStatus, 5000);
 setInterval(() => { if (route().view === 'live') loadCameras(); }, 10000);
 loadAlerts();
-render();
+kbReady.then(render);

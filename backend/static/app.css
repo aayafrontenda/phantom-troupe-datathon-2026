@@ -55,6 +55,10 @@ button{font:inherit;color:inherit}
 .status.ok .dot{background:#2EA866;box-shadow:0 0 0 3px var(--ok-bg)}
 .status.busy .dot{background:var(--info);box-shadow:0 0 0 3px var(--info-bg)}
 .status.bad .dot{background:var(--bad);box-shadow:0 0 0 3px var(--bad-bg)}
+.lang-sw{display:flex;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+.lang-sw button{height:26px;min-width:40px;padding:0 8px;border:0;border-radius:6px;background:none;color:var(--muted);font:600 11.5px var(--ui);letter-spacing:.03em;cursor:pointer}
+.lang-sw button:hover{color:var(--fg)}
+.lang-sw button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 
 /* ---------- controls ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 16px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;font-weight:500;white-space:nowrap;text-decoration:none;color:var(--fg);transition:background .12s,border-color .12s}
@@ -195,6 +199,7 @@ kbd{font:500 11px var(--mono);padding:1px 5px;border-radius:4px;border:1px solid
 .frame:hover img{border-color:var(--fg)}
 .label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
 .desc{font-size:14.5px;line-height:1.55}
+.desc + .label{margin-top:12px}
 .rule{margin-top:14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
 .rule summary{list-style:none;display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;font-size:13.5px}
 .rule summary::-webkit-details-marker{display:none}
