@@ -102,6 +102,7 @@ class Settings:
     secure_cookies: bool = field(default_factory=lambda: _bool("SECURE_COOKIES", False))
     rate_limit_per_min: int = field(default_factory=lambda: _int("RATE_LIMIT_PER_MIN", 60))
     cors_origins: list[str] = field(default_factory=lambda: _list("CORS_ORIGINS", "*"))
+    api_hosts: list[str] = field(default_factory=lambda: [h.lower() for h in _list("API_HOSTS", "")])  # hostnames that serve only the API, no UI
 
     # --- live ---
     live_fps: float = field(default_factory=lambda: _float("LIVE_FPS", 4))
@@ -111,6 +112,11 @@ class Settings:
     live_findings: bool = field(default_factory=lambda: _bool("LIVE_FINDINGS", True))       # camera alerts -> findings with a clip
     camera_clip_pre_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_PRE_SEC", 8))
     camera_clip_post_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_POST_SEC", 4))
+
+    # --- AI quality (verified decisions -> per-type confidence thresholds, training dataset) ---
+    quality_base_confidence: float = field(default_factory=lambda: _float("MIN_CONFIDENCE", 0.5))   # same env as the pipeline
+    quality_min_samples: int = field(default_factory=lambda: _int("QUALITY_MIN_SAMPLES", 10))       # decisions per type before a threshold moves
+    quality_target_precision: float = field(default_factory=lambda: _float("QUALITY_TARGET_PRECISION", 0.75))
 
     # --- alerts ---
     alerts_config: Path = field(default_factory=lambda: Path(_env("ALERTS_CONFIG", str(REPO_DIR / "backend" / "alerts.yaml"))))

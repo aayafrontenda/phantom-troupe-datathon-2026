@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from . import metrics
 from .config import REPO_DIR, get_settings
 from .logging_setup import request_id_var, setup_logging
-from .routers import admin, auth, findings, jury, system, ui
+from .routers import admin, auth, findings, jury, quality, system, ui
 from .state import AppState
 
 log = logging.getLogger("backend")
@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(jury.router)
     app.include_router(auth.router)
     app.include_router(findings.router)
+    app.include_router(quality.router)
     app.include_router(ui.router)
     app.include_router(admin.router)
     app.include_router(system.router)
@@ -132,7 +133,14 @@ def _mount_frontend(app: FastAPI) -> None:
     app.mount("/assets", StaticFiles(directory=str(dist / "assets")), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
-    def _spa(path: str):
+    def _spa(path: str, request: Request):
+        st = request.app.state.st
+        host = (request.headers.get("host") or "").split(":")[0].lower()
+        if host and host in st.settings.api_hosts:
+            from .routers.jury import api_index
+            if not path:
+                return JSONResponse(api_index(st))
+            return JSONResponse({"detail": "Not found", "status": 404}, status_code=404)
         candidate = (dist / path) if path else index
         if path and candidate.is_file() and dist in candidate.resolve().parents:
             return FileResponse(str(candidate))

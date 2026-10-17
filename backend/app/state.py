@@ -15,6 +15,7 @@ from .db import Database
 from .events import EventBus
 from .findings import FindingService
 from .jobs import JobService
+from .quality import QualityService
 from .live import CameraManager
 from .reports import make_clips
 from .storage import Retention
@@ -35,6 +36,7 @@ class AppState:
     jobs: JobService
     alerts: AlertEngine
     findings: FindingService
+    quality: QualityService
     cameras: CameraManager
     retention: Retention
     limiter: RateLimiter
@@ -49,13 +51,14 @@ class AppState:
         keys = KeyStore(db)
         users = UserStore(db)
         alerts = AlertEngine(db, bus, settings)
-        findings = FindingService(db, bus, alerts)
+        quality = QualityService(db, settings)
+        findings = FindingService(db, bus, alerts, quality=quality)
         pool = WorkerPool(settings.analyzer, mode=settings.worker_mode, workers=settings.workers,
                           warmup=settings.warmup, grace_sec=settings.watchdog_grace_sec,
                           stall_sec=settings.worker_stall_sec, max_attempts=settings.max_attempts,
                           retry_on_error=settings.retry_on_error, log_file=log_file)
         state = cls(settings=settings, db=db, keys=keys, users=users, bus=bus, pool=pool, jobs=None, alerts=alerts,  # type: ignore[arg-type]
-                    findings=findings, cameras=None, retention=Retention(db), limiter=RateLimiter(settings.rate_limit_per_min),  # type: ignore[arg-type]
+                    findings=findings, quality=quality, cameras=None, retention=Retention(db), limiter=RateLimiter(settings.rate_limit_per_min),  # type: ignore[arg-type]
                     log_file=log_file)
         state.jobs = JobService(db, pool, bus, on_result=state._on_result, findings=findings)
         pool.on_finish = state._on_finish
@@ -116,14 +119,14 @@ class AppState:
         threading.Thread(target=self._clips, args=(job, result), name=f"clips-{job['job_id']}", daemon=True).start()
         for v in result.get("violations") or []:
             frames = v.get("evidence_frames") or []
-            self.alerts.handle({
+            self.alerts.handle(self._apply_threshold({
                 "source": "job", "job_id": job["job_id"], "filename": job.get("filename"),
                 "type_code": v.get("type_code") or "T99", "type_name": v.get("type"),
                 "t_sec": v.get("timecode_sec"), "confidence": v.get("confidence"),
                 "message": (v.get("description") or "")[:400],
                 "norm": _norm_text(v), "evidence_b64": frames[0].get("image_base64") if frames else None,
                 "link": f"/checks/{job['job_id']}",
-            }, actor=job.get("source"))
+            }), actor=job.get("source"))
 
     def _clips(self, job: dict, result: dict) -> None:
         try:
@@ -134,7 +137,18 @@ class AppState:
             log.exception("job %s: clips failed", job["job_id"])
 
     def _on_live_alert(self, event: dict) -> dict | None:
-        return self.alerts.handle(event, actor="live")
+        return self.alerts.handle(self._apply_threshold(event), actor="live")
+
+    def _apply_threshold(self, event: dict) -> dict:
+        """Adaptive per-type thresholds (learned from verified decisions): below it an alert is only ``low``."""
+        try:
+            if self.quality.below_threshold(event.get("type_code"), event.get("confidence")):
+                event["below_threshold"] = True
+                if event.get("severity") not in ("info",):
+                    event["severity"] = "low"
+        except Exception:
+            log.exception("threshold check failed")
+        return event
 
 
 def _norm_text(v: dict) -> str | None:

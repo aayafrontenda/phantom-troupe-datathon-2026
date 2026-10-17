@@ -80,6 +80,7 @@ export interface FindingBrief {
   created_at: number;
   updated_at: number;
   edited: boolean;
+  below_threshold?: boolean;
   filename?: string | null;
   decided_by_name?: string | null;
   verified_by_name?: string | null;
@@ -167,4 +168,28 @@ export interface AdminUser {
 
 export interface RuleType {
   code: string; type: string; visual?: string; why?: string; norm_kind?: string; caveat?: string | null; refs: RuleRef[];
+}
+
+export interface QualityThreshold { base: number; applied: number; status: 'few' | 'ok' | 'raised' | 'retrain'; samples: number; precision?: number; kept?: number }
+export interface QualityType {
+  type_code: string; type_name: string | null; total: number; decided: number; confirmed: number; rejected: number;
+  verified: number; violations: number; confirm_rate: number | null; threshold: QualityThreshold;
+}
+export interface QualityOperator {
+  login: string; name: string; role: string | null; cameras: string[]; decided: number; rejected: number; edited: number;
+  verified: number; disagreed: number; flagged_rejects: number; reject_rate: number | null; coverage: number | null;
+  disagree_rate: number | null; flagged: boolean; flag_reason: 'disagree' | 'rejects' | null;
+}
+export interface Quality {
+  period: { days: number; since: number | null; until: number };
+  summary: {
+    total: number; decided: number; confirmed: number; rejected: number; verified: number; disagreed: number; edited: number;
+    flagged: number; overruled_confirm: number; true_verified: number; false_verified: number;
+    basis: 'verified' | 'operators'; basis_n: number; accuracy: number | null; coverage: number | null; accuracy_delta_pp: number | null;
+  };
+  by_type: QualityType[];
+  weekly: { week: number; start: number; decided: number; false: number; verified: number; rate: number | null }[];
+  operators: QualityOperator[];
+  thresholds: { base: number; target: number; min_samples: number; raised: string[]; retrain: string[] };
+  dataset: { examples: number; verified: number; negatives: number; positives: number };
 }

@@ -9,6 +9,7 @@ import ChecksPage from './pages/Checks';
 import FindingPage from './pages/Finding';
 import LivePage from './pages/Live';
 import LoginPage from './pages/Login';
+import QualityPage from './pages/Quality';
 import ReviewPage from './pages/Review';
 import RulesPage from './pages/Rules';
 
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/checks/:id" element={<CheckPage />} />
           <Route path="/findings/:id" element={<FindingPage />} />
           <Route path="/review" element={<Guard role="supervisor"><ReviewPage /></Guard>} />
+          <Route path="/quality" element={<Guard role="supervisor"><QualityPage /></Guard>} />
           <Route path="/rules" element={<RulesPage />} />
           <Route path="/admin" element={<Guard role="admin"><AdminPage /></Guard>} />
           <Route path="*" element={<Navigate to={home} replace />} />
