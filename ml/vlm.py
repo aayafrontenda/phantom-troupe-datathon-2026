@@ -46,12 +46,12 @@ def _extract_json(text: str) -> dict:
 
 
 class VLMClient:
-    def __init__(self):
+    def __init__(self, timeout: float | None = None):
         s = get_settings()
         self.backend = s.vlm_backend
         self.url = s.vlm_url.rstrip("/")
         self.model = s.vlm_model
-        self.timeout = s.vlm_timeout
+        self.timeout = timeout or s.vlm_timeout
         self.http = httpx.Client(timeout=self.timeout)
 
     @property
@@ -74,9 +74,9 @@ class VLMClient:
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt, "images": images_b64}],
                 "stream": False,
-                "think": False,  # Qwen3.5 по умолчанию «размышляет» — в разы медленнее
+                "think": False,  # Qwen3.5 по умолчанию «размышляет» - в разы медленнее
                 "format": "json",
-                "keep_alive": "30m",
+                "keep_alive": -1,  # держать модель в памяти всегда: первое видео жюри после простоя не ждёт загрузки
                 "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 600},  # без лимита может зациклиться
             })
             r.raise_for_status()

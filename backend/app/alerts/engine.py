@@ -52,9 +52,10 @@ class AlertEngine:
         self.bus = bus
         self.s = settings or get_settings()
         self.policy = load_policy(self.s.alerts_config)
-        self.telegram = TelegramChannel(self.s, on_callback=lambda aid, who, dec: self.ack(aid, who, dec))
+        from ..telegram import TelegramBot
+        self.telegram = TelegramBot(self.s)
         self.channels: dict[str, Channel] = {c.name: c for c in (channels or [
-            WebChannel(bus), self.telegram, WebhookChannel(self.s), EmailChannel(self.s), LogChannel()])}
+            WebChannel(bus), TelegramChannel(self.telegram), WebhookChannel(self.s), EmailChannel(self.s), LogChannel()])}
         self._pool = cf.ThreadPoolExecutor(max_workers=2, thread_name_prefix="alert-delivery")
         self._stop = threading.Event()
         self._esc = threading.Thread(target=self._escalation_loop, name="alert-escalation", daemon=True)
@@ -63,7 +64,7 @@ class AlertEngine:
     # ------------------------------------------------------------------ lifecycle
     def start(self) -> None:
         self._esc.start()
-        self.telegram.start_poller()
+        self.telegram.start()
 
     def stop(self) -> None:
         self._stop.set()
@@ -137,7 +138,10 @@ class AlertEngine:
 
     # ------------------------------------------------------------------ delivery
     def _deliver(self, alert: dict, role: str, level: int) -> None:
+        jury = bool((alert.get("payload") or {}).get("jury"))
         for ch in self._channels_for(role):
+            if jury and ch.name not in ("web", "log"):   # jury test videos never leave the server (brief, section 10)
+                continue
             target = ch.target(role)
             did = self.db.insert("alert_deliveries", {"alert_id": alert["id"], "channel": ch.name, "target": target,
                                                       "status": "pending" if target else "skipped", "attempts": 0,

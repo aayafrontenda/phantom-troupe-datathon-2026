@@ -35,7 +35,8 @@ def check_password(password: str, stored: str) -> bool:
 def _public(row: dict) -> dict:
     return {"id": row["id"], "login": row["login"], "name": row["name"], "role": row["role"],
             "active": bool(row["active"]), "camera_ids": loads(row.get("camera_ids")),
-            "created_at": row["created_at"], "last_login_at": row.get("last_login_at")}
+            "created_at": row["created_at"], "last_login_at": row.get("last_login_at"),
+            "telegram": {"username": row.get("tg_username"), "linked_at": row.get("tg_linked_at")} if row.get("tg_user_id") else None}
 
 
 class UserStore:

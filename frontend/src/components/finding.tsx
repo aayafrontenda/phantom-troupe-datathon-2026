@@ -50,6 +50,7 @@ export function RuleBlock({ rule, typeCode, clipUrl }: { rule: Rule; typeCode?: 
         {refs.length ? refs.map((r, i) => (
           <div key={i}><b>{docName(r)}</b>{r.point ? `, ${pointName(r.point)}` : ''}
             {r.quote && <><br /><q lang="ru">{r.quote}</q>{lang !== 'ru' && <small className="muted"> ({t('f.quoteRu')})</small>}</>}
+            {!r.quote && r.paraphrase && <><br /><span lang="ru">{r.paraphrase}</span> <small className="muted">({t('f.paraphrase')})</small></>}
             {r.url && <><br /><a href={docUrl(r.url)} target="_blank" rel="noopener">{t('f.openAdilet')} <Icon id="link" /></a></>}
           </div>
         )) : <div>{t('f.noPublic')}</div>}

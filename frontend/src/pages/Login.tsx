@@ -25,7 +25,7 @@ export default function LoginPage() {
     <div className="login">
       <section className="login-art">
         <Rosette />
-        <div className="brand"><Mark size={30} /><b>CashGuard</b></div>
+        <div className="brand"><Mark size={30} /><b>PhantomGuard</b></div>
         <div>
           <p className="claim">{t('login.claim')}</p>
           <p className="claim-sub">{t('login.claimSub')}</p>

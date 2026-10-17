@@ -18,7 +18,7 @@ export function SidebarNav({ onCollapse, onNavigate, className }: { onCollapse?:
   return (
     <aside className={cn('flex w-60 shrink-0 flex-col border-r border-border bg-sidebar', className)}>
       <div className="flex h-[52px] items-center gap-2 border-b border-border pr-2 pl-4">
-        <div className="min-w-0 flex-1 truncate text-[15px] font-semibold text-heading">CashGuard</div>
+        <div className="min-w-0 flex-1 truncate text-[15px] font-semibold text-heading">PhantomGuard</div>
         {onCollapse && (
           <Tip label={t('sb.collapse')}>
             <Button variant="ghost" size="icon-sm" onClick={onCollapse} aria-label={t('sb.collapse')}><PanelLeftClose /></Button>

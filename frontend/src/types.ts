@@ -164,6 +164,7 @@ export interface Camera {
 export interface AdminUser {
   id: number; login: string; name: string; role: 'operator' | 'supervisor' | 'admin'; active: boolean;
   camera_ids: string[] | null; created_at: number; last_login_at: number | null;
+  telegram: { username: string | null; linked_at: number } | null;
 }
 
 export interface RuleType {

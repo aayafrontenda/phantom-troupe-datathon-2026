@@ -64,7 +64,7 @@ def requeue(job_id: str, request: Request, p: Principal = Depends(require_role("
         raise HTTPException(status_code=404, detail="Задача не найдена")
     path = job.get("upload_path")
     if not path or not __import__("pathlib").Path(path).exists():
-        raise HTTPException(status_code=409, detail="Видео уже удалено по TTL — повторный прогон невозможен")
+        raise HTTPException(status_code=409, detail="Видео уже удалено по TTL - повторный прогон невозможен")
     now = time.time()
     st.db.update("jobs", "job_id", job_id, {"status": "queued", "stage": "queued", "progress": 0.0, "partial": 0,
                                             "error": None, "warning": None, "result_path": None, "verdict": None,

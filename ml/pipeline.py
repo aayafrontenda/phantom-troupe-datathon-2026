@@ -19,9 +19,10 @@ from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
 from .entry import door_findings
-from .workplace import desk_findings, find_roi, phone_times, scan
+from .workplace import desk_findings, find_roi, left_items_findings, phone_times, scan
 
 log = logging.getLogger("ml.pipeline")
+DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
 Progress = Callable[[str, float], None]
 
 
@@ -43,7 +44,7 @@ def _window_frames(frames: list[Frame], t: float, width: float, n: int) -> list[
 
 
 def _merge(findings: list[dict], merge_sec: float) -> list[dict]:
-    """Один тип в пределах merge_sec — одно событие: берём самое раннее время и максимальную уверенность."""
+    """Один тип в пределах merge_sec - одно событие: берём самое раннее время и максимальную уверенность."""
     out: list[dict] = []
     for f in sorted(findings, key=lambda x: x["t"]):
         same = next((o for o in out if o["code"] == f["code"] and abs(o["t"] - f["t"]) <= merge_sec), None)
@@ -57,10 +58,15 @@ def _merge(findings: list[dict], merge_sec: float) -> list[dict]:
     return out
 
 
-def _evidence(frames: list[Frame], t: float, s) -> list[dict]:
-    main = nearest(frames, t)
-    picks = [main]
-    for dt in (-1.0, 1.0):
+# кадры-доказательства относительно таймкода: у «ухода» сам факт (пустое место, экран, деньги на столе) виден
+# через несколько секунд после того, как кассир встал; у двери - что она так и осталась открытой
+EVIDENCE_OFFSETS = {"T01": (0.0, 2.0, 5.0), "T02": (0.0, 2.0, 5.0), "T03": (0.0, 2.0, 5.0), "T16": (0.0, 2.0, 5.0),
+                    "T04": (0.0, 3.0, 6.0)}
+
+
+def _evidence(frames: list[Frame], t: float, s, code: str = "") -> list[dict]:
+    picks: list[Frame] = []
+    for dt in EVIDENCE_OFFSETS.get(code, (0.0, -1.0, 1.0)):
         f = nearest(frames, t + dt)
         if all(f.index != p.index for p in picks):
             picks.append(f)
@@ -76,7 +82,7 @@ def to_violation(f: dict, frames: list[Frame], s) -> dict:
         "type": rule["type_name"],
         "timecode_sec": round(float(f["t"]), 1),
         "description": kb.build_description(code, f.get("observed", "")),
-        "evidence_frames": _evidence(frames, f["t"], s),
+        "evidence_frames": _evidence(frames, f["t"], s, code),
         # --- дополнительные поля (жюри их игнорирует, интерфейс использует) ---
         "type_code": code,
         "confidence": round(float(f["confidence"]), 2),
@@ -90,7 +96,9 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     s = get_settings()
     progress = on_progress or _noop
     started = time.time()
-    deadline = deadline or (started + s.time_budget_sec)
+    # backend всегда передаёт срок «загрузка + 270 с»; свой бюджет на видео (TIME_BUDGET_SEC) действует всё равно -
+    # иначе одно видео может съесть время, нужное следующим в очереди жюри
+    deadline = min(deadline or float("inf"), started + s.time_budget_sec)
 
     info = probe(path)
     progress("frames", 0.05)
@@ -107,7 +115,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
         det = get_detector()
         dets = det([f.image for f in frames])
         sig = compute_signals(frames, dets)
-    except Exception as e:  # нет torch/весов — работаем без детектора
+    except Exception as e:  # нет torch/весов - работаем без детектора
         log.warning("Детектор недоступен (%s): только равномерное покрытие", e)
 
     diag = math.hypot(info.width or 464, info.height or 848)
@@ -123,19 +131,28 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     if dets:
         findings += door_findings(frames, dets)  # T04: дверь после входа в пустую кассу, без VLM
     from .vlm import VLMClient
-    vlm = VLMClient()
+    # вызов скана - около 1 с; длинный таймаут нужен только на загрузку модели в память
+    vlm = VLMClient(timeout=min(s.vlm_timeout, DESK_CALL_TIMEOUT))
     roi = find_roi(dets, info.width or frames[0].image.shape[1], info.height or frames[0].image.shape[0]) if dets else None
     if vlm.enabled and roi:
         # рабочее место: дорожка состояний по увеличенному фрагменту → T01–T03 по правилам
         progress("vlm", 0.25)
+        stats: dict = {}
         desk_states = scan(vlm, frames, roi, s.desk_step_sec, s.desk_max_calls,
-                           deadline_ok=lambda: time.time() < deadline - 15)
+                           deadline_ok=lambda: time.time() < deadline - DESK_CALL_TIMEOUT - 5,
+                           on_call=lambda k: progress("vlm", 0.25 + 0.6 * min(1.0, k / max(1, s.desk_max_calls))),
+                           stats=stats)
+        vlm_errors += stats.get("errors", 0)
         for st in desk_states:
             if not st.reused:
                 vlm_calls += 1
                 scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
         for f in desk_findings(desk_states, phone_times(frames, dets, roi)):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
+        # после каждого ухода - узкий вопрос «что оставлено на столе» (2 вызова на уход, ~0.4 с каждый)
+        if stats.get("errors", 0) < 2 and time.time() < deadline - DESK_CALL_TIMEOUT - 5:
+            for f in left_items_findings(vlm, frames, roi, desk_states):
+                findings.append({**f, "source": "vlm", "candidate": "уход кассира"})
 
     if vlm.enabled and s.vlm_generic:
         for i, c in enumerate(cands):
@@ -157,7 +174,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
                 findings.append({"code": f["code"], "t": win[f["frame"] - 1].t, "confidence": f["confidence"],
                                  "observed": f["observed"], "source": "vlm", "candidate": c.reason})
 
-    # без VLM — правила только по детектору (с VLM они давали ложные: счётная машина = «чемодан» → T13)
+    # без VLM - правила только по детектору (с VLM они давали ложные: счётная машина = «чемодан» → T13)
     if sig and not vlm.enabled:
         for f in cv_findings(sig):
             findings.append({**f, "source": "detector"})
@@ -168,7 +185,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
 
     tl = timeline(sig) if sig else None
     if tl and dets:
-        # рамки для плеера: [группа, score, x1, y1, x2, y2] в долях кадра — не зависят от размера плеера
+        # рамки для плеера: [группа, score, x1, y1, x2, y2] в долях кадра - не зависят от размера плеера
         tl["detections"] = [
             [[d.group, round(d.score, 2), *(round(v / dim, 4) for v, dim in zip(d.box, (w, h, w, h)))] for d in ds]
             for f, ds in zip(frames, dets) for h, w in [f.image.shape[:2]]

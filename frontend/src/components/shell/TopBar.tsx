@@ -23,7 +23,7 @@ export function TopBar({ collapsed, onExpand, onMenu }: { collapsed: boolean; on
       )}
       <nav aria-label="breadcrumb" className="min-w-0 flex-1">
         <ol className="flex min-w-0 items-center gap-1 text-sm">
-          <li className="hidden text-muted-foreground sm:block">CashGuard</li>
+          <li className="hidden text-muted-foreground sm:block">PhantomGuard</li>
           {item && <>
             <li aria-hidden="true" className="hidden text-faint sm:block"><ChevronRight className="size-3.5" /></li>
             <li className="min-w-0 truncate">

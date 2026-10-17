@@ -1,4 +1,4 @@
-/* CashGuard design system: "banknote" — tenge security print. Paper ground, intaglio-ink text, one raspberry ink
+/* PhantomGuard design system: "banknote" - tenge security print. Paper ground, intaglio-ink text, one raspberry ink
    (ForteBank) that only marks what needs a human. Tone steps instead of shadows; one hairline language;
    state is carried by line form (dashed = waiting, solid = decided) as well as colour. Dark theme via data-theme. */
 @font-face{font-family:"Golos Text";font-style:normal;font-weight:400 700;font-display:swap;src:url(/fonts/golos-cyrillic-ext.woff2) format("woff2");unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
@@ -484,6 +484,13 @@ details.tech[open] > summary .i{transform:rotate(90deg)}
 .toast .i{color:inherit;opacity:.75}
 .toast.err{background:var(--bad);color:#fff}
 .toast.err .i{color:#fff}
+
+/* ---- Telegram ---- */
+.tg-what{display:flex;flex-direction:column;gap:4px;margin-top:16px;padding:14px 16px;border-radius:var(--r2);background:var(--surface-2);font-size:14px}
+.tg-what b{color:var(--plum)}
+.tg-state{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.tg-tag{display:inline-flex;align-items:center;gap:4px;color:var(--info)}
+.tg-tag .i{width:13px;height:13px}
 
 /* ---- AI quality ---- */
 .q-stats .stat{cursor:default}

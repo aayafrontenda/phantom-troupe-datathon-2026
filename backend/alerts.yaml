@@ -24,7 +24,7 @@ severity_by_type:
   T13: low        # personal items on the desk
   T14: low        # food / drinks
   EMPTY: info     # workplace empty (live only)
-  MOTION: info    # mock live analyzer (no model) — never notifies anyone
+  MOTION: info    # mock live analyzer (no model) - never notifies anyone
 
 routing:
   critical:

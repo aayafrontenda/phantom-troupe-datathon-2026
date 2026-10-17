@@ -31,6 +31,7 @@ const PATHS: Record<string, string> = {
   flag: '<path d="M5.5 21V4h11l-2 4 2 4h-11"/>',
   undo: '<path d="M8 7H4v4M4 11a8 8 0 1 1 2.3 7"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  tg: '<path d="M21 4.5L2.8 11.4l5.7 2.1 2.2 6.6 3.3-4.2 4.7 3.6z"/><path d="M8.5 13.5l12.5-9"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 19.5h14"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0M15.5 5a3.5 3.5 0 0 1 0 7M18 13.5a6 6 0 0 1 3.5 6"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
@@ -54,7 +55,7 @@ export function keyFrame(frames: { timestamp_sec: number; image_base64: string }
 }
 /** Banknote-style serial for finding numbers: 4 → "0004". */
 export const serial = (id: number | string | null | undefined) => String(id ?? '').padStart(4, '0');
-export const shortDesc = (d?: string | null) => String(d || '').split(/\s*Основание:/)[0].replace(/\s*Прямой публичной нормы не установлено\.?$/, '').trim();
+export const shortDesc = (d?: string | null) => String(d || '').split(/\s*Основание:/)[0].replace(/\s*Прямой публичной нормы не установлено\.?$/, '').replace(/\s*Норма косвенная[\s\S]*$/, '').trim();
 export const observedPart = (d?: string | null) => {
   const p = shortDesc(d).split(/\s*Это может указывать на нарушение:\s*/);
   return p.length > 1 ? p[0].replace(/\.$/, '') : '';

@@ -249,9 +249,9 @@ function TechDetails({ job, dur, onSeek }: { job: Job; dur: number; onSeek: (t: 
       <summary><Icon id="chev" />{t('tech.title')}</summary>
       <div className="tech-body">
         <div className="kv">
-          <div>{t('kv.analyzer')}<b>{job.analyzer || '—'}</b></div><div>{t('kv.frames')}<b>{String(m.frames ?? '—')}</b></div>
-          <div>{t('kv.moments')}<b>{((m.candidates as unknown[]) || []).length || '—'}</b></div><div>{t('kv.calls')}<b>{String(m.vlm_calls ?? '—')}</b></div>
-          <div>{t('kv.time')}<b>{job.processing_sec ?? '—'} {t('sec')}</b></div><div>{t('kv.id')}<b>{job.job_id}</b></div>
+          <div>{t('kv.analyzer')}<b>{job.analyzer || '-'}</b></div><div>{t('kv.frames')}<b>{String(m.frames ?? '-')}</b></div>
+          <div>{t('kv.moments')}<b>{((m.candidates as unknown[]) || []).length || '-'}</b></div><div>{t('kv.calls')}<b>{String(m.vlm_calls ?? '-')}</b></div>
+          <div>{t('kv.time')}<b>{job.processing_sec ?? '-'} {t('sec')}</b></div><div>{t('kv.id')}<b>{job.job_id}</b></div>
         </div>
         {lanes.length > 0 && <div><p className="label">{t('tech.signals')}</p><div className="lanes">{lanes.map(k => <div key={k} className="lrow"><span className="lab">{t(`lane.${k}`)}</span><div className="track"><svg viewBox="0 0 1000 16" preserveAspectRatio="none">{lane(k)}</svg></div></div>)}</div></div>}
         {scenes.length > 0 && <div><p className="label">{t('tech.saw')}</p><ul className="scenes">{scenes.map((s, i) => <li key={i}><button onClick={() => onSeek(s.t)}><span className="t num">{tc(s.t)}</span><span lang="ru">{s.scene}</span></button></li>)}</ul></div>}

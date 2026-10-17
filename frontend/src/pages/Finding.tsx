@@ -145,7 +145,7 @@ export function History({ items }: { items: HistoryItem[] }) {
     <ul className="timeline">
       {items.slice().reverse().map(h => (
         <li key={h.id}><span className={`dot ${cls(h)}`}><Icon id={icon(h)} /></span>
-          <div><b>{h.actor_name || h.actor}</b> {label(h)}{h.payload?.comment ? <> — «{String(h.payload.comment)}»</> : null}
+          <div><b>{h.actor_name || h.actor}</b> {label(h)}{h.payload?.comment ? <> - «{String(h.payload.comment)}»</> : null}
             {h.action === 'edit' && h.payload?.after ? <div className="desc-box op small" style={{ marginTop: 6 }}>{String(h.payload.after)}</div> : null}
             <small>{fmtDate(h.created_at, locale)}, {t(`role.${h.actor_role}`) !== `role.${h.actor_role}` ? t(`role.${h.actor_role}`) : h.actor_role}</small></div></li>
       ))}

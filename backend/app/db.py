@@ -137,7 +137,7 @@ MIGRATIONS: list[str] = [
         detail   TEXT
     );
     """,
-    # 2 — users, sessions, findings (review workflow), job ownership
+    # 2 - users, sessions, findings (review workflow), job ownership
     """
     CREATE TABLE IF NOT EXISTS users (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,6 +207,15 @@ MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS ix_fh_finding ON finding_history(finding_id);
 
     ALTER TABLE jobs ADD COLUMN created_by TEXT;
+    """,
+    # 3 - Telegram: personal bot linked to a user
+    """
+    ALTER TABLE users ADD COLUMN tg_user_id INTEGER;
+    ALTER TABLE users ADD COLUMN tg_chat_id INTEGER;
+    ALTER TABLE users ADD COLUMN tg_username TEXT;
+    ALTER TABLE users ADD COLUMN tg_lang TEXT;
+    ALTER TABLE users ADD COLUMN tg_linked_at REAL;
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_users_tg ON users(tg_user_id);
     """,
 ]
 

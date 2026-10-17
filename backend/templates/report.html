@@ -178,7 +178,7 @@
             {% for r in v.rule.refs %}
             <div class="rule">
               <b>{{ t.doc(r) }}</b>{% if r.point %}, {{ t.point(r.point) }}{% endif %}
-              {% if r.quote %}<div><q lang="ru">{{ r.quote }}</q>{% if t("quote_note") %} <span class="note-ru">({{ t("quote_note") }})</span>{% endif %}</div>{% endif %}
+              {% if r.quote %}<div><q lang="ru">{{ r.quote }}</q>{% if t("quote_note") %} <span class="note-ru">({{ t("quote_note") }})</span>{% endif %}</div>{% elif r.paraphrase %}<div><span lang="ru">{{ r.paraphrase }}</span> <span class="note-ru">({{ t("paraphrase_note") }})</span></div>{% endif %}
               {% if r.url %}<div><a href="{{ t.url(r.url) }}">{{ t.url(r.url) }}</a></div>{% endif %}
             </div>
             {% endfor %}

@@ -1,6 +1,6 @@
 """Детектор объектов COCO (RT-DETR, Apache-2.0) через transformers.
 
-Первый запуск скачивает веса с Hugging Face — сделайте это заранее, потом работайте с HF_HUB_OFFLINE=1.
+Первый запуск скачивает веса с Hugging Face - сделайте это заранее, потом работайте с HF_HUB_OFFLINE=1.
 Ultralytics YOLO не используем: AGPL-3.0.
 """
 from __future__ import annotations

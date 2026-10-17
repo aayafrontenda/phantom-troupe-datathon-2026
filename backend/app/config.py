@@ -123,6 +123,8 @@ class Settings:
     telegram_bot_token: str = field(default_factory=lambda: _env("TELEGRAM_BOT_TOKEN", ""))
     telegram_chat_operator: str = field(default_factory=lambda: _env("TELEGRAM_CHAT_OPERATOR", ""))
     telegram_chat_supervisor: str = field(default_factory=lambda: _env("TELEGRAM_CHAT_SUPERVISOR", ""))
+    telegram_poll: bool = field(default_factory=lambda: _bool("TELEGRAM_POLL", True))           # only one server per token may poll
+    telegram_photos: bool = field(default_factory=lambda: _bool("TELEGRAM_PHOTOS", True))        # 0 = text only, no frames leave the server
     alert_webhook_url: str = field(default_factory=lambda: _env("ALERT_WEBHOOK_URL", ""))
     alert_webhook_secret: str = field(default_factory=lambda: _env("ALERT_WEBHOOK_SECRET", ""))
     smtp_host: str = field(default_factory=lambda: _env("SMTP_HOST", ""))
@@ -155,7 +157,9 @@ class Settings:
 
     @property
     def db_path(self) -> Path:
-        return self.storage_dir / "cashguard.sqlite3"
+        path = self.storage_dir / "phantomguard.sqlite3"
+        legacy = self.storage_dir / "cashguard.sqlite3"   # name before the rename: keep existing users and decisions
+        return legacy if legacy.exists() and not path.exists() else path
 
     @property
     def max_upload_bytes(self) -> int:

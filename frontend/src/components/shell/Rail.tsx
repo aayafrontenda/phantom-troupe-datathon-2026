@@ -5,7 +5,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth';
 import { LANGS, useI18n, type Lang } from '../../i18n';
 import { cn } from '../../lib/utils';
-import { useTheme } from '../../ui';
+import { Icon, useTheme, useUi } from '../../ui';
+import { TelegramDialog } from '../Telegram';
 import { Tip } from '../ui/tooltip';
 import { Mark } from '../Guilloche';
 
@@ -14,8 +15,8 @@ export const initials = (name?: string) => (name || '?').split(/\s+/).map(x => x
 export function Rail() {
   return (
     <div className="hidden w-[60px] shrink-0 flex-col items-center bg-rail py-3 md:flex">
-      <Tip label="CashGuard" side="right">
-        <Link to="/" aria-label="CashGuard" className="grid size-9 place-items-center rounded-lg bg-white/[.07] [&_.mark_g]:stroke-rail-foreground">
+      <Tip label="PhantomGuard" side="right">
+        <Link to="/" aria-label="PhantomGuard" className="grid size-9 place-items-center rounded-lg bg-white/[.07] [&_.mark_g]:stroke-rail-foreground">
           <Mark size={24} />
         </Link>
       </Tip>
@@ -29,6 +30,7 @@ export function ProfileMenu({ inline = false }: { inline?: boolean }) {
   const { t, lang, setLang } = useI18n();
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
+  const { modal } = useUi();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -72,6 +74,12 @@ export function ProfileMenu({ inline = false }: { inline?: boolean }) {
             <button role="menuitem" onClick={toggle} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-accent">
               {dark ? <Sun className="size-4 text-muted-foreground" /> : <Moon className="size-4 text-muted-foreground" />}{t('theme')}
             </button>
+            {user && user.kind === 'user' && user.role !== 'admin' && (
+              <button role="menuitem" onClick={() => { setOpen(false); modal<null>(close => <TelegramDialog role={user.role} close={() => close(null)} />); }}
+                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-accent [&_.i]:size-4 [&_.i]:text-muted-foreground">
+                <Icon id="tg" />{t('tg.menu')}
+              </button>
+            )}
             <button role="menuitem" onClick={() => { setOpen(false); logout(); }} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-accent">
               <LogOut className="size-4 text-muted-foreground" />{t('logout')}
             </button>

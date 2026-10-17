@@ -1,10 +1,10 @@
 """Рабочее место кассира: где оно на кадре и что на нём происходит.
 
-Ноутбук детектор находит на всех ракурсах — вокруг него вырезаем фрагмент стола, увеличиваем и
+Ноутбук детектор находит на всех ракурсах - вокруг него вырезаем фрагмент стола, увеличиваем и
 задаём VLM простые вопросы о состоянии (кто за столом, что на экране, деньги, сумка, сейф).
 Нарушения T01–T03 выводят правила по дорожке состояний, а не VLM: вопрос «найди нарушение»
-маленькая модель отвечает выдумками, а вопрос о факте на увеличенном фрагменте — почти без ошибок.
-Ручных зон нет — всё от положения ноутбука, поэтому новый ракурс не ломает логику.
+маленькая модель отвечает выдумками, а вопрос о факте на увеличенном фрагменте - почти без ошибок.
+Ручных зон нет - всё от положения ноутбука, поэтому новый ракурс не ломает логику.
 """
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ log = logging.getLogger("ml.workplace")
 
 PROMPT = (ML_DIR / "prompts" / "workplace_ru.txt").read_text(encoding="utf-8")
 
-# расширение рамки ноутбука (в его ширинах/высотах): влево, вверх, вправо, вниз — захватываем стол и сейф рядом
+# расширение рамки ноутбука (в его ширинах/высотах): влево, вверх, вправо, вниз - захватываем стол и сейф рядом
 ROI_EXPAND = (1.2, 1.2, 1.2, 1.5)
-# без ноутбука: расширение рамки сидящего кассира (по ширине, по высоте) — захватываем стол перед ним
+# без ноутбука: расширение рамки сидящего кассира (по ширине, по высоте) - захватываем стол перед ним
 SEAT_EXPAND = (0.9, 0.5)
 CROP_SIDE = 448
 # повтор прошлого состояния без вызова VLM: фрагмент 64×64 почти не изменился и с вопроса прошло < MAX_REUSE_SEC
@@ -54,7 +54,8 @@ class DeskState:
 
     @property
     def present(self) -> bool:
-        return self.person in ("sit", "stand")
+        # нераспознанный ответ («?») - не повод утверждать, что кассира нет: считаем, что он на месте
+        return self.person != "none"
 
 
 def _iou(a, b) -> float:
@@ -67,16 +68,16 @@ def _iou(a, b) -> float:
 def _seat_roi(dets: list[list[Det]], width: int, height: int) -> tuple[int, int, int, int] | None:
     """Запасной ориентир без ноутбука: место, где человек дольше всего неподвижен (кассир за столом).
 
-    Отражения в стекле тоже неподвижны, но мелкие — поэтому выбираем по «число кадров × площадь рамки».
+    Отражения в стекле тоже неподвижны, но мелкие - поэтому выбираем по «число кадров × площадь рамки».
     """
     boxes = [d.box for ds in dets for d in ds if d.group == "person" and d.score >= 0.5]
-    boxes = boxes[::max(1, len(boxes) // 300)]  # сравнение «каждая с каждой» — не больше ~300 рамок
+    boxes = boxes[::max(1, len(boxes) // 300)]  # сравнение «каждая с каждой» - не больше ~300 рамок
     if len(boxes) < 5:
         return None
     area = lambda b: (b[2] - b[0]) * (b[3] - b[1])  # noqa: E731
     best = max(boxes, key=lambda b: sum(_iou(b, o) > 0.5 for o in boxes) * area(b))
     if sum(_iou(best, o) > 0.5 for o in boxes) < 5:
-        return None  # никто не задерживается на месте — рабочего места не видно
+        return None  # никто не задерживается на месте - рабочего места не видно
     x1, y1, x2, y2 = np.median(np.array([b for b in boxes if _iou(b, best) > 0.5]), axis=0)
     bw, bh = x2 - x1, y2 - y1
     return (max(0, int(x1 - bw * SEAT_EXPAND[0])), max(0, int(y1 - bh * SEAT_EXPAND[1])),
@@ -86,13 +87,15 @@ def _seat_roi(dets: list[list[Det]], width: int, height: int) -> tuple[int, int,
 def find_roi(dets: list[list[Det]], width: int, height: int) -> tuple[int, int, int, int] | None:
     """Область рабочего места: самое устойчивое положение ноутбука, расширенное до стола.
 
-    Ноутбука нет в кадре (другой ракурс, ракурс C) — берём место, где дольше всего неподвижен человек.
+    Ноутбука нет в кадре (другой ракурс, ракурс C) - берём место, где дольше всего неподвижен человек.
     """
     boxes = [d.box for ds in dets for d in ds if d.group == "laptop"]
-    if not boxes:
-        return _seat_roi(dets, width, height)
+    boxes = boxes[::max(1, len(boxes) // 300)]  # сравнение «каждая с каждой» - не больше ~300 рамок
     # ноутбук стоит на месте: берём кластер рамок, который встречается чаще всего
     support = [sum(_iou(b, o) > 0.3 for o in boxes) for b in boxes]
+    if not boxes or max(support) < 3:
+        # ноутбука нет или это одна случайная рамка (счётная машина, стекло) - ищем по сидящему кассиру
+        return _seat_roi(dets, width, height)
     anchor = boxes[int(np.argmax(support))]
     x1, y1, x2, y2 = np.median(np.array([b for b in boxes if _iou(b, anchor) > 0.3]), axis=0)
     bw, bh = x2 - x1, y2 - y1
@@ -132,38 +135,43 @@ def _key(s: DeskState) -> tuple:
 
 
 def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float = 2.0, max_calls: int = 26,
-         coarse_points: int = 20, deadline_ok=lambda: True) -> list[DeskState]:
+         coarse_points: int = 20, deadline_ok=lambda: True, on_call=None, stats: dict | None = None) -> list[DeskState]:
     """Дорожка состояний рабочего места не дороже max_calls вызовов VLM на видео.
 
-    1) грубый проход: шаг max(step_sec, длительность / coarse_points) — у видео до 40 с это и есть step_sec;
-    2) уточнение: между соседними замерами, где состояние изменилось (ушла, экран, сейф…), — шаг step_sec.
+    1) грубый проход: шаг max(step_sec, длительность / coarse_points) - у видео до 40 с это и есть step_sec;
+    2) уточнение: между соседними замерами, где состояние изменилось (ушла, экран, сейф…), - шаг step_sec.
     На неизменной картинке (фрагмент 64×64 почти тот же, с вопроса < MAX_REUSE_SEC) состояние повторяется без вызова.
     """
     if not frames:
         return []
-    calls = 0
+    calls, errors, errors_in_row = 0, 0, 0
 
     def small(f: Frame) -> np.ndarray:
         return cv2.cvtColor(cv2.resize(crop(f.image, roi), (64, 64), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
 
     def run(picks: list[Frame], prev: tuple | None) -> list[DeskState]:
-        """Состояния для кадров picks по порядку; prev — (состояние, фрагмент) последнего вопроса для повтора."""
-        nonlocal calls
+        """Состояния для кадров picks по порядку; prev - (состояние, фрагмент) последнего вопроса для повтора."""
+        nonlocal calls, errors, errors_in_row
         out = []
         for f in picks:
             sm = small(f)
             if prev and f.t - prev[0].t < MAX_REUSE_SEC and float((cv2.absdiff(sm, prev[1]) > REUSE_PIX_DIFF).mean()) < REUSE_FRAC:
                 out.append(replace(prev[0], t=f.t, reused=True))
                 continue
-            if calls >= max_calls or not deadline_ok():
-                log.warning("Лимит скана рабочего места: %d вызовов, остановлен на %.1f с", calls, f.t)
+            if calls >= max_calls or not deadline_ok() or errors_in_row >= 2:
+                log.warning("Скан рабочего места остановлен на %.1f с: вызовов %d, ошибок подряд %d",
+                            f.t, calls, errors_in_row)
                 break
+            calls += 1  # неудачный вызов тоже тратит время - считаем в лимит
+            if on_call:
+                on_call(calls)  # прогресс после каждого вопроса: без него сторож backend убьёт «зависшую» задачу
             try:
                 st = ask_state(vlm, f, roi)
-            except Exception as e:  # одна ошибка VLM не должна ронять видео
+            except Exception as e:  # одна ошибка VLM не должна ронять видео; две подряд - модель недоступна
+                errors, errors_in_row = errors + 1, errors_in_row + 1
                 log.warning("VLM ошибка (рабочее место, t=%.1f): %s", f.t, e)
                 continue
-            calls += 1
+            errors_in_row = 0
             out.append(st)
             prev = (st, sm)
         return out
@@ -184,7 +192,9 @@ def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float = 2.0, max_ca
             if _key(a) != _key(b):
                 extra += run(every(a.t + step_sec, b.t - step_sec / 2, step_sec), None)
         states = sorted(states + extra, key=lambda s: s.t)
-    log.info("Скан рабочего места: %d замеров, %d вызовов VLM", len(states), calls)
+    log.info("Скан рабочего места: %d замеров, %d вызовов VLM, ошибок %d", len(states), calls, errors)
+    if stats is not None:
+        stats.update(calls=calls, errors=errors)
     return states
 
 
@@ -203,10 +213,10 @@ def _runs(states: list[DeskState], pred) -> list[tuple[int, int]]:
 
 
 def _leave_time(states: list[DeskState], i0: int) -> float:
-    """Момент ухода по конвенции разметки — когда кассир встаёт и уходит.
+    """Момент ухода по конвенции разметки - когда кассир встаёт и уходит.
 
-    Перед пустым столом обычно идёт отрезок «стоит». Короткий (≤ 3 с) — встала и пошла: время между
-    «сидит» и первым «стоит». Длинный — работала стоя (у сейфа): время последнего «стоит».
+    Перед пустым столом обычно идёт отрезок «стоит». Короткий (≤ 3 с) - встала и пошла: время между
+    «сидит» и первым «стоит». Длинный - работала стоя (у сейфа): время последнего «стоит».
     """
     k = i0
     while k > 0 and states[k - 1].person == "stand":
@@ -218,14 +228,65 @@ def _leave_time(states: list[DeskState], i0: int) -> float:
     return states[i0 - 1].t
 
 
+LEFT_PROMPT = (ML_DIR / "prompts" / "left_items_ru.txt").read_text(encoding="utf-8")
+# что модель иногда всё равно перечисляет, хотя это обычное оборудование стола
+EQUIPMENT = ("ноутбук", "компьютер", "монитор", "телефон", "счётн", "счетн", "машин", "мыш", "клавиатур", "принтер",
+             "сейф", "терминал", "наушник", "провод", "кабел")
+
+
+def _left_items(vlm: VLMClient, frame: Frame, roi) -> set[str]:
+    d = _extract_json(vlm.ask(LEFT_PROMPT, [to_jpeg_b64(crop(frame.image, roi), CROP_SIDE, 92)]))
+    items = {x.strip().strip(".").lower() for x in str(d.get("left_items", "")).replace(";", ",").split(",")}
+    return {x for x in items if x and x not in ("ничего", "нет") and not any(w in x for w in EQUIPMENT)}
+
+
+def left_items_findings(vlm: VLMClient, frames: list[Frame], roi, states: list[DeskState]) -> list[dict]:
+    """T02 по узкому вопросу после ухода кассира: «что, кроме оборудования, оставлено на столе?».
+
+    Поля cash/bag общего скана пропускают журнал, планшет, банку (Х-24); узкий вопрос их называет, а на
+    нормальных видео отвечает «ничего» или перечисляет оборудование. Засчитываем предмет, названный на двух
+    кадрах после ухода (одиночная выдумка отсеивается).
+    """
+    found = []
+    for i0, i1 in _runs(states, lambda s: not s.present):
+        if i0 == 0 or i1 - i0 + 1 < MIN_AWAY_STATES:
+            continue
+        times = [states[i0].t, states[min(i1, i0 + 2)].t]
+        picks = [min(frames, key=lambda f: abs(f.t - t)) for t in times]
+        try:
+            answers = [_left_items(vlm, f, roi) for f in picks]
+        except Exception as e:
+            log.warning("VLM ошибка (оставленные предметы): %s", e)
+            continue
+        items = sorted(set.intersection(*answers)) if len(picks) > 1 else sorted(answers[0])
+        log.info("После ухода в %.1f с на столе: %s → %s", states[i0].t, answers, items)
+        if items:
+            found.append({"code": "T02", "t": _leave_time(states, i0), "confidence": 0.8,
+                          "observed": "Кассир уходит с рабочего места; на столе остаются без присмотра: " + ", ".join(items)})
+    return found
+
+
 def phone_times(frames: list[Frame], dets: list[list[Det]], roi) -> list[float]:
-    """Моменты, когда детектор видит телефон внутри рабочего места — подтверждение для T15."""
+    """Моменты, когда детектор видит телефон в руке кассира на рабочем месте - подтверждение для T15.
+
+    Кассир - человек, ближайший к центру рабочего места (оно строится вокруг ноутбука / сидящего кассира).
+    Телефон засчитывается, если ближе всего он к кассиру: телефон в руке клиента напротив (Х-5) - не нарушение
+    кассира, телефон без людей рядом (мышь на пустом столе) - не «в руке».
+    """
     x1, y1, x2, y2 = roi
+    rc = np.array([(x1 + x2) / 2, (y1 + y2) / 2])
     out = []
     for f, ds in zip(frames, dets):
+        persons = [np.array(p.center) for p in ds if p.group == "person" and p.score >= 0.4]
+        if not persons:
+            continue
+        cashier = min(range(len(persons)), key=lambda i: np.linalg.norm(persons[i] - rc))
         for d in ds:
             cx, cy = d.center
-            if d.group == "phone" and x1 <= cx <= x2 and y1 <= cy <= y2:
+            if d.group != "phone" or not (x1 <= cx <= x2 and y1 <= cy <= y2):
+                continue
+            nearest = min(range(len(persons)), key=lambda i: np.linalg.norm(persons[i] - np.array((cx, cy))))
+            if nearest == cashier:
                 out.append(f.t)
                 break
     return out
@@ -236,9 +297,9 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
     found: list[dict] = []
     for i0, i1 in _runs(states, lambda s: not s.present):
         if i0 == 0:
-            continue  # пусто с самого начала — ухода не видели (кассир ещё не пришёл)
+            continue  # пусто с самого начала - ухода не видели (кассир ещё не пришёл)
         if i1 - i0 + 1 < MIN_AWAY_STATES:
-            continue  # один пустой замер — кассир наклонилась/вышла из фрагмента на секунду (Х-12, Х-25)
+            continue  # один пустой замер - кассир наклонилась/вышла из фрагмента на секунду (Х-12, Х-25)
         away = states[i0:i1 + 1]
         t_leave = _leave_time(states, i0)
         n = len(away)
@@ -257,13 +318,13 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
     # сейф открыт ≥ 2 замеров подряд, а кассир при этом не работает с ним (сидит за столом или ушёл)
     for i0, i1 in _runs(states, lambda s: s.safe_open is True):
         if i1 - i0 < 1:
-            continue  # один кадр — открыла и закрыла, это норма
+            continue  # один кадр - открыла и закрыла, это норма
         idle_all = [i for i in range(i0, i1 + 1) if states[i].person in ("sit", "none")]
         if len(idle_all) < MIN_AWAY_STATES:
-            continue  # сейф открыт, пока с ним работают (стоят у него) — норма
+            continue  # сейф открыт, пока с ним работают (стоят у него) - норма
         idle = idle_all[0]
-        # «отходит от открытого сейфа»: стояла у сейфа, потом села/ушла (Х-20) — или кассира нет совсем.
-        # Сидит всё время рядом с открытым сейфом (ракурс A: сейф у кресла, Х-5, Х-19) — работает с ним, норма.
+        # «отходит от открытого сейфа»: стояла у сейфа, потом села/ушла (Х-20) - или кассира нет совсем.
+        # Сидит всё время рядом с открытым сейфом (ракурс A: сейф у кресла, Х-5, Х-19) - работает с ним, норма.
         walked_away = any(states[i].person == "stand" for i in range(i0, idle))
         if not walked_away and sum(states[i].person == "none" for i in idle_all) < MIN_AWAY_STATES:
             continue
@@ -272,17 +333,17 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
                       "observed": "Кассир отходит от сейфа; дверца сейфа остаётся открытой" +
                                   (", кассир работает за столом" if states[idle].person == "sit" else "")})
 
-    # T14/T15/T13 — действия кассира и вещи на столе; считаем только настоящие ответы VLM, не повторы
+    # T14/T15/T13 - действия кассира и вещи на столе; считаем только настоящие ответы VLM, не повторы
     asked = [s for s in states if not s.reused]
-    # телефон VLM часто «видит» у клиента или в пустых руках — засчитываем, только если детектор тоже видит
-    # телефон на рабочем месте в пределах 3 с (phones=None — подтверждения нет, верим VLM)
+    # телефон VLM часто «видит» у клиента или в пустых руках - засчитываем, только если детектор тоже видит
+    # телефон на рабочем месте в пределах 3 с (phones=None - подтверждения нет, верим VLM)
     phone_ok = (lambda s: True) if phones is None else (lambda s: any(abs(s.t - t) <= 3.0 for t in phones))  # noqa: E731
     rules = [
         ("T14", lambda s: s.action == "drink", 1, 0.7, "Кассир пьёт или ест на рабочем месте"),
         ("T15", lambda s: s.action == "phone" and phone_ok(s), 2, 0.7,
          "Кассир держит в руке мобильный телефон (смартфон) на рабочем месте"),
-        # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) — считаем, когда села или отошла;
-        # 3 подтверждения: инкассаторскую сумку на столе модель иногда принимает за личную (Х-16 — 2 раза)
+        # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) - считаем, когда села или отошла;
+        # 3 подтверждения: инкассаторскую сумку на столе модель иногда принимает за личную (Х-16 - 2 раза)
         # при клиенте/инкассаторе напротив сумка на столе скорее его (Х-16), а не личная вещь кассира
         ("T13", lambda s: s.personal and s.person in ("sit", "none") and s.client == "none", 3, 0.65,
          "На рабочем столе кассира лежат личные вещи (сумка, рюкзак или верхняя одежда)"),

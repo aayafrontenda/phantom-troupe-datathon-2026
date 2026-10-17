@@ -7,7 +7,7 @@ services:
     build:
       args:
         WITH_ML: "1"
-    image: cashguard-app:gpu
+    image: phantomguard-app:gpu
     environment:
       ANALYZER: ${ANALYZER_DOCKER:-ml}
       DETECTOR_DEVICE: cuda
@@ -60,4 +60,5 @@ services:
     restart: "no"
 
 volumes:
-  ollama: {}
+  ollama:
+    name: cashguard_ollama    # downloaded models, created before the rename to PhantomGuard

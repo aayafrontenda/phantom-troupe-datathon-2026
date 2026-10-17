@@ -47,7 +47,7 @@ export function QueueTable({ rows, uploads, counts, filter, onFilter, q, onQuery
     return <span className="flex flex-wrap gap-1"><Badge variant="success"><ShieldCheck />{t('pill.clear')}</Badge>{part}</span>;
   };
   const review = (j: JobRow) => {
-    if (j.public_status !== 'done' || j.verdict !== 'violation') return <span className="text-faint">—</span>;
+    if (j.public_status !== 'done' || j.verdict !== 'violation') return <span className="text-faint">-</span>;
     if ((j.reviewed || 0) >= (j.n_violations || 0)) return <Badge variant="success"><CheckCircle2 />{t('pill.reviewed')}</Badge>;
     return <span className="text-muted-foreground tabular-nums">{t('rev.progress', { a: j.reviewed || 0, b: j.n_violations || 0 })}</span>;
   };

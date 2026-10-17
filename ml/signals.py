@@ -1,7 +1,7 @@
 """Сигналы состояния по кадрам и кандидаты событий для проверки VLM.
 
-Идея: дешёвый детектор смотрит каждый кадр (2 fps), а дорогая VLM — только окна вокруг кандидатов.
-Пороги здесь — стартовые; калибруйте их на ml/eval (см. docs/tasks/ML.md).
+Идея: дешёвый детектор смотрит каждый кадр (2 fps), а дорогая VLM - только окна вокруг кандидатов.
+Пороги здесь - стартовые; калибруйте их на ml/eval (см. docs/tasks/ML.md).
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class FrameSignals:
 class Candidate:
     t: float
     reason: str
-    priority: int                   # 3 — сильный сигнал, 0 — равномерное покрытие
+    priority: int                   # 3 - сильный сигнал, 0 - равномерное покрытие
     hints: list[str] = field(default_factory=list)
 
 
@@ -56,7 +56,7 @@ def screen_brightness(img: np.ndarray, box) -> float:
     x1, y1, x2, y2 = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
     if x2 - x1 < 4 or y2 - y1 < 4:
         return 0.0
-    crop = img[y1:y1 + max(2, (y2 - y1) // 2), x1:x2]  # верхняя половина — обычно экран
+    crop = img[y1:y1 + max(2, (y2 - y1) // 2), x1:x2]  # верхняя половина - обычно экран
     v = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)[:, :, 2]
     return float(np.percentile(v, 75))
 
@@ -138,7 +138,7 @@ def find_candidates(sig: list[FrameSignals], duration: float, frame_diag: float,
             cands.append(Candidate(s.t, f"в кадре {c} человек", 1))
             last_t = s.t
 
-    # 6) равномерное покрытие — ловит то, что детектор не видит (деньги, сейф, дверь)
+    # 6) равномерное покрытие - ловит то, что детектор не видит (деньги, сейф, дверь)
     t = window_sec / 2
     while t < duration:
         cands.append(Candidate(t, "покрытие", 0))
@@ -172,7 +172,7 @@ def timeline(sig: list[FrameSignals]) -> dict:
 
 
 def cv_findings(sig: list[FrameSignals]) -> list[dict]:
-    """Нарушения только по детектору — когда VLM недоступна (и для live-режима)."""
+    """Нарушения только по детектору - когда VLM недоступна (и для live-режима)."""
     found = []
     def first_run(pred, min_len=2):
         run = 0
