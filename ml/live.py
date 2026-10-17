@@ -40,11 +40,17 @@ def _iou(a, b) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def _grow(b, k: float):
+    w, h = b[2] - b[0], b[3] - b[1]
+    return b[0] - w * k, b[1] - h * k, b[2] + w * k, b[3] + h * k
+
+
 @dataclass
 class _State:
     on: int = 0
     off: int = 0
     active: bool = False
+    since: float = 0.0  # время первого кадра, на котором условие появилось, — момент нарушения
 
 
 class _Desk:
@@ -69,14 +75,14 @@ class _Desk:
         if not self.enabled:
             return
         now = time.time() - self.t0
-        laps = [d for d in dets if d.group == "laptop"]
-        if laps:
-            self.laptop_dets.append(laps)
-        if self.roi is None and len(self.laptop_dets) >= 5:
+        self.laptop_dets.append([d for d in dets if d.group in ("laptop", "person")])
+        if self.roi is None and len(self.laptop_dets) >= 8:
+            # по ноутбуку, а без него — по месту, где дольше всех сидит человек (как для видео)
             from .workplace import find_roi
             h, w = img.shape[:2]
             self.roi = find_roi(list(self.laptop_dets), w, h)
-            log.info("live: рабочее место %s", self.roi)
+            if self.roi:
+                log.info("live: рабочее место %s", self.roi)
         if self.roi is None:
             return
         x1, y1, x2, y2 = self.roi
@@ -101,7 +107,8 @@ class _Desk:
                 found = {f["code"]: f for f in desk_findings(list(self.states), list(self.phones))}
                 for code, f in found.items():
                     if code not in self.active:
-                        self.pending.append(f)
+                        # t находки — секунды от начала сессии: момент самого нарушения (встала и ушла), а не ответа VLM
+                        self.pending.append({**f, "event_ts": self.t0 + f["t"]})
                 self.active = found
         except Exception as e:  # VLM недоступна — live продолжает работать на детекторе
             log.warning("live: VLM ошибка: %s", e)
@@ -117,6 +124,11 @@ class _Desk:
     def active_codes(self) -> list[str]:
         with self.lock:
             return list(self.active)
+
+    def last_state(self):
+        """Последний ответ VLM о рабочем месте (для окна live_cam) или None."""
+        with self.lock:
+            return self.states[-1] if self.states else None
 
 
 @dataclass
@@ -140,8 +152,10 @@ class LiveRules:
         new = [d for d in dets if d.group in ("phone", "drink", "food", "bag") and not self._is_background(d)]
         groups = {d.group for d in new}
         cond: dict[str, str] = {}
-        if "phone" in groups:
-            cond["T15"] = "В кадре мобильный телефон"
+        # телефон — только в руке (рядом с человеком): мышь/пульт на пустом столе детектор тоже зовёт «cell phone»
+        in_hand = [d for d in new if d.group == "phone" and any(_iou(_grow(p.box, 0.25), d.box) > 0 for p in persons)]
+        if in_hand:
+            cond["T15"] = "Мобильный телефон в руках у человека на рабочем месте"
         if "drink" in groups or "food" in groups:
             cond["T14"] = "На рабочем месте напиток или еда"
         if "bag" in groups:
@@ -160,13 +174,16 @@ class LiveRules:
                     self.background.append((d.group, d.box))
         cond = self._conditions(dets)
         alerts = []
+        now = time.time()
         for code in set(cond) | set(self.states):
             st = self.states.setdefault(code, _State())
             if code in cond:
                 st.on, st.off = st.on + 1, 0
+                if st.on == 1:
+                    st.since = now
                 if not st.active and st.on >= ON:
                     st.active = True
-                    alerts.append(self._alert(code, cond[code]))
+                    alerts.append(self._alert(code, cond[code], event_ts=st.since))
             else:
                 st.off, st.on = st.off + 1, 0
                 if st.active and st.off >= OFF:
@@ -176,16 +193,21 @@ class LiveRules:
             for f in self.desk.drain():
                 if any(a["code"] == f["code"] for a in alerts):
                     continue
-                alerts.append(self._alert(f["code"], f["observed"], f.get("confidence")))
+                alerts.append(self._alert(f["code"], f["observed"], f.get("confidence"), f.get("event_ts")))
         return alerts
 
     @staticmethod
-    def _alert(code: str, message: str, confidence: float | None = None) -> dict:
+    def _alert(code: str, message: str, confidence: float | None = None, event_ts: float | None = None) -> dict:
+        """Тревога. ts — когда подтверждена; event_ts — когда нарушение произошло; delay_sec — разница."""
+        now = time.time()
+        event_ts = min(now, event_ts) if event_ts else now
+        delay = now - event_ts
+        if delay >= 1.5:  # видно в интерфейсе без правок фронта: когда случилось и через сколько подтверждено
+            message += f" (в {time.strftime('%H:%M:%S', time.localtime(event_ts))}, подтверждено через {delay:.0f} с)"
+        a = {"code": code, "message": message, "ts": now, "event_ts": round(event_ts, 2), "delay_sec": round(delay, 1)}
         if code == "EMPTY":
-            return {"code": code, "type": "Рабочее место пустое", "message": message, "norm": None,
-                    "severity": "info", "ts": time.time()}
-        a = {"code": code, "type": kb.rule_of(code)["type_name"], "message": message,
-             "norm": kb.refs_text(code), "severity": "warning", "ts": time.time()}
+            return {**a, "type": "Рабочее место пустое", "norm": None, "severity": "info"}
+        a.update({"type": kb.rule_of(code)["type_name"], "norm": kb.refs_text(code), "severity": "warning"})
         if confidence is not None:
             a["confidence"] = round(float(confidence), 2)
         return a

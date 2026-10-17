@@ -239,7 +239,8 @@ class CameraManager:
                                                "evidence_b64": base64.b64encode(la.encode_jpeg(la.draw(small, out["detections"]))).decode("ascii"),
                                                "link": f"/live?camera={cam_id}"})
                         if alert and alert.get("new") and self.on_clip and alert.get("severity") != "info" and s.live_findings:
-                            self._schedule_clip(cam, st, alert, now)
+                            # клип вокруг момента нарушения (event_ts), а не прихода тревоги: VLM подтверждает с задержкой 4–8 с
+                            self._schedule_clip(cam, st, alert, float(a.get("event_ts") or now))
                     except Exception:
                         log.exception("camera %s: alert dispatch failed", cam_id)
             cap.release()
