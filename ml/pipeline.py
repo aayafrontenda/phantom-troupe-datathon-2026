@@ -19,7 +19,7 @@ from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
 from .entry import door_findings
-from .workplace import desk_findings, find_roi, phone_times, scan
+from .workplace import desk_findings, find_roi, left_items_findings, phone_times, scan
 
 log = logging.getLogger("ml.pipeline")
 DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
@@ -58,10 +58,15 @@ def _merge(findings: list[dict], merge_sec: float) -> list[dict]:
     return out
 
 
-def _evidence(frames: list[Frame], t: float, s) -> list[dict]:
-    main = nearest(frames, t)
-    picks = [main]
-    for dt in (-1.0, 1.0):
+# кадры-доказательства относительно таймкода: у «ухода» сам факт (пустое место, экран, деньги на столе) виден
+# через несколько секунд после того, как кассир встал; у двери — что она так и осталась открытой
+EVIDENCE_OFFSETS = {"T01": (0.0, 2.0, 5.0), "T02": (0.0, 2.0, 5.0), "T03": (0.0, 2.0, 5.0), "T16": (0.0, 2.0, 5.0),
+                    "T04": (0.0, 3.0, 6.0)}
+
+
+def _evidence(frames: list[Frame], t: float, s, code: str = "") -> list[dict]:
+    picks: list[Frame] = []
+    for dt in EVIDENCE_OFFSETS.get(code, (0.0, -1.0, 1.0)):
         f = nearest(frames, t + dt)
         if all(f.index != p.index for p in picks):
             picks.append(f)
@@ -77,7 +82,7 @@ def to_violation(f: dict, frames: list[Frame], s) -> dict:
         "type": rule["type_name"],
         "timecode_sec": round(float(f["t"]), 1),
         "description": kb.build_description(code, f.get("observed", "")),
-        "evidence_frames": _evidence(frames, f["t"], s),
+        "evidence_frames": _evidence(frames, f["t"], s, code),
         # --- дополнительные поля (жюри их игнорирует, интерфейс использует) ---
         "type_code": code,
         "confidence": round(float(f["confidence"]), 2),
@@ -144,6 +149,10 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
                 scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
         for f in desk_findings(desk_states, phone_times(frames, dets, roi)):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
+        # после каждого ухода — узкий вопрос «что оставлено на столе» (2 вызова на уход, ~0.4 с каждый)
+        if stats.get("errors", 0) < 2 and time.time() < deadline - DESK_CALL_TIMEOUT - 5:
+            for f in left_items_findings(vlm, frames, roi, desk_states):
+                findings.append({**f, "source": "vlm", "candidate": "уход кассира"})
 
     if vlm.enabled and s.vlm_generic:
         for i, c in enumerate(cands):

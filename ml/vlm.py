@@ -76,7 +76,7 @@ class VLMClient:
                 "stream": False,
                 "think": False,  # Qwen3.5 по умолчанию «размышляет» — в разы медленнее
                 "format": "json",
-                "keep_alive": "30m",
+                "keep_alive": -1,  # держать модель в памяти всегда: первое видео жюри после простоя не ждёт загрузки
                 "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 600},  # без лимита может зациклиться
             })
             r.raise_for_status()

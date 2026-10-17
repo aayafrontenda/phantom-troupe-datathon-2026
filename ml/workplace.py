@@ -228,14 +228,65 @@ def _leave_time(states: list[DeskState], i0: int) -> float:
     return states[i0 - 1].t
 
 
+LEFT_PROMPT = (ML_DIR / "prompts" / "left_items_ru.txt").read_text(encoding="utf-8")
+# что модель иногда всё равно перечисляет, хотя это обычное оборудование стола
+EQUIPMENT = ("ноутбук", "компьютер", "монитор", "телефон", "счётн", "счетн", "машин", "мыш", "клавиатур", "принтер",
+             "сейф", "терминал", "наушник", "провод", "кабел")
+
+
+def _left_items(vlm: VLMClient, frame: Frame, roi) -> set[str]:
+    d = _extract_json(vlm.ask(LEFT_PROMPT, [to_jpeg_b64(crop(frame.image, roi), CROP_SIDE, 92)]))
+    items = {x.strip().strip(".").lower() for x in str(d.get("left_items", "")).replace(";", ",").split(",")}
+    return {x for x in items if x and x not in ("ничего", "нет") and not any(w in x for w in EQUIPMENT)}
+
+
+def left_items_findings(vlm: VLMClient, frames: list[Frame], roi, states: list[DeskState]) -> list[dict]:
+    """T02 по узкому вопросу после ухода кассира: «что, кроме оборудования, оставлено на столе?».
+
+    Поля cash/bag общего скана пропускают журнал, планшет, банку (Х-24); узкий вопрос их называет, а на
+    нормальных видео отвечает «ничего» или перечисляет оборудование. Засчитываем предмет, названный на двух
+    кадрах после ухода (одиночная выдумка отсеивается).
+    """
+    found = []
+    for i0, i1 in _runs(states, lambda s: not s.present):
+        if i0 == 0 or i1 - i0 + 1 < MIN_AWAY_STATES:
+            continue
+        times = [states[i0].t, states[min(i1, i0 + 2)].t]
+        picks = [min(frames, key=lambda f: abs(f.t - t)) for t in times]
+        try:
+            answers = [_left_items(vlm, f, roi) for f in picks]
+        except Exception as e:
+            log.warning("VLM ошибка (оставленные предметы): %s", e)
+            continue
+        items = sorted(set.intersection(*answers)) if len(picks) > 1 else sorted(answers[0])
+        log.info("После ухода в %.1f с на столе: %s → %s", states[i0].t, answers, items)
+        if items:
+            found.append({"code": "T02", "t": _leave_time(states, i0), "confidence": 0.8,
+                          "observed": "Кассир уходит с рабочего места; на столе остаются без присмотра: " + ", ".join(items)})
+    return found
+
+
 def phone_times(frames: list[Frame], dets: list[list[Det]], roi) -> list[float]:
-    """Моменты, когда детектор видит телефон внутри рабочего места — подтверждение для T15."""
+    """Моменты, когда детектор видит телефон в руке кассира на рабочем месте — подтверждение для T15.
+
+    Кассир — человек, ближайший к центру рабочего места (оно строится вокруг ноутбука / сидящего кассира).
+    Телефон засчитывается, если ближе всего он к кассиру: телефон в руке клиента напротив (Х-5) — не нарушение
+    кассира, телефон без людей рядом (мышь на пустом столе) — не «в руке».
+    """
     x1, y1, x2, y2 = roi
+    rc = np.array([(x1 + x2) / 2, (y1 + y2) / 2])
     out = []
     for f, ds in zip(frames, dets):
+        persons = [np.array(p.center) for p in ds if p.group == "person" and p.score >= 0.4]
+        if not persons:
+            continue
+        cashier = min(range(len(persons)), key=lambda i: np.linalg.norm(persons[i] - rc))
         for d in ds:
             cx, cy = d.center
-            if d.group == "phone" and x1 <= cx <= x2 and y1 <= cy <= y2:
+            if d.group != "phone" or not (x1 <= cx <= x2 and y1 <= cy <= y2):
+                continue
+            nearest = min(range(len(persons)), key=lambda i: np.linalg.norm(persons[i] - np.array((cx, cy))))
+            if nearest == cashier:
                 out.append(f.t)
                 break
     return out
