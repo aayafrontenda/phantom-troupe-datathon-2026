@@ -69,6 +69,20 @@ def find_room_exits(frames: list[Frame], dets: list[list[Det]], min_empty_sec: f
     return out
 
 
+def camera_moving(frames: list[Frame], t0: float, t1: float, frac: float = 0.3) -> bool:
+    """Камера в [t0, t1] двигалась (съёмка с рук, поворот): между соседними кадрами меняется большая часть картинки.
+
+    Сравнение «до/после» на двери тогда бессмысленно — отличие даёт сама камера, а не дверь.
+    Неподвижная камера на обучающих видео: максимум 7 % пикселей между кадрами; съёмка с рук — до 84 %.
+    """
+    small = [cv2.cvtColor(cv2.resize(f.image, (48, 88), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY).astype(np.int16)
+             for f in frames if t0 <= f.t <= t1]
+    if len(small) < 2:
+        return False
+    changed = [float((np.abs(a - b) > PIX_DIFF).mean()) for a, b in zip(small, small[1:])]
+    return max(changed) > frac
+
+
 def _door_diff(frames, dets, roi, base, t0: float, t1: float) -> list[float]:
     """Доли отличающихся от эталона пикселей участка двери на кадрах [t0, t1]; люди замаскированы."""
     fracs = []
@@ -101,6 +115,9 @@ def door_findings(frames: list[Frame], dets: list[list[Det]]) -> list[dict]:
         empty = [frames[k].image for k in range(i_empty, i_in) if frames[k].t <= frames[i_in].t - 0.5] or [frames[i_empty].image]
         base = np.mean([_gray(im, roi) for im in empty], axis=0)
         t_in = frames[i_in].t
+        if camera_moving(frames, frames[i_empty].t, t_in + CHECK_TO):
+            log.info("Дверь после входа в %.1f с: камера двигалась — проверка пропущена", t_in)
+            continue
         fracs = _door_diff(frames, dets, roi, base, t_in + CHECK_FROM, t_in + CHECK_TO)
         if len(fracs) < 3:
             log.info("Дверь после входа в %.1f с: мало кадров для проверки", t_in)
@@ -125,6 +142,9 @@ def door_findings(frames: list[Frame], dets: list[list[Det]]) -> list[dict]:
         if len(before) < 5:
             continue
         base = np.median(before, axis=0)
+        if camera_moving(frames, t_out - 12.0, t_out + 10.0):
+            log.info("Дверь после выхода в %.1f с: камера двигалась — проверка пропущена", t_out)
+            continue
         fracs = _door_diff(frames, dets, roi, base, t_out + 3.0, t_out + 10.0)
         if len(fracs) < 3:
             log.info("Дверь после выхода в %.1f с: мало кадров для проверки", t_out)
