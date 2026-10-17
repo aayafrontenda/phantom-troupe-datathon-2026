@@ -39,8 +39,9 @@ ACTION = {"пьёт": "drink", "пьет": "drink", "ест": "drink", "теле
 @dataclass
 class DeskState:
     t: float
-    person: str          # sit | stand | none | ?
+    person: str          # кассир: sit | stand | none | ?
     screen: str          # app | lock | dark | closed | ?
+    client: str          # клиент напротив: sit | stand | none | ?
     action: str          # drink | phone | other | none
     personal: bool       # личные вещи (сумка, рюкзак, одежда) на рабочем столе
     cash: bool
@@ -92,6 +93,7 @@ def ask_state(vlm: VLMClient, frame: Frame, roi) -> DeskState:
         t=frame.t,
         person=PERSON.get(norm(d.get("person")), "?"),
         screen=SCREEN.get(norm(d.get("screen")), "?"),
+        client=PERSON.get(norm(d.get("client")), "?"),
         action=ACTION.get(norm(d.get("action")), "other"),
         personal=norm(d.get("personal")) == "да",
         cash=norm(d.get("cash")) == "да",
@@ -216,6 +218,10 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
         away = states[i0:i1 + 1]
         t_leave = _leave_time(states, i0)
         n = len(away)
+        # п. 22 Правил № 231: клиент остаётся у стола, а кассира нет
+        if sum(s.client in ("sit", "stand") for s in away) >= MIN_AWAY_STATES:
+            found.append({"code": "T16", "t": t_leave, "confidence": 0.75,
+                          "observed": "Кассир встаёт и уходит с рабочего места, клиент остаётся у стола без кассира"})
         if sum(s.screen == "app" for s in away) >= max(1, (n + 1) // 2):
             found.append({"code": "T01", "t": t_leave, "confidence": 0.8,
                           "observed": "Кассир уходит с рабочего места; на экране ноутбука остаётся открытое окно программы, "
@@ -232,6 +238,11 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
         if len(idle_all) < MIN_AWAY_STATES:
             continue  # сейф открыт, пока с ним работают (стоят у него) — норма
         idle = idle_all[0]
+        # «отходит от открытого сейфа»: стояла у сейфа, потом села/ушла (Х-20) — или кассира нет совсем.
+        # Сидит всё время рядом с открытым сейфом (ракурс A: сейф у кресла, Х-5, Х-19) — работает с ним, норма.
+        walked_away = any(states[i].person == "stand" for i in range(i0, idle))
+        if not walked_away and sum(states[i].person == "none" for i in idle_all) < MIN_AWAY_STATES:
+            continue
         t = (states[idle - 1].t + states[idle].t) / 2 if idle > 0 else states[idle].t
         found.append({"code": "T03", "t": t, "confidence": 0.75,
                       "observed": "Кассир отходит от сейфа; дверца сейфа остаётся открытой" +
@@ -248,7 +259,8 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
          "Кассир держит в руке мобильный телефон (смартфон) на рабочем месте"),
         # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) — считаем, когда села или отошла;
         # 3 подтверждения: инкассаторскую сумку на столе модель иногда принимает за личную (Х-16 — 2 раза)
-        ("T13", lambda s: s.personal and s.person in ("sit", "none"), 3, 0.65,
+        # при клиенте/инкассаторе напротив сумка на столе скорее его (Х-16), а не личная вещь кассира
+        ("T13", lambda s: s.personal and s.person in ("sit", "none") and s.client == "none", 3, 0.65,
          "На рабочем столе кассира лежат личные вещи (сумка, рюкзак или верхняя одежда)"),
     ]
     for code, pred, need, conf, observed in rules:

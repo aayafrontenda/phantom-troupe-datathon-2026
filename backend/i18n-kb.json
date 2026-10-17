@@ -127,6 +127,16 @@
              "visual": "Кассир ұялы телефонды (камерасы бар смартфонды) ұстап тұр немесе пайдаланады.",
              "why": "Кассалық торапқа тек фото- және бейнетүсіру мүмкіндігі жоқ байланыс құралдары ғана рұқсат етіледі."}
     },
+    "T16": {
+      "en": {"name": "Cashier left the workplace while serving a client",
+             "visual": "The client sits or stands at the desk while the cashier's seat is empty: the cashier walked away before finishing the service.",
+             "why": "A cashier must not leave the workplace until the client has been served; the client and the cash are left without control.",
+             "caveat": "The video cannot show whether the operation was completed in the system, only that the client stays at the desk without the cashier."},
+      "kk": {"name": "Кассир клиентке қызмет көрсету кезінде жұмыс орнынан кетті",
+             "visual": "Клиент үстел жанында отыр немесе тұр, ал кассирдің орны бос: кассир қызмет көрсетуді аяқтамай кетіп қалды.",
+             "why": "Кассалық қызметкерге клиентке қызмет көрсету аяқталғанға дейін жұмыс орнын тастап кетуге тыйым салынады; клиент пен қолма-қол ақша бақылаусыз қалады.",
+             "caveat": "Бейнеден операцияның жүйеде аяқталғанын анықтау мүмкін емес — тек клиенттің кассирсіз үстел жанында қалғаны көрінеді."}
+    },
     "T99": {
       "en": {"name": "Violation type not determined"},
       "kk": {"name": "Бұзушылық түрі анықталмаған"}

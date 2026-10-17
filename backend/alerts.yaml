@@ -14,6 +14,7 @@ severity_by_type:
   T08: high       # cash of two clients handled at once
   T11: high       # collector bag without paperwork
   T12: high       # valuables into the safe without counting
+  T16: high       # cashier left the workplace while serving a client
   T01: medium     # workstation not locked
   T06: medium     # cash accepted without a document
   T09: medium     # client left before the operation ended
