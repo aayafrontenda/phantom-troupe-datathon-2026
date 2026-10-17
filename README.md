@@ -24,7 +24,7 @@ python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install -r ml\requirements-ml.txt
-ollama pull qwen2.5vl:7b
+ollama pull qwen3.5:4b
 copy .env.example .env           # ANALYZER=ml
 powershell -ExecutionPolicy Bypass -File deploy\run_server.ps1
 ```
@@ -68,16 +68,27 @@ curl http://127.0.0.1:8000/api/v1/jobs/<job_id> -H "X-API-Key: <ключ>"
 Пайплайн анализа:
 
 ```
-видео .mov ─► кадры 2 fps ─► RT-DETR (люди, телефон, напитки, сумки, ноутбук)
+видео .mov ─► кадры 2 fps ─► RT-DETR (люди, ноутбук, предметы)
                                │
-                               ▼
-                    сигналы состояния + кандидаты событий
-                               │  (≤ 12 окон по 6 с)
-                               ▼
-                 Qwen2.5-VL-7B (локально, Ollama) — чек-лист T01–T15
-                               │
-                               ▼
-        слияние + порог ─► rules_kb.yaml (тип, описание, норма) ─► JSON по ТЗ
+               ┌───────────────┴────────────────┐
+               ▼                                ▼
+   рабочее место = область вокруг       вход в пустую кассу:
+   ноутбука, увеличенный фрагмент       участок двери vs эталон
+               │ (≤ 26 вызовов)                 │ (без VLM)
+               ▼                                ▼
+   Qwen3.5-4B (локально, Ollama)            T04 дверь
+   отвечает на вопросы о фактах:
+   кассир на месте? экран? деньги?
+   сейф? пьёт? телефон? личные вещи?
+               │
+               ▼
+   правила по дорожке состояний → T01 T02 T03 T13 T14 T15
+               │
+               ▼
+        слияние ─► rules_kb.yaml (тип, описание, норма) ─► JSON по ТЗ
 ```
 
-Модели и лицензии: RT-DETR r18 (Apache-2.0), Qwen2.5-VL-7B-Instruct (Apache-2.0), Ollama (MIT), OpenCV (Apache-2.0), FastAPI (MIT).
+VLM не решает «есть ли нарушение» — она отвечает на простые вопросы о том, что видно, а нарушение выводят
+правила. Так на обучающих видео ложные срабатывания упали с 19 из 20 до единиц.
+
+Модели и лицензии: RT-DETR r18 (Apache-2.0), Qwen3.5-4B (Apache-2.0), Ollama (MIT), OpenCV (Apache-2.0), FastAPI (MIT).
