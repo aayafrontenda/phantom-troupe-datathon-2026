@@ -70,4 +70,8 @@ def build_description(code: str, observed: str) -> str:
         text += f" Основание: {ref}."
     if v.get("norm_kind") == "internal":
         text += " Прямой публичной нормы не установлено."
+    elif v.get("norm_kind") == "indirect":
+        # жюри видит только description: косвенную норму нельзя выдавать за прямое основание
+        caveat = (v.get("caveat") or "").strip().rstrip(".")
+        text += f" Норма косвенная: {caveat[:1].lower()}{caveat[1:]}." if caveat else " Норма косвенная, прямой публичной нормы нет."
     return text

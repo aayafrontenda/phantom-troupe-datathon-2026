@@ -46,12 +46,12 @@ def _extract_json(text: str) -> dict:
 
 
 class VLMClient:
-    def __init__(self):
+    def __init__(self, timeout: float | None = None):
         s = get_settings()
         self.backend = s.vlm_backend
         self.url = s.vlm_url.rstrip("/")
         self.model = s.vlm_model
-        self.timeout = s.vlm_timeout
+        self.timeout = timeout or s.vlm_timeout
         self.http = httpx.Client(timeout=self.timeout)
 
     @property

@@ -54,7 +54,8 @@ class DeskState:
 
     @property
     def present(self) -> bool:
-        return self.person in ("sit", "stand")
+        # нераспознанный ответ («?») — не повод утверждать, что кассира нет: считаем, что он на месте
+        return self.person != "none"
 
 
 def _iou(a, b) -> float:
@@ -89,10 +90,12 @@ def find_roi(dets: list[list[Det]], width: int, height: int) -> tuple[int, int, 
     Ноутбука нет в кадре (другой ракурс, ракурс C) — берём место, где дольше всего неподвижен человек.
     """
     boxes = [d.box for ds in dets for d in ds if d.group == "laptop"]
-    if not boxes:
-        return _seat_roi(dets, width, height)
+    boxes = boxes[::max(1, len(boxes) // 300)]  # сравнение «каждая с каждой» — не больше ~300 рамок
     # ноутбук стоит на месте: берём кластер рамок, который встречается чаще всего
     support = [sum(_iou(b, o) > 0.3 for o in boxes) for b in boxes]
+    if not boxes or max(support) < 3:
+        # ноутбука нет или это одна случайная рамка (счётная машина, стекло) — ищем по сидящему кассиру
+        return _seat_roi(dets, width, height)
     anchor = boxes[int(np.argmax(support))]
     x1, y1, x2, y2 = np.median(np.array([b for b in boxes if _iou(b, anchor) > 0.3]), axis=0)
     bw, bh = x2 - x1, y2 - y1
@@ -132,7 +135,7 @@ def _key(s: DeskState) -> tuple:
 
 
 def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float = 2.0, max_calls: int = 26,
-         coarse_points: int = 20, deadline_ok=lambda: True) -> list[DeskState]:
+         coarse_points: int = 20, deadline_ok=lambda: True, on_call=None, stats: dict | None = None) -> list[DeskState]:
     """Дорожка состояний рабочего места не дороже max_calls вызовов VLM на видео.
 
     1) грубый проход: шаг max(step_sec, длительность / coarse_points) — у видео до 40 с это и есть step_sec;
@@ -141,29 +144,34 @@ def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float = 2.0, max_ca
     """
     if not frames:
         return []
-    calls = 0
+    calls, errors, errors_in_row = 0, 0, 0
 
     def small(f: Frame) -> np.ndarray:
         return cv2.cvtColor(cv2.resize(crop(f.image, roi), (64, 64), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
 
     def run(picks: list[Frame], prev: tuple | None) -> list[DeskState]:
         """Состояния для кадров picks по порядку; prev — (состояние, фрагмент) последнего вопроса для повтора."""
-        nonlocal calls
+        nonlocal calls, errors, errors_in_row
         out = []
         for f in picks:
             sm = small(f)
             if prev and f.t - prev[0].t < MAX_REUSE_SEC and float((cv2.absdiff(sm, prev[1]) > REUSE_PIX_DIFF).mean()) < REUSE_FRAC:
                 out.append(replace(prev[0], t=f.t, reused=True))
                 continue
-            if calls >= max_calls or not deadline_ok():
-                log.warning("Лимит скана рабочего места: %d вызовов, остановлен на %.1f с", calls, f.t)
+            if calls >= max_calls or not deadline_ok() or errors_in_row >= 2:
+                log.warning("Скан рабочего места остановлен на %.1f с: вызовов %d, ошибок подряд %d",
+                            f.t, calls, errors_in_row)
                 break
+            calls += 1  # неудачный вызов тоже тратит время — считаем в лимит
+            if on_call:
+                on_call(calls)  # прогресс после каждого вопроса: без него сторож backend убьёт «зависшую» задачу
             try:
                 st = ask_state(vlm, f, roi)
-            except Exception as e:  # одна ошибка VLM не должна ронять видео
+            except Exception as e:  # одна ошибка VLM не должна ронять видео; две подряд — модель недоступна
+                errors, errors_in_row = errors + 1, errors_in_row + 1
                 log.warning("VLM ошибка (рабочее место, t=%.1f): %s", f.t, e)
                 continue
-            calls += 1
+            errors_in_row = 0
             out.append(st)
             prev = (st, sm)
         return out
@@ -184,7 +192,9 @@ def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float = 2.0, max_ca
             if _key(a) != _key(b):
                 extra += run(every(a.t + step_sec, b.t - step_sec / 2, step_sec), None)
         states = sorted(states + extra, key=lambda s: s.t)
-    log.info("Скан рабочего места: %d замеров, %d вызовов VLM", len(states), calls)
+    log.info("Скан рабочего места: %d замеров, %d вызовов VLM, ошибок %d", len(states), calls, errors)
+    if stats is not None:
+        stats.update(calls=calls, errors=errors)
     return states
 
 

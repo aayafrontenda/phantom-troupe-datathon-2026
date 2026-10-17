@@ -22,6 +22,7 @@ from .entry import door_findings
 from .workplace import desk_findings, find_roi, phone_times, scan
 
 log = logging.getLogger("ml.pipeline")
+DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
 Progress = Callable[[str, float], None]
 
 
@@ -90,7 +91,9 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     s = get_settings()
     progress = on_progress or _noop
     started = time.time()
-    deadline = deadline or (started + s.time_budget_sec)
+    # backend всегда передаёт срок «загрузка + 270 с»; свой бюджет на видео (TIME_BUDGET_SEC) действует всё равно —
+    # иначе одно видео может съесть время, нужное следующим в очереди жюри
+    deadline = min(deadline or float("inf"), started + s.time_budget_sec)
 
     info = probe(path)
     progress("frames", 0.05)
@@ -123,13 +126,18 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     if dets:
         findings += door_findings(frames, dets)  # T04: дверь после входа в пустую кассу, без VLM
     from .vlm import VLMClient
-    vlm = VLMClient()
+    # вызов скана — около 1 с; длинный таймаут нужен только на загрузку модели в память
+    vlm = VLMClient(timeout=min(s.vlm_timeout, DESK_CALL_TIMEOUT))
     roi = find_roi(dets, info.width or frames[0].image.shape[1], info.height or frames[0].image.shape[0]) if dets else None
     if vlm.enabled and roi:
         # рабочее место: дорожка состояний по увеличенному фрагменту → T01–T03 по правилам
         progress("vlm", 0.25)
+        stats: dict = {}
         desk_states = scan(vlm, frames, roi, s.desk_step_sec, s.desk_max_calls,
-                           deadline_ok=lambda: time.time() < deadline - 15)
+                           deadline_ok=lambda: time.time() < deadline - DESK_CALL_TIMEOUT - 5,
+                           on_call=lambda k: progress("vlm", 0.25 + 0.6 * min(1.0, k / max(1, s.desk_max_calls))),
+                           stats=stats)
+        vlm_errors += stats.get("errors", 0)
         for st in desk_states:
             if not st.reused:
                 vlm_calls += 1

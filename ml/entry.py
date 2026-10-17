@@ -37,7 +37,10 @@ def find_empty_room_entries(frames: list[Frame], dets: list[list[Det]], min_empt
         if c == 0:
             empty_from = i if empty_from is None else empty_from
             continue
-        if empty_from is not None and frames[i].t - frames[empty_from].t >= min_empty_sec:
+        empty_sec = frames[i].t - frames[empty_from].t if empty_from is not None else 0.0
+        # пусто в первые секунды (кассир только приходит, Х-33: мелькнула за стеклом и вошла) или долго (≥ 3 с);
+        # 1–2 с посреди работы — это детектор потерял сидящего кассира, а не вход
+        if empty_from is not None and empty_sec >= min_empty_sec and (frames[empty_from].t <= 5.0 or empty_sec >= 3.0):
             out.append((i, empty_from))
         empty_from = None
     return out
@@ -80,7 +83,8 @@ def camera_moving(frames: list[Frame], t0: float, t1: float, frac: float = 0.3) 
     if len(small) < 2:
         return False
     changed = [float((np.abs(a - b) > PIX_DIFF).mean()) for a, b in zip(small, small[1:])]
-    return max(changed) > frac
+    # ≥ 3 пар с большим изменением: один человек прямо под камерой или вспышка света — не движение камеры
+    return sum(c > frac for c in changed) >= 3
 
 
 def _door_diff(frames, dets, roi, base, t0: float, t1: float) -> list[float]:
