@@ -56,9 +56,9 @@ class Settings:
     max_vlm_calls: int = field(default_factory=lambda: _i("MAX_VLM_CALLS", 12))
     # старый проход «найди любое нарушение по чек-листу» — давал ложные на 19 из 20 нормальных видео
     vlm_generic: bool = field(default_factory=lambda: os.getenv("VLM_GENERIC", "0") == "1")
-    # скан рабочего места (увеличенный фрагмент вокруг ноутбука): шаг и предел вызовов на видео
+    # скан рабочего места (увеличенный фрагмент вокруг ноутбука): шаг уточнения и предел вызовов VLM на видео
     desk_step_sec: float = field(default_factory=lambda: _f("DESK_STEP_SEC", 2.0))
-    desk_max_calls: int = field(default_factory=lambda: _i("DESK_MAX_CALLS", 40))
+    desk_max_calls: int = field(default_factory=lambda: _i("DESK_MAX_CALLS", 26))
 
     # --- решение ---
     min_confidence: float = field(default_factory=lambda: _f("MIN_CONFIDENCE", 0.5))

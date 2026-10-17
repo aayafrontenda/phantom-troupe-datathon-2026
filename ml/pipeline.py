@@ -128,11 +128,12 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     if vlm.enabled and roi:
         # рабочее место: дорожка состояний по увеличенному фрагменту → T01–T03 по правилам
         progress("vlm", 0.25)
-        step = max(s.desk_step_sec, duration / max(1, s.desk_max_calls))
-        desk_states = scan(vlm, frames, roi, step, deadline_ok=lambda: time.time() < deadline - 15)
-        vlm_calls += len(desk_states)
+        desk_states = scan(vlm, frames, roi, s.desk_step_sec, s.desk_max_calls,
+                           deadline_ok=lambda: time.time() < deadline - 15)
         for st in desk_states:
-            scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
+            if not st.reused:
+                vlm_calls += 1
+                scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
         for f in desk_findings(desk_states):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
 

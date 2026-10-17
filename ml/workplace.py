@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cv2
 import numpy as np
@@ -26,6 +26,8 @@ PROMPT = (ML_DIR / "prompts" / "workplace_ru.txt").read_text(encoding="utf-8")
 # расширение рамки ноутбука (в его ширинах/высотах): влево, вверх, вправо, вниз — захватываем стол и сейф рядом
 ROI_EXPAND = (1.2, 1.2, 1.2, 1.5)
 CROP_SIDE = 448
+# повтор прошлого состояния без вызова VLM: фрагмент 64×64 почти не изменился и с вопроса прошло < MAX_REUSE_SEC
+REUSE_PIX_DIFF, REUSE_FRAC, MAX_REUSE_SEC = 20, 0.04, 8.0
 
 PERSON = {"сидит": "sit", "стоит": "stand", "нет": "none"}
 SCREEN = {"программа": "app", "блокировка": "lock", "тёмный": "dark", "темный": "dark", "закрыт": "closed"}
@@ -40,6 +42,7 @@ class DeskState:
     bag: bool
     safe_open: bool | None
     note: str
+    reused: bool = False  # состояние повторено с прошлого замера без вызова VLM (картинка не менялась)
 
     @property
     def present(self) -> bool:
@@ -91,22 +94,65 @@ def ask_state(vlm: VLMClient, frame: Frame, roi) -> DeskState:
     )
 
 
-def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float, deadline_ok=lambda: True) -> list[DeskState]:
-    """Состояние рабочего места каждые step_sec секунд."""
-    out: list[DeskState] = []
-    next_t = 0.0
-    for f in frames:
-        if f.t + 1e-6 < next_t:
-            continue
-        if not deadline_ok():
-            log.warning("Бюджет времени: скан рабочего места остановлен на %.1f с", f.t)
-            break
-        try:
-            out.append(ask_state(vlm, f, roi))
-        except Exception as e:  # одна ошибка VLM не должна ронять видео
-            log.warning("VLM ошибка (рабочее место, t=%.1f): %s", f.t, e)
-        next_t = f.t + step_sec
-    return out
+def _key(s: DeskState) -> tuple:
+    return s.present, s.screen, s.cash, s.bag, s.safe_open
+
+
+def scan(vlm: VLMClient, frames: list[Frame], roi, step_sec: float = 2.0, max_calls: int = 26,
+         coarse_points: int = 20, deadline_ok=lambda: True) -> list[DeskState]:
+    """Дорожка состояний рабочего места не дороже max_calls вызовов VLM на видео.
+
+    1) грубый проход: шаг max(step_sec, длительность / coarse_points) — у видео до 40 с это и есть step_sec;
+    2) уточнение: между соседними замерами, где состояние изменилось (ушла, экран, сейф…), — шаг step_sec.
+    На неизменной картинке (фрагмент 64×64 почти тот же, с вопроса < MAX_REUSE_SEC) состояние повторяется без вызова.
+    """
+    if not frames:
+        return []
+    calls = 0
+
+    def small(f: Frame) -> np.ndarray:
+        return cv2.cvtColor(cv2.resize(crop(f.image, roi), (64, 64), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+
+    def run(picks: list[Frame], prev: tuple | None) -> list[DeskState]:
+        """Состояния для кадров picks по порядку; prev — (состояние, фрагмент) последнего вопроса для повтора."""
+        nonlocal calls
+        out = []
+        for f in picks:
+            sm = small(f)
+            if prev and f.t - prev[0].t < MAX_REUSE_SEC and float((cv2.absdiff(sm, prev[1]) > REUSE_PIX_DIFF).mean()) < REUSE_FRAC:
+                out.append(replace(prev[0], t=f.t, reused=True))
+                continue
+            if calls >= max_calls or not deadline_ok():
+                log.warning("Лимит скана рабочего места: %d вызовов, остановлен на %.1f с", calls, f.t)
+                break
+            try:
+                st = ask_state(vlm, f, roi)
+            except Exception as e:  # одна ошибка VLM не должна ронять видео
+                log.warning("VLM ошибка (рабочее место, t=%.1f): %s", f.t, e)
+                continue
+            calls += 1
+            out.append(st)
+            prev = (st, sm)
+        return out
+
+    def every(t0: float, t1: float, step: float) -> list[Frame]:
+        picks, next_t = [], t0
+        for f in frames:
+            if t0 - 1e-6 <= f.t <= t1 + 1e-6 and f.t + 1e-6 >= next_t:
+                picks.append(f)
+                next_t = f.t + step
+        return picks
+
+    coarse_step = max(step_sec, frames[-1].t / max(1, coarse_points))
+    states = run(every(0.0, frames[-1].t, coarse_step), None)
+    if coarse_step > step_sec:
+        extra = []
+        for a, b in zip(states, states[1:]):
+            if _key(a) != _key(b):
+                extra += run(every(a.t + step_sec, b.t - step_sec / 2, step_sec), None)
+        states = sorted(states + extra, key=lambda s: s.t)
+    log.info("Скан рабочего места: %d замеров, %d вызовов VLM", len(states), calls)
+    return states
 
 
 def _runs(states: list[DeskState], pred) -> list[tuple[int, int]]:
