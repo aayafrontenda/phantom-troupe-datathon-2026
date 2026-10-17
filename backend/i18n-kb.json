@@ -98,10 +98,12 @@
     "T12": {
       "en": {"name": "Valuables put in the safe without counting",
              "visual": "Bags are opened and the bundles go straight into the safe; no counting or counting machine is visible.",
-             "why": "The contents are counted before the valuables are put into storage."},
+             "why": "The contents are counted before the valuables are put into storage.",
+             "caveat": "The Rules contain no direct ban on putting cash in the safe uncounted: item 74 requires storing cash after it is recorded in the automated system, item 42 requires the cashier to count it. The video only shows that no counting took place before the safe."},
       "kk": {"name": "Құндылықтар санаусыз сейфке салынған",
              "visual": "Сөмкелер ашылып, бумалар бірден сейфке апарылады; санау да, санау машинасы да көрінбейді.",
-             "why": "Құндылықтарды сақтауға салмас бұрын олардың ішіндегісі саналады."}
+             "why": "Құндылықтарды сақтауға салмас бұрын олардың ішіндегісі саналады.",
+             "caveat": "Қағидаларда «сейфке санаусыз» деген тікелей тыйым жоқ: 74-тармақ қолма-қол ақшаны автоматтандырылған жүйеде есепке алғаннан кейін сақтауды, 42-тармақ оны кассалық қызметкердің санауын талап етеді. Бейнеде тек сейфке салар алдында санау болмағаны көрінеді."}
     },
     "T13": {
       "en": {"name": "Personal belongings at the cashier's workplace",

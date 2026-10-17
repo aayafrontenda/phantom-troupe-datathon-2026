@@ -25,6 +25,8 @@ PROMPT = (ML_DIR / "prompts" / "workplace_ru.txt").read_text(encoding="utf-8")
 
 # расширение рамки ноутбука (в его ширинах/высотах): влево, вверх, вправо, вниз — захватываем стол и сейф рядом
 ROI_EXPAND = (1.2, 1.2, 1.2, 1.5)
+# без ноутбука: расширение рамки сидящего кассира (по ширине, по высоте) — захватываем стол перед ним
+SEAT_EXPAND = (0.9, 0.5)
 CROP_SIDE = 448
 # повтор прошлого состояния без вызова VLM: фрагмент 64×64 почти не изменился и с вопроса прошло < MAX_REUSE_SEC
 REUSE_PIX_DIFF, REUSE_FRAC, MAX_REUSE_SEC = 20, 0.04, 8.0
@@ -62,11 +64,33 @@ def _iou(a, b) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def _seat_roi(dets: list[list[Det]], width: int, height: int) -> tuple[int, int, int, int] | None:
+    """Запасной ориентир без ноутбука: место, где человек дольше всего неподвижен (кассир за столом).
+
+    Отражения в стекле тоже неподвижны, но мелкие — поэтому выбираем по «число кадров × площадь рамки».
+    """
+    boxes = [d.box for ds in dets for d in ds if d.group == "person" and d.score >= 0.5]
+    boxes = boxes[::max(1, len(boxes) // 300)]  # сравнение «каждая с каждой» — не больше ~300 рамок
+    if len(boxes) < 5:
+        return None
+    area = lambda b: (b[2] - b[0]) * (b[3] - b[1])  # noqa: E731
+    best = max(boxes, key=lambda b: sum(_iou(b, o) > 0.5 for o in boxes) * area(b))
+    if sum(_iou(best, o) > 0.5 for o in boxes) < 5:
+        return None  # никто не задерживается на месте — рабочего места не видно
+    x1, y1, x2, y2 = np.median(np.array([b for b in boxes if _iou(b, best) > 0.5]), axis=0)
+    bw, bh = x2 - x1, y2 - y1
+    return (max(0, int(x1 - bw * SEAT_EXPAND[0])), max(0, int(y1 - bh * SEAT_EXPAND[1])),
+            min(width, int(x2 + bw * SEAT_EXPAND[0])), min(height, int(y2 + bh * SEAT_EXPAND[1])))
+
+
 def find_roi(dets: list[list[Det]], width: int, height: int) -> tuple[int, int, int, int] | None:
-    """Область рабочего места: самое устойчивое положение ноутбука, расширенное до стола."""
+    """Область рабочего места: самое устойчивое положение ноутбука, расширенное до стола.
+
+    Ноутбука нет в кадре (другой ракурс, ракурс C) — берём место, где дольше всего неподвижен человек.
+    """
     boxes = [d.box for ds in dets for d in ds if d.group == "laptop"]
     if not boxes:
-        return None
+        return _seat_roi(dets, width, height)
     # ноутбук стоит на месте: берём кластер рамок, который встречается чаще всего
     support = [sum(_iou(b, o) > 0.3 for o in boxes) for b in boxes]
     anchor = boxes[int(np.argmax(support))]
