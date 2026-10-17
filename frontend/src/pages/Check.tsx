@@ -3,15 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api';
 import { useAuth } from '../auth';
 import { refreshFeed } from '../components/events';
+import { VideoInspectionCard } from '../components/inspection/VideoInspectionCard';
 import { DecisionBar, DescriptionBlock, FrameStrip, RuleBlock } from '../components/finding';
 import { Player, type Marker, type PlayerHandle } from '../components/Player';
 import { useUploads } from '../components/uploads';
 import { useI18n } from '../i18n';
 import type { Finding, FindingBrief, Job } from '../types';
-import { Icon, tc, useAgo, useUi } from '../ui';
+import { Icon, keyFrame, tc, useAgo, useUi } from '../ui';
 import { reportUrl } from './Checks';
-
-const STEPS = ['queued', 'frames', 'detection', 'vlm', 'report', 'done'];
 
 export default function CheckPage() {
   const { id = '' } = useParams();
@@ -81,9 +80,10 @@ export default function CheckPage() {
     else if (nf.decision) { const next = all.findIndex((f, k) => k > (nf.violation_index ?? -1) && !f.decision); if (next >= 0) select(next, true); }
   };
 
-  const select = useCallback((i: number, jump: boolean) => {
+  // keyboard-driven selection jumps instantly; only pointer selection scrolls smoothly
+  const select = useCallback((i: number, jump: boolean, smooth = true) => {
     setSel(i);
-    document.querySelector(`.find[data-i="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.querySelector(`.find[data-i="${i}"]`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest' });
     if (jump && viols[i]) player.current?.seek(Math.max(0, viols[i].timecode_sec - 1), true);
   }, [viols]);
 
@@ -92,16 +92,27 @@ export default function CheckPage() {
       if ((e.target as HTMLElement).closest('input,textarea,select') || document.querySelector('.modal')) return;
       if (!job || job.status !== 'done') return;
       const n = viols.length;
-      if (e.key === ' ') { e.preventDefault(); player.current?.toggle(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); player.current?.seek(time - 1); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); player.current?.seek(time + 1); }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // e.code, not e.key: shortcuts must work on the Russian and Kazakh layouts too
+      if (e.code === 'Space') { e.preventDefault(); player.current?.toggle(); }
+      else if (e.code === 'ArrowLeft') { e.preventDefault(); player.current?.seek(time - 1); }
+      else if (e.code === 'ArrowRight') { e.preventDefault(); player.current?.seek(time + 1); }
       else if (!n) return;
-      else if (e.key === 'n' || e.key === 'N') select((sel + 1) % n, true);
-      else if (e.key === 'p' || e.key === 'P') select((sel - 1 + n) % n, true);
+      else if (e.code === 'KeyN') select((sel + 1) % n, true, false);
+      else if (e.code === 'KeyP') select((sel - 1 + n) % n, true, false);
+      else if ((e.code === 'KeyC' || e.code === 'KeyR') && can('operator')) {
+        const f = fById[sel];
+        if (f && !f.decision) decideByKey(f, e.code === 'KeyC' ? 'confirm' : 'reject');
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [job, viols, sel, time, select]);
+  }, [job, viols, sel, time, select, fById, can]);
+
+  async function decideByKey(f: FindingBrief, decision: 'confirm' | 'reject') {
+    try { onFindingChange(await api<Finding>(`/ui/api/findings/${f.id}/decision`, { method: 'POST', json: { decision, comment: null } })); }
+    catch (e) { toast(t('toast.saveErr', { e: (e as Error).message }), 'err'); }
+  }
 
   const onTime = (tt: number) => {
     setTime(tt);
@@ -125,29 +136,26 @@ export default function CheckPage() {
   if (!job) return <div className="page"><p className="loading">{t('loading')}</p></div>;
 
   const meta = [job.duration_sec ? t('meta.long', { t: tc(job.duration_sec) }) : '', job.created_at ? t('meta.uploaded', { ago: ago(job.created_at) }) : '',
-    job.created_by ? t('meta.by', { n: job.created_by }) : '', job.processing_sec ? t('meta.analysed', { s: job.processing_sec }) : ''].filter(Boolean).join(' · ');
+    job.created_by ? t('meta.by', { n: job.created_by }) : '', job.processing_sec ? t('meta.analysed', { s: job.processing_sec }) : ''].filter(Boolean);
   const head = (extra?: React.ReactNode) => (
     <>
-      <Link className="crumb" to="/checks"><Icon id="back" />{t('crumb')}</Link>
-      <div className="check-head"><div><h1>{job.filename}</h1><div className="meta">{meta}</div></div>
-        <div className="acts">{extra}{can('operator') && <button className="btn danger" onClick={del}><Icon id="trash" />{t(job.status === 'processing' ? 'del.cancelBtn' : 'act.delete')}</button>}</div></div>
+    <Link className="crumb" to="/checks"><Icon id="back" />{t('crumb')}</Link>
+    <div className="check-head"><div><h1>{job.filename}</h1><div className="meta">{meta.map(m => <span key={m}>{m}</span>)}</div></div>
+      <div className="acts">{extra}{can('operator') && job.status !== 'processing' && <button className="btn danger" onClick={del}><Icon id="trash" />{t('act.delete')}</button>}</div></div>
     </>
   );
 
   if (job.status === 'processing') {
-    const stage = job.stage === 'started' || job.stage === 'retry' ? 'queued' : (job.stage || 'queued');
-    const ci = Math.max(0, STEPS.indexOf(stage));
-    const pct = Math.round((job.progress || 0) * 100);
     return (
       <div className="page">{head()}
-        <div className="card proc">
-          <h2>{stage === 'queued' ? (job.queue_position ? t('proc.queue', { n: job.queue_position }) : t('proc.starting')) : t('proc.title')}</h2>
-          <p className="muted">{job.stage === 'retry' ? t('proc.retry') : t('proc.sub')}</p>
-          <div className="bigbar"><i style={{ width: `${Math.max(3, pct)}%` }} /></div>
-          <div className="steps">{STEPS.map((k, i) => <div key={k} className={`step ${i < ci ? 'done' : i === ci ? 'now' : ''}`}><b>{t(`step.${k}`)}</b><span>{i === ci && i > 0 ? `${pct}%` : ''}</span></div>)}</div>
-          <div className="proc-foot"><span>{job.eta_sec != null ? t('proc.eta', { s: job.eta_sec }) : ''}</span><span className="sp" />{local[id] && <span>{t('proc.preview')}</span>}</div>
-          {local[id] && <video src={local[id]} controls muted playsInline style={{ width: '100%', maxHeight: 360, borderRadius: 16, background: 'var(--video)', marginTop: 12 }} />}
-        </div>
+        <VideoInspectionCard job={job} onCancel={can('operator') ? del : undefined}>
+          {local[id] && (
+            <div className="border-t border-border/60 p-4 sm:px-5">
+              <p className="mb-2 text-xs text-muted-foreground">{t('proc.preview')}</p>
+              <video src={local[id]} controls muted playsInline className="max-h-[360px] w-full rounded-lg bg-video" />
+            </div>
+          )}
+        </VideoInspectionCard>
       </div>
     );
   }
@@ -160,12 +168,13 @@ export default function CheckPage() {
   else if (n) verdict = (
     <div className={`verdict ${decided === n ? 'done' : 'bad'}`}><span className="vi"><Icon id={decided === n ? 'check' : 'alert'} /></span>
       <div><h2>{t(decided === n ? 'v.doneTitle' : 'v.badTitle')}</h2><p>{decided === n ? t('v.doneText', { c: confirmed, d: decided - confirmed }) : t('v.badText', { n })}</p></div>
-      <div className="rv"><b>{t('rev.progress', { a: decided, b: n })}</b><div className="minibar"><i style={{ width: `${decided / n * 100}%` }} /></div></div></div>
+      <div className="rv"><b>{t('rev.progress', { a: decided, b: n })}</b>
+        <div className="ticks" aria-hidden="true">{viols.map((_, i) => <i key={i} className={fById[i]?.decision === 'confirm' ? 'c' : fById[i]?.decision ? 'd' : ''} />)}</div></div></div>
   );
   else verdict = <div className="verdict ok"><span className="vi"><Icon id="shield" /></span><div><h2>{t('v.okTitle')}</h2><p>{t('v.okText')}</p></div></div>;
 
   const markers: Marker[] = viols.map((v, i) => ({ t: v.timecode_sec, label: String(i + 1), title: `${typeName(v.type_code, v.type)} · ${tc(v.timecode_sec)}`,
-    state: fById[i]?.decision === 'confirm' ? 'confirm' : fById[i]?.decision ? 'done' : '' }));
+    state: fById[i]?.decision === 'confirm' ? 'confirm' : fById[i]?.decision ? 'done' : '', thumb: keyFrame(v.evidence_frames, v.timecode_sec) }));
   const poster = viols[sel]?.evidence_frames?.[0] ? `data:image/jpeg;base64,${viols[sel].evidence_frames[0].image_base64}` : undefined;
   const src = local[id] || (job.video_available !== false ? `/ui/api/jobs/${id}/video` : null);
   const scenes = ((job.meta as { scenes?: { t: number; scene: string }[] } | undefined)?.scenes) || [];

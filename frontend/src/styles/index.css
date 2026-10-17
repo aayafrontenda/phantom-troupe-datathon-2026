@@ -1,0 +1,74 @@
+/* Entry stylesheet. Tailwind (utilities win) on top of the legacy page styles in app.css, which sit in their own
+   layer so a utility class always overrides them. Colour tokens live in app.css (:root / [data-theme=dark]);
+   here they are exposed to Tailwind under shadcn names. */
+@layer theme, base, legacy, components, utilities;
+@import "tailwindcss";
+@import "./app.css" layer(legacy);
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@theme inline {
+  --font-sans: var(--ui);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-heading: var(--plum);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--fg);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-faint: var(--faint);
+  --color-subtle: var(--surface-3);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--fg);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--fg);
+  --color-primary: var(--brand);
+  --color-primary-hover: var(--brand-hover);
+  --color-primary-soft: var(--brand-soft);
+  --color-primary-ink: var(--brand-ink);
+  --color-primary-foreground: #fff;
+  --color-destructive: var(--bad);
+  --color-destructive-soft: var(--bad-bg);
+  --color-success: var(--ok);
+  --color-success-soft: var(--ok-bg);
+  --color-warning: var(--warn);
+  --color-warning-soft: var(--warn-bg);
+  --color-border: var(--line);
+  --color-border-strong: var(--line-2);
+  --color-input: var(--line);
+  --color-ring: var(--brand);
+  --color-rail: var(--rail);
+  --color-rail-foreground: var(--rail-fg);
+  --color-rail-muted: var(--rail-muted);
+  --color-sidebar: var(--sidebar);
+  --color-video: var(--video);
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-scan: scan 1.8s var(--ease-out) infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes scan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(350%); }
+}
+
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes sheet-in-right { from { transform: translateX(100%); } }
+@keyframes sheet-in-left { from { transform: translateX(-100%); } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body { overflow: hidden; }
+  * { border-color: var(--color-border); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer, .animate-scan { animation: none !important; }
+}

@@ -1,0 +1,95 @@
+/* Banknote-style engraved linework. GuillocheBand: woven strands whose amplitude swells around given points
+   (the video scrubber uses it to show where the AI looked closer). Rosette: concentric engraved rings for the login. */
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+export interface Peak { x: number; strength?: number }
+
+function bandPaths(w: number, h: number, peaks: Peak[], strands: number) {
+  const mid = h / 2, base = h * 0.12, swell = h * 0.5, sigma = Math.max(14, w * 0.035);
+  const period = 34;
+  const out: string[] = [];
+  for (let k = 0; k < strands; k++) {
+    const phase = (k / strands) * Math.PI * 2;
+    let d = '';
+    for (let x = 0; x <= w; x += 1.5) {
+      let env = base;
+      for (const p of peaks) { const z = (x - p.x) / sigma; env += swell * (p.strength ?? 1) * Math.exp(-z * z); }
+      env = Math.min(env, mid - 1.5);
+      const mod = 0.72 + 0.28 * Math.cos(x / (period * 3.1) + phase * 0.5);
+      const y = mid + env * mod * Math.sin((x / period) * Math.PI * 2 + phase);
+      d += `${x === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(2)}`;
+    }
+    out.push(d);
+  }
+  return out;
+}
+
+/** progress: 0..1, peaks: x as 0..1 fraction of the width; hot peaks (still waiting for a person) are inked in raspberry. */
+export function GuillocheBand({ peaks, progress, height = 48, strands = 4 }: { peaks: { at: number; strength?: number; hot?: boolean }[]; progress: number; height?: number; strands?: number }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const [w, setW] = useState(0);
+  const clip = useId(), hotClip = useId();
+  const hotHalf = Math.max(14, w * 0.035) * 1.6;
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const key = peaks.map(p => `${p.at.toFixed(4)}:${p.strength ?? 1}`).join(',');
+  const paths = useMemo(() => (w ? bandPaths(w, height, peaks.map(p => ({ x: p.at * w, strength: p.strength })), strands) : []), [w, height, strands, key]);
+  return (
+    <svg ref={ref} className="guilloche" viewBox={`0 0 ${w || 1} ${height}`} height={height} preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <clipPath id={clip}><rect x="0" y="0" width={Math.max(0, Math.min(1, progress)) * w} height={height} /></clipPath>
+        <clipPath id={hotClip}>{peaks.filter(p => p.hot).map((p, i) => <rect key={i} x={p.at * w - hotHalf} y="0" width={hotHalf * 2} height={height} />)}</clipPath>
+      </defs>
+      <g className="g-rest">{paths.map((d, i) => <path key={i} d={d} />)}</g>
+      <g className="g-played" clipPath={`url(#${clip})`}>{paths.map((d, i) => <path key={i} d={d} />)}</g>
+      {peaks.some(p => p.hot) && <g className="g-hot" clipPath={`url(#${hotClip})`}>{paths.map((d, i) => <path key={i} d={d} />)}</g>}
+    </svg>
+  );
+}
+
+/** Concentric engraved rings (hypotrochoid-like), drawn once; the container rotates it slowly in CSS. */
+export function Rosette({ size = 640, rings = 30 }: { size?: number; rings?: number }) {
+  const paths = useMemo(() => {
+    const c = size / 2, out: string[] = [];
+    for (let r = 0; r < rings; r++) {
+      const R = size * (0.09 + r * 0.0128), lobes = 36, a = size * (0.009 + 0.004 * Math.sin(r * 0.6)), ph = r * 0.42;
+      let d = '';
+      for (let i = 0; i <= 1080; i++) {
+        const th = (i / 1080) * Math.PI * 2;
+        const rr = R + a * Math.sin(lobes * th + ph) + a * 0.35 * Math.sin(6 * th - ph);
+        d += `${i ? 'L' : 'M'}${(c + rr * Math.cos(th)).toFixed(1)} ${(c + rr * Math.sin(th)).toFixed(1)}`;
+      }
+      out.push(d + 'Z');
+    }
+    return out;
+  }, [size, rings]);
+  return (
+    <svg className="rosette" viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      {paths.map((d, i) => <path key={i} d={d} className={i === 9 || i === 21 ? 'hot' : ''} />)}
+    </svg>
+  );
+}
+
+function lobedRing(c: number, r: number, amp: number, lobes: number, phase = 0) {
+  let d = '';
+  for (let i = 0; i <= 180; i++) {
+    const th = (i / 180) * Math.PI * 2, rr = r + amp * Math.sin(lobes * th + phase);
+    d += `${i ? 'L' : 'M'}${(c + rr * Math.cos(th)).toFixed(2)} ${(c + rr * Math.sin(th)).toFixed(2)}`;
+  }
+  return d + 'Z';
+}
+const MARK_RINGS = [lobedRing(16, 12.2, 1.9, 9), lobedRing(16, 12.2, 1.9, 9, Math.PI), lobedRing(16, 7.4, 1.2, 9, Math.PI / 2)];
+
+/** Small brand mark: a woven engraved rosette (two interlaced lobed rings) around a raspberry seal. */
+export function Mark({ size = 26 }: { size?: number }) {
+  return (
+    <svg className="mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <g fill="none" strokeWidth="1.1">{MARK_RINGS.map((d, i) => <path key={i} d={d} />)}</g>
+      <circle cx="16" cy="16" r="3.2" className="mark-dot" />
+    </svg>
+  );
+}

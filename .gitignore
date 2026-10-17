@@ -21,3 +21,8 @@ frontend/.vite/
 skills-lock.json
 design/
 _to_delete/
+# design-skill artifacts (impeccable): local context and browser profiles
+.impeccable/
+/PRODUCT.md
+/DESIGN.md
+*.tsbuildinfo

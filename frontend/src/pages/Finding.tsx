@@ -7,7 +7,7 @@ import { DecisionBar, DescriptionBlock, FrameStrip, RuleBlock, VerifyBlock } fro
 import { Player, SequencePlayer, type Marker, type PlayerHandle } from '../components/Player';
 import { useI18n } from '../i18n';
 import type { Finding, HistoryItem } from '../types';
-import { fmtDate, Icon, tc, useAgo } from '../ui';
+import { fmtDate, Icon, keyFrame, serial, tc, useAgo } from '../ui';
 
 export default function FindingPage() {
   const { id = '' } = useParams();
@@ -33,7 +33,7 @@ export default function FindingPage() {
   const from = sp.get('from');
   const back = from === 'review' ? { to: '/review', label: t('fd.crumbReview') } : from === 'check' && f.job_id ? { to: `/checks/${f.job_id}`, label: f.filename || t('fd.upload') } : { to: '/live', label: t('fd.crumbLive') };
   const where = f.source === 'camera' ? f.camera_name || f.camera_id : f.filename;
-  const marker: Marker[] = f.t_sec != null ? [{ t: f.t_sec, label: '!', title: typeName(f.type_code, f.type_name), state: f.decision === 'confirm' ? 'confirm' : f.decision ? 'done' : '' }] : [];
+  const marker: Marker[] = f.t_sec != null ? [{ t: f.t_sec, label: '!', title: typeName(f.type_code, f.type_name), state: f.decision === 'confirm' ? 'confirm' : f.decision ? 'done' : '', thumb: keyFrame(f.frames, f.t_sec) }] : [];
   const sib = f.siblings || [];
   const pos = sib.findIndex(s => s.id === f.id);
   const prev = pos > 0 ? sib[pos - 1] : null, next = pos >= 0 && pos < sib.length - 1 ? sib[pos + 1] : null;
@@ -58,7 +58,7 @@ export default function FindingPage() {
           <h1>{typeName(f.type_code, f.type_name)}</h1>
           <div className="meta">
             <span className="pill neutral xs"><Icon id={f.source === 'camera' ? 'cam' : 'film'} />{t(f.source === 'camera' ? 'fd.camera' : 'fd.upload')}</span>{' '}
-            {where}{f.t_sec != null ? ` · ${t('ev.at', { t: tc(f.t_sec) })}` : ''} · {ago(f.created_at)} · {t('fd.title', { id: f.id })}
+            <span>{where}</span>{f.t_sec != null && <span className="num">{t('ev.at', { t: tc(f.t_sec) })}</span>}<span>{ago(f.created_at)}</span><span className="serial">№ {serial(f.id)}</span>
           </div>
         </div>
         <div className="acts">
@@ -72,10 +72,10 @@ export default function FindingPage() {
         <span className="vi"><Icon id={f.decision === 'confirm' ? 'alert' : f.decision === 'reject' ? 'check' : 'alert'} /></span>
         <div>
           <h2>{f.decision === 'confirm' ? t('f.confirmed') : f.decision === 'reject' ? t('f.notViolation') : t('v.badTitle')}</h2>
-          <p>{f.decision ? `${t('f.decidedBy', { n: f.decided_by_name || f.decided_by || '' })}${f.decided_at ? ` · ${fmtDate(f.decided_at, locale)}` : ''}` : t('f.question')}</p>
+          <p>{f.decision ? `${t('f.decidedBy', { n: f.decided_by_name || f.decided_by || '' })}${f.decided_at ? `, ${fmtDate(f.decided_at, locale)}` : ''}` : t('f.question')}</p>
         </div>
         <div className="rv">
-          {f.verified ? <span className={`pill ${f.verify_result === 'agree' ? 'ok' : 'bad'}`}><Icon id={f.verify_result === 'agree' ? 'check' : 'flag'} />{t('fd.verified')} · {f.verified_by_name || f.verified_by}</span>
+          {f.verified ? <span className={`pill ${f.verify_result === 'agree' ? 'ok' : 'bad'}`}><Icon id={f.verify_result === 'agree' ? 'check' : 'flag'} />{t('fd.verifiedBy', { n: f.verified_by_name || f.verified_by || '' })}</span>
             : f.decision ? <span className="pill neutral">{t('fd.notVerified')}</span> : null}
         </div>
       </div>
@@ -92,7 +92,7 @@ export default function FindingPage() {
             <div className="card">
               <h3>{t('fd.alert')}</h3>
               <div className="row"><span className={`pill ${f.alert.severity === 'critical' ? 'bad' : f.alert.severity === 'high' ? 'warn' : 'neutral'}`}>{t(`sev.${f.alert.severity}`)}</span>
-                <span className="muted small">{t(f.alert.state === 'open' ? 'ev.pending' : f.alert.state === 'false_positive' ? 'ev.markedFalse' : f.alert.state === 'resolved' ? 'ev.resolved' : 'ev.acked')}{f.alert.count > 1 ? ` · ×${f.alert.count}` : ''}{f.alert.escalation_level ? ` · ${t('ev.escalated')}` : ''}</span></div>
+                <span className="muted small">{t(f.alert.state === 'open' ? 'ev.pending' : f.alert.state === 'false_positive' ? 'ev.markedFalse' : f.alert.state === 'resolved' ? 'ev.resolved' : 'ev.acked')}{f.alert.count > 1 ? `, ×${f.alert.count}` : ''}{f.alert.escalation_level ? `, ${t('ev.escalated')}` : ''}</span></div>
             </div>
           )}
         </div>
@@ -114,7 +114,7 @@ export default function FindingPage() {
               <h3>{t('fd.others')}</h3>
               <ul className="scenes" style={{ marginTop: 0 }}>
                 {sib.map(s => <li key={s.id}><Link to={`/findings/${s.id}?from=${from || ''}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <button style={s.id === f.id ? { background: 'var(--surface-3)' } : undefined}><span className="t num">{tc(s.t_sec)}</span><span>{typeName(undefined, s.type_name)}{s.decision ? ` · ${t(s.decision === 'confirm' ? 'f.confirmed' : 'f.notViolation')}` : ''}</span></button></Link></li>)}
+                  <button style={s.id === f.id ? { background: 'var(--surface-3)' } : undefined}><span className="t num">{tc(s.t_sec)}</span><span>{typeName(undefined, s.type_name)}</span>{s.decision ? <span className="muted small sc-d">{t(s.decision === 'confirm' ? 'f.confirmed' : 'f.notViolation')}</span> : null}</button></Link></li>)}
               </ul>
             </div>
           )}
@@ -147,7 +147,7 @@ export function History({ items }: { items: HistoryItem[] }) {
         <li key={h.id}><span className={`dot ${cls(h)}`}><Icon id={icon(h)} /></span>
           <div><b>{h.actor_name || h.actor}</b> {label(h)}{h.payload?.comment ? <> — «{String(h.payload.comment)}»</> : null}
             {h.action === 'edit' && h.payload?.after ? <div className="desc-box op small" style={{ marginTop: 6 }}>{String(h.payload.after)}</div> : null}
-            <small>{fmtDate(h.created_at, locale)} · {t(`role.${h.actor_role}`) !== `role.${h.actor_role}` ? t(`role.${h.actor_role}`) : h.actor_role}</small></div></li>
+            <small>{fmtDate(h.created_at, locale)}, {t(`role.${h.actor_role}`) !== `role.${h.actor_role}` ? t(`role.${h.actor_role}`) : h.actor_role}</small></div></li>
       ))}
     </ul>
   );

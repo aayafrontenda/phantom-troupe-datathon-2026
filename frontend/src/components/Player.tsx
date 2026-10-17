@@ -2,8 +2,9 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { Icon, tc } from '../ui';
+import { GuillocheBand } from './Guilloche';
 
-export interface Marker { t: number; label: string; title: string; state?: 'confirm' | 'done' | '' }
+export interface Marker { t: number; label: string; title: string; state?: 'confirm' | 'done' | ''; thumb?: string }
 export interface PlayerHandle { seek: (t: number, play?: boolean) => void; toggle: () => void }
 
 interface Props {
@@ -32,10 +33,11 @@ function Scrub({ duration, t, markers, selected, onSeek, onSelect }: { duration:
     <div className="scrub" ref={ref}
       onPointerDown={e => { if ((e.target as HTMLElement).closest('button')) return; at(e); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }}
       onPointerMove={e => { if (e.buttons & 1 && !(e.target as HTMLElement).closest('button')) at(e); }}>
-      <div className="rail" /><div className="fill" style={{ width: `${t / D * 100}%` }} />
+      <GuillocheBand progress={t / D} peaks={markers.map(m => ({ at: m.t / D, strength: m.state === 'done' ? 0.45 : 1, hot: !m.state }))} />
       {markers.map((m, i) => (
-        <button key={i} className={`mk ${i === selected ? 'on' : ''} ${m.state || ''}`} style={{ left: `${m.t / D * 100}%` }} title={m.title}
-          onClick={e => { e.stopPropagation(); onSelect?.(i); }}>{m.label}</button>
+        <button key={i} className={`mk ${i === selected ? 'on' : ''} ${m.state || ''}`} style={{ left: `${m.t / D * 100}%` }} aria-label={m.title}
+          title={m.thumb ? undefined : m.title} onClick={e => { e.stopPropagation(); onSelect?.(i); }}>{m.label}
+          {m.thumb && <span className="mk-tip" aria-hidden="true"><img src={m.thumb} alt="" /><span>{m.title}</span></span>}</button>
       ))}
       <div className="head" style={{ left: `${t / D * 100}%` }} />
     </div>
@@ -64,6 +66,14 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(p, ref) {
   useImperativeHandle(ref, () => ({ seek, toggle }), [seek, toggle]);
 
   useEffect(() => { setBroken(false); }, [p.src]);
+  // timeupdate fires ~4x a second; follow the video every frame while it plays so the playhead glides
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    const tick = () => { const v = vid.current; if (v) setTime(v.currentTime); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
 
   if (!p.src) {
     return (
@@ -124,7 +134,7 @@ export const SequencePlayer = forwardRef<PlayerHandle, { frames: { t: number; ur
         <div className="pctrl">
           <button className="icon-btn" onClick={toggle} aria-label={t(playing ? 'p.pause' : 'p.play')}><Icon id={playing ? 'pause' : 'play'} /></button>
           <span className="time num"><b>{tc(cur?.t || 0)}</b> / {tc(duration)}</span>
-          <span className="sp" /><span className="muted small">{t('p.frames')} · {p.frames.length}</span>
+          <span className="sp" /><span className="muted small">{t('p.frames')} <span className="num">({p.frames.length})</span></span>
         </div>
       </>
     );

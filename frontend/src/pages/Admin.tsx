@@ -2,19 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
-import type { AdminUser, Camera } from '../types';
+import type { AdminUser } from '../types';
 import { fmtDate, Icon, useUi } from '../ui';
-import { addCameraDialog, useCameras } from './Live';
+import { useCameras } from './Live';
 
 interface Stats { jobs: { done: number; total: number }; alerts: { open: number }; uptime_sec: number; cameras: { id: string; name: string; status: string }[] }
 
 export default function AdminPage() {
   const { t, locale } = useI18n();
   const { me } = useAuth();
-  const { modal, confirm, toast } = useUi();
+  const { modal, toast } = useUi();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const { cams, refresh: refreshCams } = useCameras();
+  const { cams } = useCameras();
 
   const load = useCallback(async () => {
     try { setUsers((await api<{ users: AdminUser[] }>('/ui/api/users')).users); } catch (e) { toast((e as Error).message, 'err'); }
@@ -67,16 +67,6 @@ export default function AdminPage() {
     try { await api(`/ui/api/users/${u.id}`, { method: 'PATCH', json: { active: !u.active } }); load(); }
     catch (e) { toast((e as Error).message, 'err'); }
   };
-  const addCam = async () => {
-    const r = await addCameraDialog(modal, t); if (!r) return;
-    try { await api('/ui/api/cameras', { method: 'POST', json: { ...r, fps: 4 } }); toast(t('cam.added', { n: r.name })); refreshCams(); load(); }
-    catch (e) { toast((e as Error).message, 'err'); }
-  };
-  const removeCam = async (c: Camera) => {
-    if (!await confirm(t('cam.removeTitle'), <><b>{c.name}</b> {t('cam.removeText', { name: '' })}</>, t('cam.remove'))) return;
-    try { await api(`/ui/api/cameras/${c.id}`, { method: 'DELETE' }); toast(t('cam.removed')); refreshCams(); load(); }
-    catch (e) { toast((e as Error).message, 'err'); }
-  };
   const retention = me?.features.retention_days || 0;
 
   return (
@@ -89,7 +79,7 @@ export default function AdminPage() {
         <div className="stat"><div className="n" style={{ fontSize: 22 }}>{me?.analyzer}</div><div className="l">{t('adm.analyzer')} · {me?.version}</div></div>
         <div className="stat"><div className="n" style={{ fontSize: 22 }}>{retention ? t('adm.days', { n: retention }) : t('adm.forever')}</div><div className="l">{t('adm.retention')}</div></div>
       </div>
-      <div className="two-col">
+      <div>
         <div className="card">
           <div className="feed-h"><h2>{t('adm.users')}</h2></div>
           <table className="table">
@@ -110,24 +100,7 @@ export default function AdminPage() {
             </tbody>
           </table>
         </div>
-        <div className="card">
-          <div className="feed-h"><h2>{t('adm.camsTitle')}</h2><span className="sp" /><button className="btn xs primary" onClick={addCam}><Icon id="plus" />{t('live.addCam')}</button></div>
-          <p className="muted small" style={{ padding: '12px 22px 0' }}>{t('adm.camHint')}</p>
-          {cams.length ? (
-            <table className="table">
-              <tbody>
-                {cams.map(c => (
-                  <tr key={c.id}>
-                    <td><div className="fname"><span className="ic"><Icon id="cam" /></span><div><b>{c.name}</b><small>{c.url.replace(/\/\/.*@/, '//***@')}</small></div></div></td>
-                    <td><span className={`pill xs ${c.state?.status === 'online' ? 'ok' : 'neutral'}`}>{t(`cam.${c.state?.status || 'stopped'}`)}</span></td>
-                    <td className="c-acts"><div className="row-acts"><button className="icon-btn danger" onClick={() => removeCam(c)} title={t('live.removeCam')}><Icon id="trash" /></button></div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <div className="empty"><b>{t('live.noCams')}</b>{t('live.noCamsAdmin')}</div>}
-          <div style={{ padding: '14px 22px 20px' }} className="muted small"><b style={{ color: 'var(--fg)' }}>{t('adm.apiKey')}</b> — {t('adm.apiKeyHint')}</div>
-        </div>
+        <p className="muted small" style={{ marginTop: 14 }}><b style={{ color: 'var(--fg)' }}>{t('adm.apiKey')}</b> — {t('adm.apiKeyHint')}</p>
       </div>
     </div>
   );

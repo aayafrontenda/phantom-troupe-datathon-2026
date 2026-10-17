@@ -1,6 +1,6 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
-import Header from './components/Header';
+import { AppShell } from './components/shell/AppShell';
 import { UploadProvider } from './components/uploads';
 import { useI18n } from './i18n';
 import AdminPage from './pages/Admin';
@@ -23,14 +23,12 @@ function Guard({ role, children }: { role: 'operator' | 'supervisor' | 'admin'; 
 export default function App() {
   const { ready, user } = useAuth();
   const { t } = useI18n();
-  const loc = useLocation();
-  if (!ready) return <div className="loading">{t('loading')}</div>;
+  if (!ready) return <div className="loading" style={{ paddingTop: '30vh' }}>{t('loading')}</div>;
   if (!user) return <LoginPage />;
   const home = user.role === 'supervisor' ? '/review' : '/live';
   return (
     <UploadProvider>
-      <Header />
-      <main key={loc.pathname.split('/')[1]}>
+      <AppShell>
         <Routes>
           <Route path="/" element={<Navigate to={home} replace />} />
           <Route path="/live" element={<LivePage />} />
@@ -43,7 +41,7 @@ export default function App() {
           <Route path="/admin" element={<Guard role="admin"><AdminPage /></Guard>} />
           <Route path="*" element={<Navigate to={home} replace />} />
         </Routes>
-      </main>
+      </AppShell>
     </UploadProvider>
   );
 }

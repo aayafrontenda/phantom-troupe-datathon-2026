@@ -33,10 +33,15 @@ export function FrameStrip({ frames, keyT, caption }: { frames: Frame[]; keyT?: 
   );
 }
 
+/** Keep “№ 231” and “п. 20” on one line in norm citations. */
+const nb = (s: string) => s.replace(/(№|п\.|пп\.) /g, '$1\u00a0');
+
 export function RuleBlock({ rule, typeCode, clipUrl }: { rule: Rule; typeCode?: string | null; clipUrl?: string | null }) {
-  const { t, lang, docName, pointName, docUrl, typeField, has } = useI18n();
+  const { t, lang, docName: docRaw, pointName: pointRaw, docUrl, typeField, has } = useI18n();
+  const docName = (r: Parameters<typeof docRaw>[0]) => nb(docRaw(r));
+  const pointName = (p: Parameters<typeof pointRaw>[0]) => nb(pointRaw(p));
   const refs = rule.refs || [];
-  const title = refs.length ? `${refs[0].point ? pointName(refs[0].point) + ' · ' : ''}${docName(refs[0])}` : t('f.internalReg');
+  const title = refs.length ? `${refs[0].point ? pointName(refs[0].point) + ', ' : ''}${docName(refs[0])}` : t('f.internalReg');
   const caveat = typeField(typeCode, 'caveat', rule.caveat);
   return (
     <details className="rule">
@@ -138,7 +143,7 @@ export function DecisionBar({ f, onChange, editable, names }: { f: FindingBrief;
     return <div className="find-f"><span className="pill warn">{t('fd.notDecided')}</span><span className="sp" /><Conf f={f} /></div>;
   }
   return (
-    <div className="find-f" onClick={e => e.stopPropagation()}>
+    <div className="find-f" aria-busy={busy} onClick={e => e.stopPropagation()}>
       <span className="q">{t('f.question')}</span>
       <button className="btn sm yes" disabled={busy} onClick={() => decide('confirm')}><Icon id="check" />{t('f.yes')}</button>
       <button className="btn sm no" disabled={busy} onClick={() => decide('reject')}><Icon id="x" />{t('f.no')}</button>

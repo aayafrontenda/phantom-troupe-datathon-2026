@@ -2,10 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, wsUrl } from '../api';
 import { useAuth } from '../auth';
+import { Button } from '../components/ui/button';
+import { Film, Plus, Video } from 'lucide-react';
+import { CameraGallery } from '../components/CameraGallery';
 import { useFeed } from '../components/events';
 import { useI18n } from '../i18n';
 import type { Camera, FindingBrief } from '../types';
-import { Icon, tc, useAgo, useUi } from '../ui';
+import { Icon, serial, tc, useAgo, useUi } from '../ui';
 
 interface Det { group?: string; label?: string; score?: number; box: number[] }
 
@@ -50,63 +53,11 @@ function CameraTile({ cam, onRemove }: { cam: Camera; onRemove?: () => void }) {
   const alarmed = active.some(c => !['MOTION', 'EMPTY'].includes(c));
   const st = cam.state?.status || 'stopped';
   return (
-    <div className={`tile ${alarmed ? 'alarmed' : ''}`}>
+    <div className={`tile h-full w-full ${alarmed ? 'alarmed' : ''}`}>
       <canvas ref={canvas} />
       <div className="tile-bar"><span className={`rec ${st === 'online' ? '' : 'off'}`} /><span>{cam.name}</span><span className="sp" />
         <small>{ms != null ? `${ms} ms` : has(`cam.${st}`) ? t(`cam.${st}`) : st}</small>
         {onRemove && <button className="icon-btn" onClick={onRemove} title={t('live.removeCam')}><Icon id="x" /></button>}</div>
-      <div className="tile-foot">{active.map(c => <span key={c} className={`pill xs ${['MOTION', 'EMPTY'].includes(c) ? 'neutral' : 'bad'}`} title={typeName(c, c)}>{c}</span>)}</div>
-    </div>
-  );
-}
-
-function LaptopTile({ onStop }: { onStop: () => void }) {
-  const { t, typeName } = useI18n();
-  const { toast } = useUi();
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const [status, setStatus] = useState('—');
-  const [active, setActive] = useState<string[]>([]);
-  useEffect(() => {
-    let stream: MediaStream | null = null, ws: WebSocket | null = null, timer: number | null = null, raf = 0, busy = false, alive = true;
-    let dets: Det[] = [], size: number[] | null = null;
-    const video = document.createElement('video'); video.muted = true; video.playsInline = true;
-    const off = document.createElement('canvas');
-    (async () => {
-      try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 } }, audio: false }); }
-      catch (e) { toast(t('cam.denied', { e: (e as Error).message }), 'err'); onStop(); return; }
-      if (!alive) { stream.getTracks().forEach(x => x.stop()); return; }
-      video.srcObject = stream; await video.play();
-      ws = new WebSocket(wsUrl('/ui/api/live'));
-      ws.onopen = () => { timer = window.setInterval(() => {
-        if (busy || !ws || ws.readyState !== 1 || !video.videoWidth) return;
-        const k = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
-        off.width = Math.round(video.videoWidth * k); off.height = Math.round(video.videoHeight * k);
-        off.getContext('2d')!.drawImage(video, 0, 0, off.width, off.height);
-        off.toBlob(b => { if (b && ws && ws.readyState === 1) { busy = true; ws.send(b); } }, 'image/jpeg', 0.75);
-      }, 333); };
-      ws.onmessage = e => {
-        const m = JSON.parse(e.data); busy = false;
-        if (m.error) { toast(m.error, 'err'); return; }
-        if (m.skipped) return;
-        dets = m.detections || []; size = m.size; setStatus(`${m.ms} ms${m.busy ? ` · ${t('busy')}` : ''}`); setActive(m.active || []);
-      };
-      const draw = () => {
-        const cv = canvas.current;
-        if (cv && video.videoWidth) {
-          const w = video.videoWidth, h = video.videoHeight; if (cv.width !== w) { cv.width = w; cv.height = h; }
-          const ctx = cv.getContext('2d')!; ctx.drawImage(video, 0, 0, w, h); if (size) drawBoxes(ctx, dets, w / size[0], h / size[1]);
-        }
-        raf = requestAnimationFrame(draw);
-      };
-      raf = requestAnimationFrame(draw);
-    })();
-    return () => { alive = false; if (timer) clearInterval(timer); cancelAnimationFrame(raf); ws?.close(); stream?.getTracks().forEach(x => x.stop()); };
-  }, [onStop, t, toast]);
-  const alarmed = active.some(c => !['MOTION', 'EMPTY'].includes(c));
-  return (
-    <div className={`tile ${alarmed ? 'alarmed' : ''}`}>
-      <canvas ref={canvas} />
-      <div className="tile-bar"><span className="rec" /><span>{t('live.thisComputer')}</span><span className="sp" /><small>{status}</small><button className="icon-btn" onClick={onStop} title={t('live.stop')}><Icon id="x" /></button></div>
       <div className="tile-foot">{active.map(c => <span key={c} className={`pill xs ${['MOTION', 'EMPTY'].includes(c) ? 'neutral' : 'bad'}`} title={typeName(c, c)}>{c}</span>)}</div>
     </div>
   );
@@ -142,10 +93,11 @@ export default function LivePage() {
   const ago = useAgo();
   const nav = useNavigate();
   const { cams, refresh } = useCameras();
-  const [laptop, setLaptop] = useState(false);
   const [tab, setTab] = useState<'open' | 'all'>('open');
   const feed = useFeed();
-  const stopLaptop = useCallback(() => setLaptop(false), []);
+  // ids present when the page opened; anything newer is "fresh" and gets the arrival animation
+  const seen = useRef<Set<number> | null>(null);
+  if (seen.current === null && feed.loaded) seen.current = new Set(feed.items.map(f => f.id));
 
   const addCam = async () => {
     const r = await addCameraDialog(modal, t);
@@ -162,36 +114,85 @@ export default function LivePage() {
   const items = (tab === 'open' ? feed.items.filter(f => !f.decision) : feed.items).slice(0, 80);
   const where = (f: FindingBrief) => f.source === 'camera' ? (f.camera_name || f.camera_id) : f.filename || f.job_id;
 
+  // chat order: oldest at the top, newest at the bottom next to the reader's eye
+  const chat = [...items].reverse();
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [chat.length, tab]);
+
   return (
-    <div className="page wide">
-      <div className="page-head">
-        <div><h1>{t('live.title')}</h1><p>{t('live.lead')}</p></div>
-        <div className="acts">
-          <button className="btn" onClick={() => setLaptop(l => !l)}><Icon id={laptop ? 'x' : 'cam'} />{t(laptop ? 'live.stopCam' : 'live.useCam')}</button>
-          {can('admin') && <button className="btn primary" onClick={addCam}><Icon id="plus" />{t('live.addCam')}</button>}
+    <div className="mx-auto flex max-w-[1680px] flex-col gap-4 lg:h-full">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-semibold tracking-tight text-heading">{t('live.title')}</h1>
+          <p className="mt-1 max-w-[80ch] text-sm text-muted-foreground">{t('live.lead')}</p>
         </div>
+        {can('admin') && <Button onClick={addCam}><Plus />{t('live.addCam')}</Button>}
       </div>
-      <div className="live-grid">
-        <div className="wall">
-          {laptop && <LaptopTile onStop={stopLaptop} />}
-          {cams.map(c => <CameraTile key={c.id} cam={c} onRemove={can('admin') ? () => removeCam(c) : undefined} />)}
-          {!cams.length && !laptop && (
-            <div className="tile-add"><span className="ic"><Icon id="cam" /></span><b>{t('live.noCams')}</b><span>{t(can('admin') ? 'live.noCamsAdmin' : 'live.noCamsHint')}</span>
-              {can('admin') && <button className="btn primary" onClick={addCam}><Icon id="plus" />{t('live.addCam')}</button>}</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+        {/* the stage: like a shared screen in a call, it takes the main part of the window */}
+        <section aria-label={t('live.title')} className="relative flex min-h-[420px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-video p-3 shadow-sm sm:p-4">
+          {cams.length ? (
+            <CameraGallery>
+              {cams.map(c => <CameraTile key={c.id} cam={c} onRemove={can('admin') ? () => removeCam(c) : undefined} />)}
+            </CameraGallery>
+          ) : (
+            <div className="flex max-w-sm flex-col items-center px-6 text-center text-pretty">
+              <span className="grid size-14 place-items-center rounded-full bg-white/[.08] text-white/80"><Video className="size-6" strokeWidth={1.7} /></span>
+              <h2 className="mt-4 text-lg font-semibold text-white">{t('live.noCams')}</h2>
+              <p className="mt-1.5 text-sm text-white/60">{t(can('admin') ? 'live.noCamsAdmin' : 'live.noCamsHint')}</p>
+              {can('admin') && <Button className="mt-5" onClick={addCam}><Plus />{t('live.addCam')}</Button>}
+            </div>
           )}
-        </div>
-        <aside className="card feed">
-          <div className="feed-h"><h2>{t('live.events')}</h2>{feed.counts.pending ? <span className="badge">{feed.counts.pending}</span> : null}<span className="sp" />
-            <div className="seg"><button className={tab === 'open' ? 'on' : ''} onClick={() => setTab('open')}>{t('live.open')}</button><button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>{t('live.allEv')}</button></div></div>
-          <div className="feed-list">
-            {!items.length ? <div className="empty"><b>{t(tab === 'open' ? 'ev.noneOpen' : 'ev.none')}</b>{t('ev.hint')}</div> : items.map(f => (
-              <Link key={f.id} className={`al ${f.decision ? 'closed' : ''}`} to={`/findings/${f.id}?from=live`} onClick={e => { e.preventDefault(); nav(`/findings/${f.id}?from=live`); }}>
-                <div className="t1"><span className={`pill xs ${f.decision === 'confirm' ? 'bad' : f.decision ? 'neutral' : 'warn'}`}>{t(f.decision === 'confirm' ? 'f.confirmed' : f.decision ? 'f.notViolation' : 'ev.pending')}</span>
-                  <span className="sp" /><span>{ago(f.created_at)}</span></div>
-                <b>{typeName(f.type_code, f.type_name)}</b>
-                <div className="where"><Icon id={f.source === 'camera' ? 'cam' : 'film'} /> {where(f)}{f.t_sec != null ? ` · ${t('ev.at', { t: tc(f.t_sec) })}` : ''}{f.verified ? ` · ${t('fd.verified')}` : ''}</div>
-              </Link>
-            ))}
+        </section>
+
+        {/* events as a chat panel */}
+        <aside className="flex h-[70vh] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm lg:h-auto lg:w-[380px]">
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+            <h2 className="text-[15px] font-semibold text-heading">{t('live.events')}</h2>
+            {feed.counts.pending ? <span className="min-w-5 rounded-md bg-primary px-1.5 text-center text-[11px] leading-5 font-semibold text-primary-foreground tabular-nums">{feed.counts.pending}</span> : null}
+            <div role="tablist" className="ml-auto flex gap-0.5 rounded-lg bg-muted p-0.5">
+              {(['open', 'all'] as const).map(k => (
+                <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                  className={`h-7 rounded-md px-2.5 text-[13px] font-medium transition-colors ${tab === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {t(k === 'open' ? 'live.open' : 'live.allEv')}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-4">
+            {!chat.length ? (
+              <div className="m-auto max-w-[30ch] text-center text-sm text-muted-foreground text-pretty">
+                <p className="font-semibold text-foreground">{t(tab === 'open' ? 'ev.noneOpen' : 'ev.none')}</p>
+                <p className="mt-1">{t(tab === 'open' ? 'ev.hintOpen' : 'ev.hint')}</p>
+              </div>
+            ) : chat.map(f => {
+              const state = f.decision === 'confirm' ? 'confirm' : f.decision ? 'dismiss' : 'pending';
+              const fresh = seen.current && !seen.current.has(f.id);
+              return (
+                <Link key={f.id} to={`/findings/${f.id}?from=live`} onClick={e => { e.preventDefault(); nav(`/findings/${f.id}?from=live`); }}
+                  className={`group flex gap-2.5 text-left no-underline ${fresh ? '[animation:pop-in_.32s_var(--ease-out)_both]' : ''}`}>
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+                    {f.source === 'camera' ? <Video className="size-4" /> : <Film className="size-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2 text-xs text-faint tabular-nums">
+                      <span className="truncate font-semibold text-foreground">{where(f)}</span>
+                      <span className="shrink-0">{ago(f.created_at)}</span>
+                      <span className="ml-auto shrink-0">№ {serial(f.id)}</span>
+                    </div>
+                    <div className={`mt-1 rounded-2xl rounded-tl-md border px-3 py-2.5 transition-colors group-hover:border-border-strong ${state === 'pending' ? 'border-primary/25 bg-primary-soft/50' : 'border-border/60 bg-subtle'}`}>
+                      <span className={`state ${state}`}>{t(f.decision === 'confirm' ? 'f.confirmed' : f.decision ? 'f.notViolation' : 'ev.pending')}</span>
+                      <p className={`mt-1 text-sm leading-snug ${f.decision ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{typeName(f.type_code, f.type_name)}</p>
+                      {(f.t_sec != null || f.verified) && (
+                        <p className="mt-1 flex gap-2 text-xs text-muted-foreground tabular-nums">
+                          {f.t_sec != null && <span>{t('ev.at', { t: tc(f.t_sec) })}</span>}{f.verified && <span>{t('fd.verified')}</span>}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </aside>
       </div>

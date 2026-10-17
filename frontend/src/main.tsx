@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './auth';
 import { I18nProvider } from './i18n';
-import './styles/app.css';
+import './styles/index.css';
 import { UiProvider } from './ui';
 
 createRoot(document.getElementById('root')!).render(

@@ -46,6 +46,14 @@ export const tc = (t: number | null | undefined) => {
   return `${String(m).padStart(2, '0')}:${(v - m * 60).toFixed(1).padStart(4, '0')}`;
 };
 export const esc = (s: unknown) => String(s ?? '');
+/** The evidence frame closest to the moment, as a data URL for the scrubber preview. */
+export function keyFrame(frames: { timestamp_sec: number; image_base64: string }[] | undefined, t: number | null | undefined) {
+  if (!frames?.length) return undefined;
+  const f = frames.reduce((a, b) => (Math.abs(b.timestamp_sec - (t ?? 0)) < Math.abs(a.timestamp_sec - (t ?? 0)) ? b : a));
+  return `data:image/jpeg;base64,${f.image_base64}`;
+}
+/** Banknote-style serial for finding numbers: 4 → "0004". */
+export const serial = (id: number | string | null | undefined) => String(id ?? '').padStart(4, '0');
 export const shortDesc = (d?: string | null) => String(d || '').split(/\s*Основание:/)[0].replace(/\s*Прямой публичной нормы не установлено\.?$/, '').trim();
 export const observedPart = (d?: string | null) => {
   const p = shortDesc(d).split(/\s*Это может указывать на нарушение:\s*/);
@@ -91,8 +99,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const toast = useCallback((msg: string, kind: '' | 'err' = '') => {
     const id = ++seq.current;
     setToasts(x => [...x, { id, msg, kind }]);
-    setTimeout(() => setToasts(x => x.filter(y => y.id !== id)), 4200);
   }, []);
+  const dropToast = useCallback((id: number) => setToasts(x => x.filter(y => y.id !== id)), []);
 
   const closeModal = useCallback((id: number, v: unknown) => {
     setModals(m => {
@@ -141,11 +149,47 @@ export function UiProvider({ children }: { children: ReactNode }) {
       ))}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb.src} alt="" /><div className="lb-cap">{lb.cap}</div></div>}
       <div className="toasts" aria-live="polite">
-        {toasts.map(x => <div key={x.id} className={`toast ${x.kind}`}><Icon id={x.kind === 'err' ? 'alert' : 'check'} /><span>{x.msg}</span></div>)}
+        {toasts.map(x => <ToastItem key={x.id} toast={x} onDone={dropToast} />)}
       </div>
     </Ui.Provider>
   );
 }
+/* A toast that reads like Sonner: the timer pauses while hovered or while the tab is hidden, a click dismisses it,
+   and it leaves faster than it arrived. */
+function ToastItem({ toast, onDone }: { toast: Toast; onDone: (id: number) => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const left = useRef(toast.kind === 'err' ? 6500 : 4200);
+  const started = useRef(0);
+  const timer = useRef<number | null>(null);
+  const pause = useCallback(() => {
+    if (timer.current == null) return;
+    clearTimeout(timer.current); timer.current = null;
+    left.current -= Date.now() - started.current;
+  }, []);
+  const resume = useCallback(() => {
+    if (timer.current != null || document.hidden) return;
+    started.current = Date.now();
+    timer.current = window.setTimeout(() => setLeaving(true), Math.max(600, left.current));
+  }, []);
+  useEffect(() => {
+    resume();
+    const vis = () => (document.hidden ? pause() : resume());
+    document.addEventListener('visibilitychange', vis);
+    return () => { pause(); document.removeEventListener('visibilitychange', vis); };
+  }, [pause, resume]);
+  useEffect(() => {
+    if (!leaving) return;
+    const id = window.setTimeout(() => onDone(toast.id), 220);
+    return () => clearTimeout(id);
+  }, [leaving, onDone, toast.id]);
+  return (
+    <div className={`toast ${toast.kind} ${leaving ? 'out' : ''}`} role={toast.kind === 'err' ? 'alert' : 'status'}
+      onMouseEnter={pause} onMouseLeave={resume} onClick={() => setLeaving(true)}>
+      <Icon id={toast.kind === 'err' ? 'alert' : 'check'} /><span>{toast.msg}</span>
+    </div>
+  );
+}
+
 export function useUi(): UiCtx {
   const v = useContext(Ui);
   if (!v) throw new Error('useUi outside provider');
@@ -157,9 +201,15 @@ export function useTheme() {
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
   const toggle = useCallback(() => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem('cg_theme', next); } catch { /* ignore */ }
-    setDark(next === 'dark');
+    const apply = () => {
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem('cg_theme', next); } catch { /* ignore */ }
+      setDark(next === 'dark');
+    };
+    // a rare action: a short crossfade instead of a hard flash, skipped for reduced motion
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    if (doc.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) doc.startViewTransition(apply);
+    else apply();
   }, []);
   return { dark, toggle };
 }

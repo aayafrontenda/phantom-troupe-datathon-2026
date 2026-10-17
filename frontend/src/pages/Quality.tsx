@@ -78,7 +78,7 @@ export default function QualityPage() {
             <div className="stat attn">
               <div className="n num">{nf.format(s.flagged)}</div>
               <div className="l">{t('q.flagged')}</div>
-              <div className="sub"><Link to="/review?q=disagreed">{t('q.openReview')} →</Link></div>
+              <div className="sub"><Link to="/review?q=disagreed">{t('q.openReview')}</Link></div>
             </div>
           </div>
 
