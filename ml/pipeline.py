@@ -18,6 +18,7 @@ from . import kb
 from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
+from .workplace import desk_findings, find_roi, scan
 
 log = logging.getLogger("ml.pipeline")
 Progress = Callable[[str, float], None]
@@ -120,7 +121,19 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     vlm_calls, vlm_errors, scenes = 0, 0, []
     from .vlm import VLMClient
     vlm = VLMClient()
-    if vlm.enabled:
+    roi = find_roi(dets, info.width or frames[0].image.shape[1], info.height or frames[0].image.shape[0]) if dets else None
+    if vlm.enabled and roi:
+        # рабочее место: дорожка состояний по увеличенному фрагменту → T01–T03 по правилам
+        progress("vlm", 0.25)
+        step = max(s.desk_step_sec, duration / max(1, s.desk_max_calls))
+        desk_states = scan(vlm, frames, roi, step, deadline_ok=lambda: time.time() < deadline - 15)
+        vlm_calls += len(desk_states)
+        for st in desk_states:
+            scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
+        for f in desk_findings(desk_states):
+            findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
+
+    if vlm.enabled and s.vlm_generic:
         for i, c in enumerate(cands):
             if time.time() > deadline - min(s.vlm_timeout, 30):
                 log.warning("Бюджет времени исчерпан: проверено %d из %d кандидатов", i, len(cands))

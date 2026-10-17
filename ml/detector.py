@@ -20,7 +20,7 @@ GROUPS = {
     "drink": {"cup", "bottle", "wine glass"},
     "food": {"sandwich", "banana", "apple", "donut", "cake", "pizza", "hot dog", "orange"},
     "bag": {"handbag", "backpack", "suitcase"},
-    "laptop": {"laptop", "tv"},
+    "laptop": {"laptop"},  # "tvmonitor" не берём: ловит стеклянную дверь
     "book": {"book"},
 }
 LABEL2GROUP = {lbl: g for g, lbls in GROUPS.items() for lbl in lbls}
