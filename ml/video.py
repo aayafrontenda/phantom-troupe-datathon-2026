@@ -32,11 +32,11 @@ class Frame:
 
 
 def ascii_path(path: str | Path) -> str:
-    """OpenCV на Windows не открывает пути с кириллицей (например «Х-4.mov») — делаем ASCII-копию/ссылку."""
+    """OpenCV на Windows не открывает пути с кириллицей (например «Х-4.mov») - делаем ASCII-копию/ссылку."""
     p = str(path)
     if os.name != "nt" or p.isascii():
         return p
-    tmp = Path(tempfile.gettempdir()) / "cashguard_ascii"
+    tmp = Path(tempfile.gettempdir()) / "phantomguard_ascii"
     tmp.mkdir(exist_ok=True)
     dst = tmp / (hashlib.md5(p.encode("utf-8")).hexdigest()[:12] + Path(p).suffix)
     if not dst.exists():

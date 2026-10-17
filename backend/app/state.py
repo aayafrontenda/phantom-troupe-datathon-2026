@@ -156,7 +156,7 @@ class AppState:
 def _norm_text(v: dict) -> str | None:
     rule = v.get("rule") or {}
     refs = rule.get("refs") or []
-    parts = [f"{r.get('point')} — {r.get('document')}" if r.get("point") else r.get("document", "") for r in refs]
+    parts = [f"{r.get('point')} - {r.get('document')}" if r.get("point") else r.get("document", "") for r in refs]
     return "; ".join(p for p in parts if p) or None
 
 

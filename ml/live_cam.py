@@ -1,13 +1,13 @@
-"""Live-режим на камере ноутбука (или любом потоке) — без сервера, для проверки и демонстрации.
+"""Live-режим на камере ноутбука (или любом потоке) - без сервера, для проверки и демонстрации.
 
     python -m ml.live_cam                 # вебкамера 0
     python -m ml.live_cam --cam 1         # другая камера
     python -m ml.live_cam --cam video.mp4 # файл как «камера» (в реальном времени)
     python -m ml.live_cam --cam rtsp://…  # IP-камера
 
-Окно: кадр с рамками детектора и рамкой рабочего места; справа — что модель видит на рабочем месте
+Окно: кадр с рамками детектора и рамкой рабочего места; справа - что модель видит на рабочем месте
 (раз в LIVE_VLM_SEC секунд) и лента тревог: когда нарушение произошло и через сколько подтверждено.
-Клавиши: q / Esc — выход, s — снимок окна в storage/live_cam/.
+Клавиши: q / Esc - выход, s - снимок окна в storage/live_cam/.
 Логика та же, что в live-режиме сервиса (ml/live.py) и при анализе видео (ml/workplace.py).
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ COLORS = {"person": (80, 200, 80), "laptop": (230, 180, 60), "phone": (60, 60, 2
           "food": (60, 160, 240), "bag": (200, 80, 200)}
 PERSON = {"sit": "сидит", "stand": "стоит", "none": "нет", "?": "?"}
 SCREEN = {"app": "открыта программа", "lock": "экран блокировки", "dark": "тёмный", "closed": "закрыт", "?": "не видно"}
-ACTION = {"drink": "пьёт / ест", "phone": "телефон в руке", "other": "работает", "none": "—"}
+ACTION = {"drink": "пьёт / ест", "phone": "телефон в руке", "other": "работает", "none": "-"}
 
 
 def _font(size: int):
@@ -75,13 +75,13 @@ def render(frame: np.ndarray, dets, rules: LiveRules, log: list[dict], fps: floa
     pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
     dr = ImageDraw.Draw(pil)
     x, y = img.shape[1] + 16, 12
-    dr.text((x, y), "CashGuard · live", font=F_TITLE, fill=(255, 255, 255)); y += 28
+    dr.text((x, y), "PhantomGuard · live", font=F_TITLE, fill=(255, 255, 255)); y += 28
     dr.text((x, y), f"{fps:.1f} кадр/с · модель каждые {LIVE_VLM_SEC:g} с", font=F_SMALL, fill=(160, 160, 160)); y += 26
 
     dr.text((x, y), "Рабочее место (модель):", font=F_TEXT, fill=(0, 220, 255)); y += 22
     st = desk.last_state() if desk else None
     if desk and not desk.enabled:
-        dr.text((x, y), "VLM выключена — только детектор", font=F_SMALL, fill=(200, 200, 200)); y += 20
+        dr.text((x, y), "VLM выключена - только детектор", font=F_SMALL, fill=(200, 200, 200)); y += 20
     elif not desk or not desk.roi:
         dr.text((x, y), "ищу рабочее место (ноутбук / сидящий человек)…", font=F_SMALL, fill=(200, 200, 200)); y += 20
     elif st is None:
@@ -96,7 +96,7 @@ def render(frame: np.ndarray, dets, rules: LiveRules, log: list[dict], fps: floa
         dr.text((x, y), f"«{st.note}» · {age:.0f} с назад", font=F_SMALL, fill=(150, 150, 150)); y += 26
 
     active = rules.active()
-    dr.text((x, y), "Активно: " + (", ".join(active) if active else "—"), font=F_TEXT,
+    dr.text((x, y), "Активно: " + (", ".join(active) if active else "-"), font=F_TEXT,
             fill=(255, 120, 100) if any(c != "EMPTY" for c in active) else (120, 220, 120)); y += 30
 
     dr.text((x, y), "Тревоги:", font=F_TEXT, fill=(255, 255, 255)); y += 22
@@ -124,7 +124,7 @@ def main() -> int:
     if not cap.isOpened():
         print(f"Не удалось открыть камеру {a.cam!r}")
         return 1
-    # окно — через Tkinter (входит в Python): у opencv-python-headless, который нужен серверу, окон нет
+    # окно - через Tkinter (входит в Python): у opencv-python-headless, который нужен серверу, окон нет
     import tkinter as tk
     from PIL import ImageTk
 
@@ -135,7 +135,7 @@ def main() -> int:
     s = {"next_t": 0.0, "last": time.time(), "fps": 0.0, "view": None}
 
     root = tk.Tk()
-    root.title("CashGuard live — q / Esc: выход, s: снимок")
+    root.title("PhantomGuard live - q / Esc: выход, s: снимок")
     label = tk.Label(root, bg="black")
     label.pack()
 
@@ -174,7 +174,7 @@ def main() -> int:
     root.bind("<Escape>", lambda _: root.destroy())
     root.bind("q", lambda _: root.destroy())
     root.bind("s", snapshot)
-    print("Камера открыта. q / Esc — выход, s — снимок окна.", flush=True)
+    print("Камера открыта. q / Esc - выход, s - снимок окна.", flush=True)
     root.after(0, tick)
     root.mainloop()
     cap.release()

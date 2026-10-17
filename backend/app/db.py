@@ -137,7 +137,7 @@ MIGRATIONS: list[str] = [
         detail   TEXT
     );
     """,
-    # 2 — users, sessions, findings (review workflow), job ownership
+    # 2 - users, sessions, findings (review workflow), job ownership
     """
     CREATE TABLE IF NOT EXISTS users (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -208,7 +208,7 @@ MIGRATIONS: list[str] = [
 
     ALTER TABLE jobs ADD COLUMN created_by TEXT;
     """,
-    # 3 — Telegram: personal bot linked to a user
+    # 3 - Telegram: personal bot linked to a user
     """
     ALTER TABLE users ADD COLUMN tg_user_id INTEGER;
     ALTER TABLE users ADD COLUMN tg_chat_id INTEGER;

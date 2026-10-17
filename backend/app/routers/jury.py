@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1", tags=["jury"])
 
 
 def api_index(st) -> dict:
-    return {"service": "CashGuard", "version": st.settings.version, "api": "v1", "auth": "X-API-Key header",
+    return {"service": "PhantomGuard", "version": st.settings.version, "api": "v1", "auth": "X-API-Key header",
             "endpoints": {"analyze": "POST /api/v1/analyze (multipart, field 'file', .mov)",
                           "job": "GET /api/v1/jobs/{job_id}", "rules": "GET /api/v1/rules"},
             "docs": "/docs", "health": "/health"}

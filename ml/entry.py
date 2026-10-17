@@ -1,10 +1,10 @@
-"""Вход в пустую кассу и дверь за собой (T04) — без VLM.
+"""Вход в пустую кассу и дверь за собой (T04) - без VLM.
 
 Стеклянную дверь «открыта/закрыта» по одному кадру не различает ни VLM, ни человек на 464×848.
-Зато видно, вернулся ли участок двери к виду «до входа»: пока в кассе пусто, дверь закрыта — это эталон.
+Зато видно, вернулся ли участок двери к виду «до входа»: пока в кассе пусто, дверь закрыта - это эталон.
 Через 5–10 с после входа сравниваем тот же участок с эталоном (люди замаскированы рамками детектора):
-дверь закрыли — отличие падает до шума, оставили открытой — остаётся большим.
-Эталон из того же видео, участок двери — там, где вошедший появился впервые: ракурс не важен.
+дверь закрыли - отличие падает до шума, оставили открытой - остаётся большим.
+Эталон из того же видео, участок двери - там, где вошедший появился впервые: ракурс не важен.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ log = logging.getLogger("ml.entry")
 
 PERSON_SCORE = 0.5
 PIX_DIFF = 25          # порог отличия пикселя (0–255, после размытия)
-DOOR_OPEN_FRAC = 0.12  # доля отличающихся пикселей участка двери, выше — дверь не закрыта (норма Х-31: 5%, Х-32: 15%+)
+DOOR_OPEN_FRAC = 0.12  # доля отличающихся пикселей участка двери, выше - дверь не закрыта (норма Х-31: 5%, Х-32: 15%+)
 CHECK_FROM, CHECK_TO = 5.0, 12.0  # когда после входа проверяем дверь, с
 
 
@@ -39,7 +39,7 @@ def find_empty_room_entries(frames: list[Frame], dets: list[list[Det]], min_empt
             continue
         empty_sec = frames[i].t - frames[empty_from].t if empty_from is not None else 0.0
         # пусто в первые секунды (кассир только приходит, Х-33: мелькнула за стеклом и вошла) или долго (≥ 3 с);
-        # 1–2 с посреди работы — это детектор потерял сидящего кассира, а не вход
+        # 1–2 с посреди работы - это детектор потерял сидящего кассира, а не вход
         if empty_from is not None and empty_sec >= min_empty_sec and (frames[empty_from].t <= 5.0 or empty_sec >= 3.0):
             out.append((i, empty_from))
         empty_from = None
@@ -75,15 +75,15 @@ def find_room_exits(frames: list[Frame], dets: list[list[Det]], min_empty_sec: f
 def camera_moving(frames: list[Frame], t0: float, t1: float, frac: float = 0.3) -> bool:
     """Камера в [t0, t1] двигалась (съёмка с рук, поворот): между соседними кадрами меняется большая часть картинки.
 
-    Сравнение «до/после» на двери тогда бессмысленно — отличие даёт сама камера, а не дверь.
-    Неподвижная камера на обучающих видео: максимум 7 % пикселей между кадрами; съёмка с рук — до 84 %.
+    Сравнение «до/после» на двери тогда бессмысленно - отличие даёт сама камера, а не дверь.
+    Неподвижная камера на обучающих видео: максимум 7 % пикселей между кадрами; съёмка с рук - до 84 %.
     """
     small = [cv2.cvtColor(cv2.resize(f.image, (48, 88), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY).astype(np.int16)
              for f in frames if t0 <= f.t <= t1]
     if len(small) < 2:
         return False
     changed = [float((np.abs(a - b) > PIX_DIFF).mean()) for a, b in zip(small, small[1:])]
-    # ≥ 3 пар с большим изменением: один человек прямо под камерой или вспышка света — не движение камеры
+    # ≥ 3 пар с большим изменением: один человек прямо под камерой или вспышка света - не движение камеры
     return sum(c > frac for c in changed) >= 3
 
 
@@ -98,7 +98,7 @@ def _door_diff(frames, dets, roi, base, t0: float, t1: float) -> list[float]:
         for d in _persons(ds, 0.3):
             px1, py1, px2, py2 = (int(v) for v in d.box)
             mask[max(0, py1 - roi[1]):max(0, py2 - roi[1]), max(0, px1 - roi[0]):max(0, px2 - roi[0])] = False
-        if mask.sum() > 0.3 * mask.size:  # участок двери почти весь закрыт человеком — кадр не годится
+        if mask.sum() > 0.3 * mask.size:  # участок двери почти весь закрыт человеком - кадр не годится
             fracs.append(float((np.abs(g - base)[mask] > PIX_DIFF).mean()))
     return fracs
 
@@ -109,7 +109,7 @@ def door_findings(frames: list[Frame], dets: list[list[Det]]) -> list[dict]:
         return found
     h, w = frames[0].image.shape[:2]
 
-    # 1) вход в пустую кассу: эталон «дверь закрыта» — пустая касса до входа
+    # 1) вход в пустую кассу: эталон «дверь закрыта» - пустая касса до входа
     for i_in, i_empty in find_empty_room_entries(frames, dets):
         entrant = _persons(dets[i_in], 0.3)
         if not entrant:
@@ -120,7 +120,7 @@ def door_findings(frames: list[Frame], dets: list[list[Det]]) -> list[dict]:
         base = np.mean([_gray(im, roi) for im in empty], axis=0)
         t_in = frames[i_in].t
         if camera_moving(frames, frames[i_empty].t, t_in + CHECK_TO):
-            log.info("Дверь после входа в %.1f с: камера двигалась — проверка пропущена", t_in)
+            log.info("Дверь после входа в %.1f с: камера двигалась - проверка пропущена", t_in)
             continue
         fracs = _door_diff(frames, dets, roi, base, t_in + CHECK_FROM, t_in + CHECK_TO)
         if len(fracs) < 3:
@@ -131,10 +131,10 @@ def door_findings(frames: list[Frame], dets: list[list[Det]]) -> list[dict]:
         if frac > DOOR_OPEN_FRAC:
             found.append({"code": "T04", "t": t_in + 2.0, "confidence": min(0.9, 0.6 + frac),
                           "observed": "Сотрудник входит в помещение кассы и проходит к рабочему месту; "
-                                      "дверь за собой не закрывает — участок двери не возвращается к закрытому виду",
+                                      "дверь за собой не закрывает - участок двери не возвращается к закрытому виду",
                           "source": "detector"})
 
-    # 2) касса опустела (последний человек вышел): эталон — медиана кадров за 4–12 с до ухода,
+    # 2) касса опустела (последний человек вышел): эталон - медиана кадров за 4–12 с до ухода,
     #    пока дверь была закрыта (проходящие люди в медиане пропадают)
     for i_out in find_room_exits(frames, dets):
         leaver = _persons(dets[i_out - 1], 0.3)
@@ -147,7 +147,7 @@ def door_findings(frames: list[Frame], dets: list[list[Det]]) -> list[dict]:
             continue
         base = np.median(before, axis=0)
         if camera_moving(frames, t_out - 12.0, t_out + 10.0):
-            log.info("Дверь после выхода в %.1f с: камера двигалась — проверка пропущена", t_out)
+            log.info("Дверь после выхода в %.1f с: камера двигалась - проверка пропущена", t_out)
             continue
         fracs = _door_diff(frames, dets, roi, base, t_out + 3.0, t_out + 10.0)
         if len(fracs) < 3:
@@ -158,6 +158,6 @@ def door_findings(frames: list[Frame], dets: list[list[Det]]) -> list[dict]:
         if frac > DOOR_OPEN_FRAC:
             found.append({"code": "T04", "t": t_out, "confidence": min(0.9, 0.6 + frac),
                           "observed": "Сотрудник выходит из помещения кассы, касса остаётся пустой; "
-                                      "дверь за собой не закрывает — участок двери не возвращается к виду до ухода",
+                                      "дверь за собой не закрывает - участок двери не возвращается к виду до ухода",
                           "source": "detector"})
     return found

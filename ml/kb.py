@@ -42,13 +42,13 @@ def refs_struct(code: str) -> list[dict]:
 
 
 def refs_text(code: str) -> str:
-    """Короткая строка-ссылка для конца description: «п. 20 — Правила … № 231»."""
+    """Короткая строка-ссылка для конца description: «п. 20 - Правила … № 231»."""
     by_doc: dict[str, list[str]] = {}
     for r in refs_struct(code):
         by_doc.setdefault(r["document"], [])
         if r["point"]:
             by_doc[r["document"]].append(r["point"])
-    parts = [f"{', '.join(points)} — {doc}" if points else doc for doc, points in by_doc.items()]
+    parts = [f"{', '.join(points)} - {doc}" if points else doc for doc, points in by_doc.items()]
     return "; ".join(parts)
 
 
@@ -56,7 +56,7 @@ def checklist_text() -> str:
     """Список типов для промпта VLM."""
     lines = []
     for code, v in load_kb()["violations"].items():
-        lines.append(f"{code} — {v['type_name']}. Признак на видео: {v['visual']}.")
+        lines.append(f"{code} - {v['type_name']}. Признак на видео: {v['visual']}.")
     return "\n".join(lines)
 
 

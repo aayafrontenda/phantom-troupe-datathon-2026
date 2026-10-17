@@ -9,8 +9,8 @@ overridden by the supervisor when they disagree:
 From those labels the service computes per-type precision, a weekly false-positive trend, per-operator stats,
 and per-type confidence thresholds: when a type is confirmed less often than ``QUALITY_TARGET_PRECISION`` the
 threshold is raised to the lowest confidence at which the confirmed examples reach the target. The thresholds
-do not hide anything — alerts below the threshold are downgraded to ``low`` severity and findings get a
-``below_threshold`` flag — and the jury API is never affected.
+do not hide anything - alerts below the threshold are downgraded to ``low`` severity and findings get a
+``below_threshold`` flag - and the jury API is never affected.
 
 Dataset export: frames + labels of decided findings as a zip. Jury uploads are excluded (brief, section 7).
 """
@@ -319,7 +319,7 @@ class QualityService:
         return out
 
 
-DATASET_README = """CashGuard training dataset — exported {exported}
+DATASET_README = """PhantomGuard training dataset - exported {exported}
 
 {n} labelled examples ({positives} violations, {negatives} not violations), {frames} frames.
 Every example is a moment the AI flagged as a possible violation; the label is what people decided:
@@ -327,10 +327,10 @@ Every example is a moment the AI flagged as a possible violation; the label is w
   label = 0  not a violation (operator rejected and the supervisor agreed, or the supervisor overruled a confirmation)
   label_source = supervisor when the decision was verified, operator otherwise.
 
-labels.jsonl / labels.csv — one row per example: type_code (T01…T15), ai_confidence, operator decision and wording,
+labels.jsonl / labels.csv - one row per example: type_code (T01…T15), ai_confidence, operator decision and wording,
 supervisor result, description_ai / description_operator, and the frame paths.
-frames/<finding_id>/ — JPEG frames around the moment (uploads: the evidence frames; cameras: ±3 s around the alert).
+frames/<finding_id>/ - JPEG frames around the moment (uploads: the evidence frames; cameras: ±3 s around the alert).
 
 Jury test videos are never included (brief, section 7). All data stays inside the bank: this archive was produced
-on the CashGuard server from the bank's own recordings.
+on the PhantomGuard server from the bank's own recordings.
 """

@@ -87,8 +87,8 @@ export default function AdminPage() {
     <div className="page wide">
       <div className="page-head"><div><h1>{t('adm.title')}</h1><p>{t('adm.lead')}</p></div><div className="acts"><button className="btn primary" onClick={addUser}><Icon id="plus" />{t('adm.addUser')}</button></div></div>
       <div className="stats five">
-        <div className="stat"><div className="n">{stats?.jobs.done ?? '—'}</div><div className="l">{t('adm.jobs')}</div></div>
-        <div className="stat warn"><div className="n">{stats?.alerts.open ?? '—'}</div><div className="l">{t('adm.alerts')}</div></div>
+        <div className="stat"><div className="n">{stats?.jobs.done ?? '-'}</div><div className="l">{t('adm.jobs')}</div></div>
+        <div className="stat warn"><div className="n">{stats?.alerts.open ?? '-'}</div><div className="l">{t('adm.alerts')}</div></div>
         <div className="stat ok"><div className="n">{cams.filter(c => c.state?.status === 'online').length}/{cams.length}</div><div className="l">{t('adm.cameras')}</div></div>
         <div className="stat"><div className="n" style={{ fontSize: 22 }}>{me?.analyzer}</div><div className="l">{t('adm.analyzer')} · {me?.version}</div></div>
         <div className="stat"><div className="n" style={{ fontSize: 22 }}>{retention ? t('adm.days', { n: retention }) : t('adm.forever')}</div><div className="l">{t('adm.retention')}</div></div>
@@ -103,7 +103,7 @@ export default function AdminPage() {
                 <tr key={u.id} style={{ opacity: u.active ? 1 : .55 }}>
                   <td><div className="fname"><span className="ic"><Icon id="user" /></span><div><b>{u.name}</b><small>{u.login}{!u.active && <> · {t('adm.inactive')}</>}{u.telegram && <> · <span className="tg-tag" title={t('tg.title')}><Icon id="tg" />{u.telegram.username ? '@' + u.telegram.username : 'Telegram'}</span></>}</small></div></div></td>
                   <td><span className={`pill xs ${u.role === 'admin' ? 'brand' : u.role === 'supervisor' ? 'info' : 'neutral'}`}>{t(`role.${u.role}`)}</span></td>
-                  <td className="muted small">{u.camera_ids == null ? t('adm.allCams') : u.camera_ids.map(id => cams.find(c => c.id === id)?.name || id).join(', ') || '—'}</td>
+                  <td className="muted small">{u.camera_ids == null ? t('adm.allCams') : u.camera_ids.map(id => cams.find(c => c.id === id)?.name || id).join(', ') || '-'}</td>
                   <td className="muted small">{u.last_login_at ? fmtDate(u.last_login_at, locale) : t('adm.never')}</td>
                   <td className="c-acts"><div className="row-acts">
                     <button className="btn xs" onClick={() => editUser(u)}>{t('adm.edit')}</button>
@@ -131,7 +131,7 @@ export default function AdminPage() {
               </tbody>
             </table>
           ) : <div className="empty"><b>{t('live.noCams')}</b>{t('live.noCamsAdmin')}</div>}
-          <div style={{ padding: '14px 22px 20px' }} className="muted small"><b style={{ color: 'var(--fg)' }}>{t('adm.apiKey')}</b> — {t('adm.apiKeyHint')}</div>
+          <div style={{ padding: '14px 22px 20px' }} className="muted small"><b style={{ color: 'var(--fg)' }}>{t('adm.apiKey')}</b> - {t('adm.apiKeyHint')}</div>
         </div>
       </div>
     </div>

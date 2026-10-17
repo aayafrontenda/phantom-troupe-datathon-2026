@@ -9,7 +9,7 @@ import { Icon } from '../ui';
 const PERIODS: [number, string][] = [[7, 'q.p7'], [30, 'q.p30'], [0, 'q.pAll']];
 
 function pct(v: number | null | undefined, digits = 0): string {
-  return v == null ? '—' : `${(v * 100).toFixed(digits)}%`;
+  return v == null ? '-' : `${(v * 100).toFixed(digits)}%`;
 }
 
 export default function QualityPage() {

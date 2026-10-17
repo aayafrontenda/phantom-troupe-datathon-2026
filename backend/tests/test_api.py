@@ -104,7 +104,7 @@ def test_ui_routes(app_factory, video):
         assert "Проверка видео с кассы" in c.get(f"/ui/api/jobs/{job_id}/report.html").text
         assert "Cash-desk video check" in c.get(f"/ui/api/jobs/{job_id}/report.html", headers={"Accept-Language": "en-US,en;q=0.9"}).text
         assert c.get("/metrics").status_code == 200
-        assert b"cashguard_jobs_total" in c.get("/metrics").content
+        assert b"phantomguard_jobs_total" in c.get("/metrics").content
         assert c.get("/version").json()["analyzer"] == "mock"
 
 
@@ -328,7 +328,7 @@ def test_i18n_tables_are_complete():
     keys = [set(re.findall(r"'([a-zA-Z_.]+)':", b.split("\n  },")[0])) for b in blocks]
     assert keys[0] == keys[1] == keys[2] and len(keys[0]) > 150
     t = Translator("en")
-    v = {"type": "Сейф", "type_code": "T03", "description": "Сейф открыт. Это может указывать на нарушение: x. Основание: п. 20 — y.",
+    v = {"type": "Сейф", "type_code": "T03", "description": "Сейф открыт. Это может указывать на нарушение: x. Основание: п. 20 - y.",
          "rule": {"caveat": None}}
     assert t.type_name(v) == "Safe left open and unattended"
     assert t.description(v)["observed"] == "Сейф открыт" and t.description(v)["why"]

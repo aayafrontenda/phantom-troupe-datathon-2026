@@ -85,7 +85,7 @@ def place_upload(up: Upload, job_id: str) -> Path:
 class Retention:
     """Background cleaner.
 
-    Jury uploads (POST /api/v1/analyze) are deleted JURY_VIDEO_TTL_SEC after the check — the brief forbids keeping
+    Jury uploads (POST /api/v1/analyze) are deleted JURY_VIDEO_TTL_SEC after the check - the brief forbids keeping
     them. Operator uploads and camera clips are kept for VIDEO_RETENTION_DAYS (0 = forever). Old results go after
     RESULT_TTL_SEC (0 = keep).
     """

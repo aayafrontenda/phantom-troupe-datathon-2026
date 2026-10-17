@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CashGuard in Docker on Mac / Linux.
+# PhantomGuard in Docker on Mac / Linux.
 #   ./deploy/docker.sh             demo analyzer (CPU)          ./deploy/docker.sh --gpu     real model (Linux + NVIDIA)
 #   ./deploy/docker.sh --tunnel    + public trycloudflare.com    ./deploy/docker.sh --logs | --down
 set -euo pipefail
@@ -36,7 +36,7 @@ done; echo
 curl -fsS "http://127.0.0.1:$port/ready" >/dev/null 2>&1 || { echo "Not ready yet: ./deploy/docker.sh --logs" >&2; exit 1; }
 
 key=$(docker compose "${files[@]}" exec -T app python -c 'from backend.app.config import get_settings; print(get_settings().resolve_api_key())')
-echo "CashGuard is up:  http://127.0.0.1:$port"
+echo "PhantomGuard is up:  http://127.0.0.1:$port"
 echo "Jury API key:     $key"
 if [[ " ${profiles[*]-} " == *" tunnel "* ]]; then
   for _ in $(seq 1 30); do

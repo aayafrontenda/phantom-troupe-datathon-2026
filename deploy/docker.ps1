@@ -1,4 +1,4 @@
-# CashGuard in Docker on Windows (Docker Desktop, WSL2 backend).
+# PhantomGuard in Docker on Windows (Docker Desktop, WSL2 backend).
 #   powershell -ExecutionPolicy Bypass -File deploy\docker.ps1            # GPU: real model + Ollama
 #   powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel    # + Cloudflare tunnel (named if CLOUDFLARE_TUNNEL_TOKEN is in .env, else trycloudflare.com)
 #   powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Cpu       # no GPU: demo analyzer
@@ -31,7 +31,7 @@ if ($line) { $port = [int]$line.Matches[0].Groups[1].Value }
 
 $up = @("up", "-d")
 if (-not $NoBuild) { $up += "--build" }
-Write-Host "Starting CashGuard ($(if ($Cpu) {'demo analyzer, CPU'} else {'real model, GPU'}))... first build takes 10-20 minutes." -ForegroundColor Cyan
+Write-Host "Starting PhantomGuard ($(if ($Cpu) {'demo analyzer, CPU'} else {'real model, GPU'}))... first build takes 10-20 minutes." -ForegroundColor Cyan
 docker compose @files @profiles @up
 if ($LASTEXITCODE -ne 0) {
   if (-not $Cpu) { Write-Host "If the error mentions 'nvidia' or 'GPU': update the NVIDIA driver, enable WSL2 in Docker Desktop, or run with -Cpu." -ForegroundColor Yellow }
@@ -48,7 +48,7 @@ if (-not $ready) { Write-Host "Not ready yet. Check: powershell -File deploy\doc
 
 $key = "$(docker compose @files exec -T app python -c 'from backend.app.config import get_settings; print(get_settings().resolve_api_key())')".Trim()
 Write-Host ""
-Write-Host "CashGuard is up:  http://127.0.0.1:$port" -ForegroundColor Green
+Write-Host "PhantomGuard is up:  http://127.0.0.1:$port" -ForegroundColor Green
 Write-Host "Jury API key:     $key"
 if ($Named) { Write-Host "Named tunnel is running: open the public hostname set for it in Cloudflare (service http://app:8000)." -ForegroundColor Green }
 if ($Tunnel) {

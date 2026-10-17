@@ -68,7 +68,7 @@ export default function ChecksPage() {
     return <><span className="pill ok"><Icon id="shield" />{t('pill.clear')}</span>{part}</>;
   };
   const reviewCell = (j: JobRow) => {
-    if (j.public_status !== 'done' || j.verdict !== 'violation') return <span className="muted">—</span>;
+    if (j.public_status !== 'done' || j.verdict !== 'violation') return <span className="muted">-</span>;
     if ((j.reviewed || 0) >= (j.n_violations || 0)) return <span className="pill ok"><Icon id="check" />{t('pill.reviewed')}</span>;
     return <span className="muted">{t('rev.progress', { a: j.reviewed || 0, b: j.n_violations || 0 })}</span>;
   };

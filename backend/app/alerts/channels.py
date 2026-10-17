@@ -63,7 +63,7 @@ class WebChannel(Channel):
 
 
 class TelegramChannel(Channel):
-    """Alert delivery through the CashGuard bot (backend/app/telegram.py): linked users by role + optional group chats."""
+    """Alert delivery through the PhantomGuard bot (backend/app/telegram.py): linked users by role + optional group chats."""
     name = "telegram"
 
     def __init__(self, bot):
@@ -119,7 +119,7 @@ class EmailChannel(Channel):
         if not to:
             return
         msg = EmailMessage()
-        msg["Subject"] = f"[CashGuard {alert.get('severity', '').upper()}] {alert.get('type_name') or alert.get('type_code')}"
+        msg["Subject"] = f"[PhantomGuard {alert.get('severity', '').upper()}] {alert.get('type_name') or alert.get('type_code')}"
         msg["From"] = self.s.smtp_from or self.s.smtp_user
         msg["To"] = to
         msg.set_content(_text(alert, level, self.s.public_url))

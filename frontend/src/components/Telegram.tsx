@@ -63,7 +63,7 @@ export function TelegramDialog({ close, role }: { close: () => void; role: strin
               <a href={url} target="_blank" rel="noopener noreferrer" className="small">{t('tg.openAgain')}</a>
             </div>
           ) : (
-            <p className="muted small" style={{ marginTop: 14 }}>{t('tg.step', { bot: st.bot ? '@' + st.bot : 'CashGuard' })}</p>
+            <p className="muted small" style={{ marginTop: 14 }}>{t('tg.step', { bot: st.bot ? '@' + st.bot : 'PhantomGuard' })}</p>
           )}
         </>
       )}

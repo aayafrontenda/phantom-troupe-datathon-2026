@@ -157,7 +157,9 @@ class Settings:
 
     @property
     def db_path(self) -> Path:
-        return self.storage_dir / "cashguard.sqlite3"
+        path = self.storage_dir / "phantomguard.sqlite3"
+        legacy = self.storage_dir / "cashguard.sqlite3"   # name before the rename: keep existing users and decisions
+        return legacy if legacy.exists() and not path.exists() else path
 
     @property
     def max_upload_bytes(self) -> int:

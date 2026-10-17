@@ -31,11 +31,11 @@ def thresholds(request: Request, p: Principal = Depends(require_user("supervisor
 def dataset(request: Request, days: int = Query(0, ge=0, le=3650), p: Principal = Depends(require_user("supervisor"))):
     st = request.app.state.st
     rows = st.quality.dataset_rows(days=days, camera_ids=p.camera_ids)
-    tmp = tempfile.NamedTemporaryFile(prefix="cashguard-dataset-", suffix=".zip", delete=False)
+    tmp = tempfile.NamedTemporaryFile(prefix="phantomguard-dataset-", suffix=".zip", delete=False)
     tmp.close()
     counts = st.quality.dataset_zip(rows, tmp.name)
     st.db.audit("dataset.export", p.name, None, {**counts, "days": days})
-    name = f"cashguard-dataset-{time.strftime('%Y%m%d-%H%M')}.zip"
+    name = f"phantomguard-dataset-{time.strftime('%Y%m%d-%H%M')}.zip"
     return FileResponse(tmp.name, media_type="application/zip", filename=name,
                         headers={"X-Examples": str(counts["examples"]), "X-Frames": str(counts["frames"])},
                         background=BackgroundTask(os.unlink, tmp.name))

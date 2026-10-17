@@ -1,4 +1,4 @@
-# data and artifacts — not in git (case videos must not be published)
+# data and artifacts - not in git (case videos must not be published)
 data/
 storage/
 ml/eval/out/

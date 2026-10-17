@@ -1,9 +1,9 @@
 """Telegram bot: notifications only. Every decision is made on the site, where the clip, timecode and regulation are.
 
 Who gets what (scoped to the user's cameras):
-  operator    "possible violation found" — type, place, time, frame and an "Open in CashGuard" button;
+  operator    "possible violation found" - type, place, time, frame and an "Open in PhantomGuard" button;
               for video checks only the user who uploaded the video
-  supervisor  "an operator rejected an AI finding" — the AI's description, the operator's wording and comment, a link
+  supervisor  "an operator rejected an AI finding" - the AI's description, the operator's wording and comment, a link
   admin       nothing
 
 Linking: the UI issues a one-time code -> https://t.me/<bot>?start=<code> -> the bot stores the Telegram user id.
@@ -34,18 +34,18 @@ SEV_ICON = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪", 
 T: dict[str, dict[str, str]] = {
     "ru": {
         "found": "Найдено возможное нарушение", "video": "видео {name}", "conf": "Уверенность ИИ: {p}%",
-        "repeats": "Повторов: {n}", "decide": "Решение — на сайте.", "btn.open": "Открыть в CashGuard",
+        "repeats": "Повторов: {n}", "decide": "Решение - на сайте.", "btn.open": "Открыть в PhantomGuard",
         "reject.head": "⚠️ Оператор отклонил находку ИИ", "reject.op": "Оператор: {who}", "reject.ai": "ИИ: {t}",
         "reject.text": "Формулировка оператора: {t}", "reject.comment": "Комментарий: {t}", "reject.q": "Проверьте решение на сайте.",
-        "welcome": "Готово, {name}! Telegram привязан к CashGuard — {role}.\n\n{what}\n\n"
-                   "/pending — что ждёт вас на сайте\n/status — сводка\n/lang — язык\n/stop — отключить",
+        "welcome": "Готово, {name}! Telegram привязан к PhantomGuard - {role}.\n\n{what}\n\n"
+                   "/pending - что ждёт вас на сайте\n/status - сводка\n/lang - язык\n/stop - отключить",
         "what.operator": "Сюда приходят возможные нарушения с ваших камер и по вашим проверкам видео. Решение принимается на сайте.",
-        "what.supervisor": "Сюда приходят находки ИИ, которые отклонил оператор. Проверка — на сайте, в разделе «Контроль».",
+        "what.supervisor": "Сюда приходят находки ИИ, которые отклонил оператор. Проверка - на сайте, в разделе «Контроль».",
         "what.admin": "Администраторам уведомления не приходят.",
         "role.operator": "оператор", "role.supervisor": "супервайзер", "role.admin": "администратор",
-        "hint": "Это бот CashGuard. Чтобы получать уведомления, откройте CashGuard → меню профиля → «Telegram» → «Подключить».",
-        "bad_code": "Ссылка устарела или уже использована. Получите новую в CashGuard → «Telegram».",
-        "stopped": "Telegram отключён от CashGuard. Подключить снова — в профиле CashGuard.",
+        "hint": "Это бот PhantomGuard. Чтобы получать уведомления, откройте PhantomGuard → меню профиля → «Telegram» → «Подключить».",
+        "bad_code": "Ссылка устарела или уже использована. Получите новую в PhantomGuard → «Telegram».",
+        "stopped": "Telegram отключён от PhantomGuard. Подключить снова - в профиле PhantomGuard.",
         "lang.ask": "Выберите язык", "lang.set": "Язык: русский",
         "pending.none": "Нет находок, ожидающих решения.", "pending.head": "Ждут решения на сайте: {n}. Последние:",
         "verify.none": "Нет отклонённых находок без проверки.", "verify.head": "Отклонено операторами и не проверено: {n}. Последние:",
@@ -55,18 +55,18 @@ T: dict[str, dict[str, str]] = {
     },
     "kk": {
         "found": "Ықтимал бұзушылық табылды", "video": "бейне {name}", "conf": "ЖИ сенімділігі: {p}%",
-        "repeats": "Қайталау: {n}", "decide": "Шешім — сайтта.", "btn.open": "CashGuard-та ашу",
+        "repeats": "Қайталау: {n}", "decide": "Шешім - сайтта.", "btn.open": "PhantomGuard-та ашу",
         "reject.head": "⚠️ Оператор ЖИ табылымын қабылдамады", "reject.op": "Оператор: {who}", "reject.ai": "ЖИ: {t}",
         "reject.text": "Оператор тұжырымы: {t}", "reject.comment": "Пікір: {t}", "reject.q": "Шешімді сайтта тексеріңіз.",
-        "welcome": "Дайын, {name}! Telegram CashGuard-қа байланыстырылды — {role}.\n\n{what}\n\n"
-                   "/pending — сайтта сізді не күтіп тұр\n/status — жиынтық\n/lang — тіл\n/stop — ажырату",
+        "welcome": "Дайын, {name}! Telegram PhantomGuard-қа байланыстырылды - {role}.\n\n{what}\n\n"
+                   "/pending - сайтта сізді не күтіп тұр\n/status - жиынтық\n/lang - тіл\n/stop - ажырату",
         "what.operator": "Мұнда сіздің камераларыңыздан және бейне тексерулеріңізден ықтимал бұзушылықтар келеді. Шешім сайтта қабылданады.",
-        "what.supervisor": "Мұнда оператор қабылдамаған ЖИ табылымдары келеді. Тексеру — сайтта, «Бақылау-тексеру» бөлімінде.",
+        "what.supervisor": "Мұнда оператор қабылдамаған ЖИ табылымдары келеді. Тексеру - сайтта, «Бақылау-тексеру» бөлімінде.",
         "what.admin": "Әкімшілерге хабарлама келмейді.",
         "role.operator": "оператор", "role.supervisor": "супервайзер", "role.admin": "әкімші",
-        "hint": "Бұл — CashGuard боты. Хабарламаларды алу үшін CashGuard → профиль мәзірі → «Telegram» → «Қосу» ашыңыз.",
-        "bad_code": "Сілтеменің мерзімі өткен немесе ол қолданылған. CashGuard → «Telegram» ішінен жаңасын алыңыз.",
-        "stopped": "Telegram CashGuard-тан ажыратылды. Қайта қосу — CashGuard профилінде.",
+        "hint": "Бұл - PhantomGuard боты. Хабарламаларды алу үшін PhantomGuard → профиль мәзірі → «Telegram» → «Қосу» ашыңыз.",
+        "bad_code": "Сілтеменің мерзімі өткен немесе ол қолданылған. PhantomGuard → «Telegram» ішінен жаңасын алыңыз.",
+        "stopped": "Telegram PhantomGuard-тан ажыратылды. Қайта қосу - PhantomGuard профилінде.",
         "lang.ask": "Тілді таңдаңыз", "lang.set": "Тіл: қазақша",
         "pending.none": "Шешім күтетін табылымдар жоқ.", "pending.head": "Сайтта шешім күтуде: {n}. Соңғылары:",
         "verify.none": "Тексерілмеген қабылданбаған табылымдар жоқ.", "verify.head": "Операторлар қабылдамаған, тексерілмеген: {n}. Соңғылары:",
@@ -76,18 +76,18 @@ T: dict[str, dict[str, str]] = {
     },
     "en": {
         "found": "Possible violation found", "video": "video {name}", "conf": "AI confidence: {p}%",
-        "repeats": "Repeats: {n}", "decide": "Decide on the site.", "btn.open": "Open in CashGuard",
+        "repeats": "Repeats: {n}", "decide": "Decide on the site.", "btn.open": "Open in PhantomGuard",
         "reject.head": "⚠️ An operator rejected an AI finding", "reject.op": "Operator: {who}", "reject.ai": "AI: {t}",
         "reject.text": "Operator's wording: {t}", "reject.comment": "Comment: {t}", "reject.q": "Check the decision on the site.",
-        "welcome": "Done, {name}! Telegram is linked to CashGuard — {role}.\n\n{what}\n\n"
-                   "/pending — what is waiting for you on the site\n/status — summary\n/lang — language\n/stop — disconnect",
+        "welcome": "Done, {name}! Telegram is linked to PhantomGuard - {role}.\n\n{what}\n\n"
+                   "/pending - what is waiting for you on the site\n/status - summary\n/lang - language\n/stop - disconnect",
         "what.operator": "You will get possible violations from your cameras and your video checks. Decisions are made on the site.",
         "what.supervisor": "You will get AI findings an operator rejected. Verification is on the site, in “Control”.",
         "what.admin": "Administrators get no notifications.",
         "role.operator": "operator", "role.supervisor": "supervisor", "role.admin": "administrator",
-        "hint": "This is the CashGuard bot. To get notifications, open CashGuard → profile menu → “Telegram” → “Connect”.",
-        "bad_code": "The link has expired or was already used. Get a new one in CashGuard → “Telegram”.",
-        "stopped": "Telegram is disconnected from CashGuard. Connect again from your CashGuard profile.",
+        "hint": "This is the PhantomGuard bot. To get notifications, open PhantomGuard → profile menu → “Telegram” → “Connect”.",
+        "bad_code": "The link has expired or was already used. Get a new one in PhantomGuard → “Telegram”.",
+        "stopped": "Telegram is disconnected from PhantomGuard. Connect again from your PhantomGuard profile.",
         "lang.ask": "Choose a language", "lang.set": "Language: English",
         "pending.none": "No findings awaiting a decision.", "pending.head": "Awaiting your decision on the site: {n}. Latest:",
         "verify.none": "No rejected findings left to verify.", "verify.head": "Rejected by operators, not verified: {n}. Latest:",

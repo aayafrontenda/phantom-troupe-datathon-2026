@@ -1,10 +1,10 @@
-"""CashGuard service (FastAPI).
+"""PhantomGuard service (FastAPI).
 
 Jury API (section 10 of the brief), header X-API-Key:
     POST /api/v1/analyze            multipart, field `file` (.mov) -> {"job_id": ...}
     GET  /api/v1/jobs/{job_id}      -> {"job_id", "status", "verdict", "violations", ...extras}
 
-UI API (cookie session, roles operator/supervisor/admin): /ui/api/*  — see docs/api_contract.md
+UI API (cookie session, roles operator/supervisor/admin): /ui/api/*  - see docs/api_contract.md
 Admin API (admin key): /admin/api/*
 System: /health /ready /metrics /version
 
@@ -58,7 +58,7 @@ def create_app() -> FastAPI:
         finally:
             state.stop()
 
-    app = FastAPI(title="Forte CashGuard", version=settings.version, lifespan=lifespan,
+    app = FastAPI(title="Forte PhantomGuard", version=settings.version, lifespan=lifespan,
                   docs_url="/docs", openapi_url="/openapi.json")
     app.state.st = state
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"],

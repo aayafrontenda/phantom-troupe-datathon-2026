@@ -107,7 +107,7 @@ class MockLiveSession(LiveSession):
         try:
             from ml import kb
             rule = kb.rule_of(code)
-            return {"code": code, "type": rule["type_name"], "message": "[MOCK] Движение в кадре — демонстрационная тревога без модели",
+            return {"code": code, "type": rule["type_name"], "message": "[MOCK] Движение в кадре - демонстрационная тревога без модели",
                     "norm": kb.refs_text(code), "severity": "warning", "confidence": 0.5, "ts": time.time()}
         except Exception:
             return {"code": "MOTION", "type": "Движение в кадре (mock)", "message": "Обнаружено движение",

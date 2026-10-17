@@ -64,7 +64,7 @@ function LaptopTile({ onStop }: { onStop: () => void }) {
   const { t, typeName } = useI18n();
   const { toast } = useUi();
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [status, setStatus] = useState('—');
+  const [status, setStatus] = useState('-');
   const [active, setActive] = useState<string[]>([]);
   useEffect(() => {
     let stream: MediaStream | null = null, ws: WebSocket | null = null, timer: number | null = null, raf = 0, busy = false, alive = true;

@@ -48,7 +48,7 @@ export default function Header() {
 
   return (
     <header className="top">
-      <NavLink className="brand" to="/"><b>CashGuard</b></NavLink>
+      <NavLink className="brand" to="/"><b>PhantomGuard</b></NavLink>
       <nav className="tabs" aria-label={t('nav.sections')}>
         {tab('/live', t('nav.live'), openCount)}
         {tab('/checks', t('nav.checks'))}

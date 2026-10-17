@@ -25,7 +25,7 @@ export default function RulesPage() {
                     <td><span className="code">{ty.code}</span></td>
                     <td><b>{typeName(ty.code, ty.type)}</b><div style={{ marginTop: 6 }}><span className={`kind ${ty.norm_kind || 'direct'}`}>{has(`kind.${ty.norm_kind || 'direct'}`) ? t(`kind.${ty.norm_kind || 'direct'}`) : ty.norm_kind}</span></div></td>
                     <td className="vis">{typeField(ty.code, 'visual', ty.visual)}</td>
-                    <td style={{ fontSize: 13 }}>{ty.refs?.length ? ty.refs.map((r, i) => <div key={i}>{r.point && <b>{pointName(r.point)} — </b>}{docName(r)}{r.url && <> <a href={docUrl(r.url)} target="_blank" rel="noopener"><Icon id="link" /></a></>}</div>) : <span className="muted">—</span>}</td>
+                    <td style={{ fontSize: 13 }}>{ty.refs?.length ? ty.refs.map((r, i) => <div key={i}>{r.point && <b>{pointName(r.point)} - </b>}{docName(r)}{r.url && <> <a href={docUrl(r.url)} target="_blank" rel="noopener"><Icon id="link" /></a></>}</div>) : <span className="muted">-</span>}</td>
                     <td>{LIVE_CODES.has(ty.code) ? <span className="pill ok">{t('yes')}</span> : <span className="muted">{t('rules.recordings')}</span>}</td>
                   </tr>
                 ))}

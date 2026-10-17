@@ -172,7 +172,7 @@ def test_telegram_bot_notifies_without_decisions(tmp_path, video):
             body = {k: _form(req, k) for k in ("chat_id", "caption", "reply_markup")}
         calls.append((method, body))
         if method == "getMe":
-            return httpx.Response(200, json={"ok": True, "result": {"username": "cashguard_test_bot"}})
+            return httpx.Response(200, json={"ok": True, "result": {"username": "phantomguard_test_bot"}})
         return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
 
     def sent(chat) -> list[dict]:
@@ -201,7 +201,7 @@ def test_telegram_bot_notifies_without_decisions(tmp_path, video):
         c.post("/ui/api/auth/logout")
         # operator: a bad code is refused, a fresh one links the account
         login(c, "operator", "op123")
-        assert c.get("/ui/api/auth/telegram").json() == {"enabled": True, "bot": "cashguard_test_bot", "linked": False,
+        assert c.get("/ui/api/auth/telegram").json() == {"enabled": True, "bot": "phantomguard_test_bot", "linked": False,
                                                         "telegram": None, "photos": True}
         bot.handle_update({"update_id": 1, "message": {"chat": {"id": 501, "type": "private"}, "text": "/start bogus",
                                                        "from": {"id": 501}}})
@@ -216,7 +216,7 @@ def test_telegram_bot_notifies_without_decisions(tmp_path, video):
         photo = next(b for m, b in calls if m == "sendPhoto" and str(b["chat_id"]) == "501")
         assert "Найдено возможное нарушение" in photo["caption"]
         kb = _json.loads(photo["reply_markup"])["inline_keyboard"]
-        assert kb == [[{"text": "Открыть в CashGuard", "url": f"https://cg.example.kz/findings/{fid}"}]]
+        assert kb == [[{"text": "Открыть в PhantomGuard", "url": f"https://cg.example.kz/findings/{fid}"}]]
         assert not sent(777) or all("T02" not in (b.get("caption") or "") for b in sent(777)[1:])
         # buttons can no longer decide anything from Telegram
         bot.handle_update({"update_id": 2, "callback_query": {"id": "q", "data": f"a:{st.alerts.list()[0]['id']}:c",

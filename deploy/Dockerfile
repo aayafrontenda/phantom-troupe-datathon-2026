@@ -1,4 +1,4 @@
-# CashGuard service image: web UI built in a Node stage, Python service with ffmpeg.
+# PhantomGuard service image: web UI built in a Node stage, Python service with ffmpeg.
 #   WITH_ML=0 (default): backend + demo analyzer, any machine (Mac, Linux, Windows), ~600 MB.
 #   WITH_ML=1: + PyTorch (CUDA 12.4 wheels bring their own CUDA runtime) + detector weights baked in.
 #              Needs an NVIDIA GPU at runtime (docker-compose.gpu.yml), ~6 GB.

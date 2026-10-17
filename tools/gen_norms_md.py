@@ -17,6 +17,7 @@ KIND = {"direct": "прямая норма", "indirect": "косвенная н�
 def main() -> None:
     kb = load_kb(str(ROOT / "ml" / "rules_kb.yaml"))
     src = kb["sources"]
+    codes = sorted(c for c in kb["violations"] if c != "T99")
     lines = [
         "# Нормативные источники и сопоставление с нарушениями",
         "",
@@ -28,7 +29,7 @@ def main() -> None:
     for key, s in src.items():
         if key == "INTERNAL":
             continue
-        url = f" — [{s['url']}]({s['url']})" if s.get("url") else ""
+        url = f" - [{s['url']}]({s['url']})" if s.get("url") else ""
         lines.append(f"- **{s['act']}.** {s['title']}{url}")
         if s.get("note"):
             lines.append(f"  - {s['note']}")
@@ -37,9 +38,9 @@ def main() -> None:
         "## Принцип сопоставления",
         "",
         "1. Модель фиксирует только видимые действия (кто, что делает, где, когда).",
-        "2. Наблюдение относится к типу из закрытого списка T01–T15; у каждого типа заранее заданы визуальный признак и нормы.",
+        f"2. Наблюдение относится к типу из закрытого списка {codes[0]}–{codes[-1]}; у каждого типа заранее заданы визуальный признак и нормы.",
         "3. В ответ попадают только ссылки из этого списка; где прямой публичной нормы нет, это указано явно.",
-        "4. Вывод формулируется как «признак возможного нарушения» — окончательное решение за проверяющим.",
+        "4. Вывод формулируется как «признак возможного нарушения» - окончательное решение за проверяющим.",
         "",
         "## Типы нарушений",
         "",
@@ -52,7 +53,7 @@ def main() -> None:
             by.setdefault(src[r["src"]]["label"], [])
             if r.get("point"):
                 by[src[r["src"]]["label"]].append(r["point"])
-        refs = [f"{', '.join(p)} — {lbl}" if p else lbl for lbl, p in by.items()]
+        refs = [f"{', '.join(p)} - {lbl}" if p else lbl for lbl, p in by.items()]
         lines.append(f"| {code} | {v['type_name']} | {v['visual']} | {'; '.join(refs)} | {KIND.get(v.get('norm_kind'), '')} |")
     lines += ["", "## Цитаты", ""]
     for code, v in kb["violations"].items():

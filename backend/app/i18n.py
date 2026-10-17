@@ -13,7 +13,7 @@ KB_FILE = Path(__file__).resolve().parents[1] / "i18n-kb.json"
 
 REPORT = {
     "en": {
-        "title": "Check report", "bar": "Check report — print it or save as PDF", "print": "Print / Save PDF", "back": "Back to the check",
+        "title": "Check report", "bar": "Check report - print it or save as PDF", "print": "Print / Save PDF", "back": "Back to the check",
         "h1": "Cash-desk video check", "generated": "Report generated", "check_id": "Check ID",
         "v_bad": "Signs of possible violations detected", "v_ok": "No violation detected",
         "v_bad_sub": "Findings: {n} · reviewed {r} of {n}", "v_ok_sub": "No visually observable sign of a cash-handling violation",
@@ -30,12 +30,12 @@ REPORT = {
                 "visible on the video; transaction records, reconciliations, amounts and identities are not established from video. "
                 "All models run locally on the service; the video was not sent to external services.",
         "op_desc": "Operator’s wording", "ai_desc": "AI description", "decided_by": "Decided by", "comment": "Comment",
-        "verification": "Supervisor verification", "v_agree": "Verified — agrees with the operator", "v_disagree": "Verified — disagrees with the operator",
-        "v_none": "Not verified", "verified_by": "Verified by", "source_camera": "Camera", "footer_brand": "ForteBank · CashGuard",
+        "verification": "Supervisor verification", "v_agree": "Verified - agrees with the operator", "v_disagree": "Verified - disagrees with the operator",
+        "v_none": "Not verified", "verified_by": "Verified by", "source_camera": "Camera", "footer_brand": "ForteBank · PhantomGuard",
         "hash": "Result hash {h} · service {v}.",
     },
     "ru": {
-        "title": "Отчёт о проверке", "bar": "Отчёт о проверке — распечатайте или сохраните в PDF", "print": "Печать / PDF", "back": "Вернуться к проверке",
+        "title": "Отчёт о проверке", "bar": "Отчёт о проверке - распечатайте или сохраните в PDF", "print": "Печать / PDF", "back": "Вернуться к проверке",
         "h1": "Проверка видео с кассы", "generated": "Отчёт сформирован", "check_id": "ID проверки",
         "v_bad": "Обнаружены признаки возможных нарушений", "v_ok": "Нарушение не обнаружено",
         "v_bad_sub": "Находок: {n} · решено {r} из {n}", "v_ok_sub": "Визуальных признаков нарушения работы с наличными не обнаружено",
@@ -48,16 +48,16 @@ REPORT = {
         "why": "Почему это может быть нарушением", "model_note": "Комментарий модели", "regulation": "Норма",
         "quote_note": "", "confidence": "уверенность модели {p}%",
         "sign_name": "Проверил (ФИО)", "sign_pos": "Должность", "sign_date": "Дата и подпись",
-        "foot": "Отчёт — подсказка для проверяющего, а не окончательное юридическое или дисциплинарное заключение. Анализ охватывает "
+        "foot": "Отчёт - подсказка для проверяющего, а не окончательное юридическое или дисциплинарное заключение. Анализ охватывает "
                 "только то, что видно на видео; проводки, сверки, суммы и личности по видео не устанавливаются. "
                 "Все модели работают локально на сервисе; видео не передавалось во внешние сервисы.",
         "op_desc": "Формулировка оператора", "ai_desc": "Описание ИИ", "decided_by": "Решение принял", "comment": "Комментарий",
-        "verification": "Проверка супервайзера", "v_agree": "Проверено — согласен с оператором", "v_disagree": "Проверено — не согласен с оператором",
-        "v_none": "Не проверено", "verified_by": "Проверил", "source_camera": "Камера", "footer_brand": "ForteBank · CashGuard",
+        "verification": "Проверка супервайзера", "v_agree": "Проверено - согласен с оператором", "v_disagree": "Проверено - не согласен с оператором",
+        "v_none": "Не проверено", "verified_by": "Проверил", "source_camera": "Камера", "footer_brand": "ForteBank · PhantomGuard",
         "hash": "Хэш результата {h} · сервис {v}.",
     },
     "kk": {
-        "title": "Тексеру есебі", "bar": "Тексеру есебі — басып шығарыңыз немесе PDF ретінде сақтаңыз", "print": "Басып шығару / PDF", "back": "Тексеруге оралу",
+        "title": "Тексеру есебі", "bar": "Тексеру есебі - басып шығарыңыз немесе PDF ретінде сақтаңыз", "print": "Басып шығару / PDF", "back": "Тексеруге оралу",
         "h1": "Касса бейнежазбасын тексеру", "generated": "Есеп жасалған уақыт", "check_id": "Тексеру ID",
         "v_bad": "Ықтимал бұзушылық белгілері анықталды", "v_ok": "Бұзушылық анықталмады",
         "v_bad_sub": "Табылғандар: {n} · {n} ішінен {r} шешілді", "v_ok_sub": "Қолма-қол ақшамен жұмыс бұзушылығының көзге көрінетін белгілері анықталмады",
@@ -70,12 +70,12 @@ REPORT = {
         "why": "Неліктен бұл бұзушылық болуы мүмкін", "model_note": "Модель жазбасы (орыс тілінде)", "regulation": "Норма",
         "quote_note": "орыс тіліндегі мәтіннен үзінді", "confidence": "модель сенімділігі {p}%",
         "sign_name": "Тексерген (аты-жөні)", "sign_pos": "Лауазымы", "sign_date": "Күні және қолы",
-        "foot": "Бұл есеп — тексерушіге арналған көмекші құрал, түпкілікті заңдық немесе тәртіптік қорытынды емес. Талдау тек бейнеде "
+        "foot": "Бұл есеп - тексерушіге арналған көмекші құрал, түпкілікті заңдық немесе тәртіптік қорытынды емес. Талдау тек бейнеде "
                 "көрінетін нәрсені қамтиды; өткізбелер, салыстырулар, сомалар мен тұлғалар бейне арқылы анықталмайды. "
                 "Барлық модельдер сервисте жергілікті жұмыс істейді; бейне сыртқы сервистерге жіберілмеді.",
         "op_desc": "Оператордың тұжырымы", "ai_desc": "ЖИ сипаттамасы", "decided_by": "Шешім қабылдаған", "comment": "Пікір",
-        "verification": "Супервайзер тексеруі", "v_agree": "Тексерілді — оператормен келіседі", "v_disagree": "Тексерілді — оператормен келіспейді",
-        "v_none": "Тексерілмеген", "verified_by": "Тексерген", "source_camera": "Камера", "footer_brand": "ForteBank · CashGuard",
+        "verification": "Супервайзер тексеруі", "v_agree": "Тексерілді - оператормен келіседі", "v_disagree": "Тексерілді - оператормен келіспейді",
+        "v_none": "Тексерілмеген", "verified_by": "Тексерген", "source_camera": "Камера", "footer_brand": "ForteBank · PhantomGuard",
         "hash": "Нәтиже хэші {h} · сервис {v}.",
     },
 }
@@ -127,7 +127,7 @@ class Translator:
         return (self.lang != "ru" and self._type(v.get("type_code")).get("caveat")) or rule.get("caveat")
 
     def description(self, v: dict) -> dict:
-        """{'why': str|None, 'observed': str|None, 'full': str} — in ru only 'full' is used."""
+        """{'why': str|None, 'observed': str|None, 'full': str} - in ru only 'full' is used."""
         full = short_desc(v.get("description"))
         why = self._type(v.get("type_code")).get("why") if self.lang != "ru" else None
         parts = _OBS_SPLIT.split(full)

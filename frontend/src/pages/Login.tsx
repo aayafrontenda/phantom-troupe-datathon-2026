@@ -23,7 +23,7 @@ export default function LoginPage() {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <div className="brand"><b style={{ fontSize: 28, color: 'var(--brand)', fontWeight: 700, letterSpacing: '-.03em' }}>CashGuard</b></div>
+        <div className="brand"><b style={{ fontSize: 28, color: 'var(--brand)', fontWeight: 700, letterSpacing: '-.03em' }}>PhantomGuard</b></div>
         <h1>{t('login.title')}</h1>
         <p>{t('login.lead')}</p>
         <div className="form">

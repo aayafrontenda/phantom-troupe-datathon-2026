@@ -1,11 +1,11 @@
 # frontend
 
-Web UI of CashGuard: React 19 + Vite + TypeScript, no UI libraries, design system in `src/styles/app.css` (forte.kz look).
+Web UI of PhantomGuard: React 19 + Vite + TypeScript, no UI libraries, design system in `src/styles/app.css` (forte.kz look).
 
 ```bash
 npm ci
 npm run dev        # http://127.0.0.1:5173, proxies the API to http://127.0.0.1:8000 (VITE_BACKEND to change)
-npm run build      # frontend/dist — served by the backend
+npm run build      # frontend/dist - served by the backend
 npm run typecheck
 ```
 

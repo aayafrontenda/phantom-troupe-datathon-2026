@@ -1,9 +1,9 @@
-# CashGuard — base stack (backend + demo analyzer, no GPU). Works on Mac, Linux and Windows.
+# PhantomGuard - base stack (backend + demo analyzer, no GPU). Works on Mac, Linux and Windows.
 #   docker compose up -d --build                         -> http://127.0.0.1:8000
 #   docker compose --profile tunnel up -d                -> + public https://*.trycloudflare.com address
 # Real model on an NVIDIA GPU (Windows / Linux): add the override file, see deploy/DOCKER.md
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
-name: cashguard
+name: phantomguard
 
 services:
   app:
@@ -12,7 +12,7 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         WITH_ML: "0"
-    image: cashguard-app:cpu
+    image: phantomguard-app:cpu
     env_file:
       - path: .env
         required: false
@@ -47,4 +47,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  storage: {}
+  storage:
+    name: cashguard_storage   # data volume created before the rename to PhantomGuard

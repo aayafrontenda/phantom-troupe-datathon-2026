@@ -103,7 +103,7 @@ def main() -> int:
         }
         report.append(row)
         print(f"{row['video']:>5} {row['angle']} {outcome}  gt={r['label_sec'] or '-':>5} {r['type_code'] or '':4}"
-              f" | pred: {row['pred'] or '—'} | dt={row['dt_sec']} type_ok={type_ok} | {row['sec']} s | {row['schema']}")
+              f" | pred: {row['pred'] or '-'} | dt={row['dt_sec']} type_ok={type_ok} | {row['sec']} s | {row['schema']}")
 
     if not report:
         return 1
@@ -135,7 +135,7 @@ def main() -> int:
         summary([x for x in report if x["angle"] == angle], f"ракурс {angle}")
     bad = [x for x in report if x["schema"] != "OK"]
     if bad:
-        print(f"\n!! нарушения схемы ТЗ в {len(bad)} ответах — см. report.csv")
+        print(f"\n!! нарушения схемы ТЗ в {len(bad)} ответах - см. report.csv")
     print(f"\nотчёт: {out_dir / 'report.csv'}")
     return 0
 
