@@ -1,0 +1,62 @@
+# Override for the real pipeline on an NVIDIA GPU (Windows + Docker Desktop/WSL2, or Linux + nvidia-container-toolkit):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+# Starts Ollama (VLM) on the same GPU and pulls VLM_MODEL on first start (~6 GB, once; kept in a volume).
+# To use an Ollama already installed on Windows instead: VLM_URL_DOCKER=http://host.docker.internal:11434
+services:
+  app:
+    build:
+      args:
+        WITH_ML: "1"
+    image: cashguard-app:gpu
+    environment:
+      ANALYZER: ${ANALYZER_DOCKER:-ml}
+      DETECTOR_DEVICE: cuda
+      HF_HUB_OFFLINE: "1"
+      VLM_URL: ${VLM_URL_DOCKER:-http://ollama:11434}
+    shm_size: 4gb
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama:
+    image: ollama/ollama:0.35.1
+    volumes:
+      - ollama:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: "-1"
+      OLLAMA_NUM_PARALLEL: "1"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama-pull:
+    image: ollama/ollama:0.35.1
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull \"$${VLM_MODEL:-qwen2.5vl:7b}\""]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      VLM_MODEL: ${VLM_MODEL:-qwen2.5vl:7b}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  ollama: {}

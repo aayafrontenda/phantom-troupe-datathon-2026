@@ -1,0 +1,170 @@
+{
+  "_comment": "English and Kazakh texts for ml/rules_kb.yaml (Russian stays the source of truth there). Used by the web UI and the printable report.",
+  "types": {
+    "T01": {
+      "en": {"name": "Workstation not locked when leaving the desk",
+             "visual": "The cashier leaves the desk or the cash room while the laptop or monitor screen stays on and unlocked.",
+             "why": "An unattended unlocked workstation creates a risk of unauthorized access to banking systems.",
+             "caveat": "The public rule requires an automatic lock after 30 minutes of inactivity; locking manually when leaving is the bank's internal information security policy."},
+      "kk": {"name": "Жұмыс орнынан кеткенде компьютер бұғатталмаған",
+             "visual": "Кассир үстелден немесе кассадан кетеді, ноутбук не монитор экраны қосулы әрі бұғатталмаған күйде қалады.",
+             "why": "Қараусыз қалған бұғатталмаған жұмыс станциясы банк жүйелеріне рұқсатсыз қол жеткізу қаупін туғызады.",
+             "caveat": "Жария норма 30 минут әрекетсіздіктен кейін автоматты бұғаттауды талап етеді; кетерде қолмен бұғаттау — банктің ішкі ақпараттық қауіпсіздік саясаты."}
+    },
+    "T02": {
+      "en": {"name": "Cash or valuables left unattended at the workplace",
+             "visual": "The cashier leaves; cash, a collection bag or documents remain on the desk.",
+             "why": "Cash must be kept in lockable storage, and the cashier must not leave it unattended."},
+      "kk": {"name": "Қолма-қол ақша немесе құндылықтар жұмыс орнында қараусыз қалдырылған",
+             "visual": "Кассир кетеді, үстелде ақша, инкассаторлық сөмке немесе құжаттар қалады.",
+             "why": "Қолма-қол ақша құлыпталатын құрылғыларда сақталуы тиіс, ал кассир оны қараусыз қалдырмауы керек."}
+    },
+    "T03": {
+      "en": {"name": "Safe left open and unattended",
+             "visual": "The safe door is open; the cashier has walked away or sits at the desk without working with the safe.",
+             "why": "Storage for valuables must be locked, and access to it must rule out unauthorized use."},
+      "kk": {"name": "Сейф ашық күйде қараусыз қалдырылған",
+             "visual": "Сейфтің есігі ашық, кассир алыстап кеткен немесе үстел басында отыр, бірақ сейфпен жұмыс істемейді.",
+             "why": "Құндылықтар қоймасы кілтпен жабылуы тиіс, оған қол жеткізу рұқсатсыз пайдалануды болдырмауы керек."}
+    },
+    "T04": {
+      "en": {"name": "Cash room door left open",
+             "visual": "The cashier came in or went out and the cash room door stayed open.",
+             "why": "The cash unit must be isolated and have an entrance that locks."},
+      "kk": {"name": "Касса үй-жайының есігі жабылмаған",
+             "visual": "Кассир кірді немесе шықты, касса есігі ашық қалды.",
+             "why": "Кассалық торап оқшауланған және құлыпталатын кіреберісі болуы тиіс."}
+    },
+    "T05": {
+      "en": {"name": "Unauthorized person in the cash room",
+             "visual": "Someone who is neither the client being served nor a cash collector enters the cash room or approaches the cashier from the staff side.",
+             "why": "Access to the cash unit is limited to the people responsible for the safety of valuables."},
+      "kk": {"name": "Касса үй-жайында бөгде адам",
+             "visual": "Кассаға қызмет көрсетілетін клиент те, инкассатор да емес адам кіреді немесе кассирге қызметтік жақтан жақындайды.",
+             "why": "Кассалық торапқа тек құндылықтардың сақталуына жауапты адамдар ғана кіре алады."}
+    },
+    "T06": {
+      "en": {"name": "Cash accepted without an identity document",
+             "visual": "The client hands over money right away; no ID being handed over or checked is visible on the video.",
+             "why": "Before accepting cash the cashier identifies the client visually by an ID document.",
+             "caveat": "The document may have been shown off camera or in digital form, so the finding is “not recorded on video”."},
+      "kk": {"name": "Жеке басын куәландыратын құжатсыз қолма-қол ақша қабылдау",
+             "visual": "Клиент бірден ақша береді; куәлікті беру және тексеру бейнеде көрінбейді.",
+             "why": "Қолма-қол ақшаны қабылдамас бұрын кассир клиентті құжат бойынша көзбен сәйкестендіреді.",
+             "caveat": "Құжат кадрдан тыс немесе цифрлық түрде көрсетілуі мүмкін, сондықтан «бейнеде тіркелмеген» деп жазылады."}
+    },
+    "T07": {
+      "en": {"name": "Previous client's cash not put away while serving the next one",
+             "visual": "The previous client has left, the money stays on the desk, the next client comes in.",
+             "why": "Only the current client's cash may be on the desk; cash accepted earlier belongs in lockable storage."},
+      "kk": {"name": "Келесі клиентке қызмет көрсеткенде алдыңғы клиенттің ақшасы жиналмаған",
+             "visual": "Алдыңғы клиент кетті, ақша үстелде қалды, келесі клиент кіреді.",
+             "why": "Жұмыс орнында тек қызмет көрсетіліп жатқан клиенттің ақшасы болуы тиіс, бұрын қабылданғаны құлыпталатын құрылғыларда сақталады."}
+    },
+    "T08": {
+      "en": {"name": "Handling cash of different clients at the same time",
+             "visual": "The previous client's money is on the desk while the cashier accepts or counts the new client's money.",
+             "why": "Cash is accepted separately for each cash document; mixing it creates a risk of errors and shortages."},
+      "kk": {"name": "Әртүрлі клиенттердің қолма-қол ақшасымен бір мезгілде жұмыс істеу",
+             "visual": "Үстелде алдыңғы клиенттің ақшасы жатыр, ал кассир жаңа клиенттің ақшасын қабылдайды немесе санайды.",
+             "why": "Қолма-қол ақша әр кассалық құжат бойынша бөлек қабылданады, араласу қате мен жетіспеушілік қаупін туғызады."}
+    },
+    "T09": {
+      "en": {"name": "Cash operation not completed in the client's presence",
+             "visual": "The client leaves while the cashier keeps counting their money.",
+             "why": "Cash is accepted and counted in the client's presence."},
+      "kk": {"name": "Қолма-қол ақшамен операция клиенттің қатысуымен аяқталмаған",
+             "visual": "Клиент кетеді, ал кассир оның ақшасын санауды жалғастырады.",
+             "why": "Қолма-қол ақша клиенттің қатысуымен қабылданады және саналады."}
+    },
+    "T10": {
+      "en": {"name": "Banknote set aside during checking returned to the client",
+             "visual": "After the counting machine or a visual check, the cashier sets a banknote aside and hands it back to the client.",
+             "why": "Doubtful banknotes are sent for examination; banknotes with signs of forgery are not returned to the client.",
+             "caveat": "The video cannot show that the banknote was doubtful, only that it was set aside and returned."},
+      "kk": {"name": "Тексеру кезінде бөлінген банкнотты клиентке қайтару",
+             "visual": "Санау машинасынан немесе көзбен тексеруден кейін кассир банкнотты бөліп, клиентке қайтарады.",
+             "why": "Күмәнді банкноттар сараптамаға жіберіледі, жалғандық белгілері бар банкноттар клиентке қайтарылмайды.",
+             "caveat": "Бейнеден банкноттың күмәнді екенін анықтау мүмкін емес — тек оның бөлініп, қайтарылғаны көрінеді."}
+    },
+    "T11": {
+      "en": {"name": "Collection bag accepted from a cash collector without paperwork",
+             "visual": "The cash collector leaves a bag and goes; no documents being passed or checked are visible.",
+             "why": "A bag is accepted against an accompanying document, with its integrity and seals checked."},
+      "kk": {"name": "Инкассатордан сөмкені рәсімдеусіз қабылдау",
+             "visual": "Инкассатор сөмкені қалдырып кетеді; құжаттарды беру мен тексеру көрінбейді.",
+             "why": "Сөмке ілеспе құжат бойынша, тұтастығы мен пломбалары тексеріліп қабылданады."}
+    },
+    "T12": {
+      "en": {"name": "Valuables put in the safe without counting",
+             "visual": "Bags are opened and the bundles go straight into the safe; no counting or counting machine is visible.",
+             "why": "The contents are counted before the valuables are put into storage."},
+      "kk": {"name": "Құндылықтар санаусыз сейфке салынған",
+             "visual": "Сөмкелер ашылып, бумалар бірден сейфке апарылады; санау да, санау машинасы да көрінбейді.",
+             "why": "Құндылықтарды сақтауға салмас бұрын олардың ішіндегісі саналады."}
+    },
+    "T13": {
+      "en": {"name": "Personal belongings at the cashier's workplace",
+             "visual": "A bag, backpack or outerwear on the cashier's desk.",
+             "why": "Employees' personal belongings are kept outside the cash unit."},
+      "kk": {"name": "Кассирдің жұмыс орнындағы жеке заттар",
+             "visual": "Кассирдің жұмыс үстелінде сөмке, рюкзак немесе сырт киім жатыр.",
+             "why": "Қызметкерлердің жеке заттары кассалық тораптан тыс сақталады."}
+    },
+    "T14": {
+      "en": {"name": "Eating or drinking at the workplace while handling cash",
+             "visual": "The cashier eats or drinks with cash lying nearby.",
+             "why": "Food and drinks at the workplace risk damaging valuables and distract the cashier."},
+      "kk": {"name": "Қолма-қол ақшамен жұмыс кезінде жұмыс орнында тамақтану немесе сусын ішу",
+             "visual": "Кассир тамақ жейді немесе сусын ішеді, жанында қолма-қол ақша жатыр.",
+             "why": "Жұмыс орнындағы тамақ пен сусын құндылықтарды бүлдіру және назар аударту қаупін туғызады."}
+    },
+    "T15": {
+      "en": {"name": "Smartphone in the cash room",
+             "visual": "The cashier holds or uses a mobile phone (a smartphone with a camera).",
+             "why": "Only communication devices without photo or video capability are allowed in the cash unit."},
+      "kk": {"name": "Касса үй-жайында смартфон",
+             "visual": "Кассир ұялы телефонды (камерасы бар смартфонды) ұстап тұр немесе пайдаланады.",
+             "why": "Кассалық торапқа тек фото- және бейнетүсіру мүмкіндігі жоқ байланыс құралдары ғана рұқсат етіледі."}
+    },
+    "T99": {
+      "en": {"name": "Violation type not determined"},
+      "kk": {"name": "Бұзушылық түрі анықталмаған"}
+    },
+    "EMPTY": {
+      "en": {"name": "Workplace empty"},
+      "kk": {"name": "Жұмыс орны бос"}
+    },
+    "MOTION": {
+      "en": {"name": "Motion (demo analyzer)"},
+      "kk": {"name": "Қозғалыс (демо талдағыш)"}
+    }
+  },
+  "sources": {
+    "NB231": {
+      "match": "V1900019680",
+      "en": "Rules for cash operations and cash collection (National Bank Board resolution No. 231 of 29.11.2019)",
+      "kk": "Кассалық операцияларды және инкассация операцияларын жүзеге асыру қағидалары (ҚР Ұлттық Банкі Басқармасының 2019 жылғы 29 қарашадағы № 231 қаулысы)"
+    },
+    "NB14": {
+      "match": "V2000020075",
+      "en": "Rules for the security and layout of bank premises (National Bank Board resolution No. 14 of 24.02.2020)",
+      "kk": "Банк үй-жайларының күзетін ұйымдастыру және оларды жайластыру қағидалары (ҚР Ұлттық Банкі Басқармасының 2020 жылғы 24 ақпандағы № 14 қаулысы)"
+    },
+    "ARDFM53": {
+      "match": "V2600038336",
+      "en": "Information security requirements for banks (Financial Market Regulation Agency Board resolution No. 53 of 03.04.2026)",
+      "kk": "Банктердің ақпараттық қауіпсіздігін қамтамасыз етуге қойылатын талаптар (ҚНРДА Басқармасының 2026 жылғы 3 сәуірдегі № 53 қаулысы)"
+    },
+    "AML191": {
+      "match": "Z090000191_",
+      "en": "Law of the Republic of Kazakhstan No. 191-IV of 28.08.2009 on countering money laundering and terrorist financing",
+      "kk": "Қылмыстық жолмен алынған кірістерді заңдастыруға (жылыстатуға) және терроризмді қаржыландыруға қарсы іс-қимыл туралы ҚР 2009 жылғы 28 тамыздағы № 191-IV Заңы"
+    },
+    "INTERNAL": {
+      "match": "",
+      "en": "Bank's internal requirements (no public regulation identified)",
+      "kk": "Банктің ішкі талаптары (жария нормативтік дереккөз анықталмаған)"
+    }
+  }
+}

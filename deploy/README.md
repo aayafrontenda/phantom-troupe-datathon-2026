@@ -22,7 +22,10 @@ copy .env.example .env      # ANALYZER=ml, API_KEY=<ключ для жюри>, V
 powershell -ExecutionPolicy Bypass -File deploy\run_server.ps1
 ```
 
-Проверка: http://127.0.0.1:8000 (интерфейс), http://127.0.0.1:8000/health.
+Проверка: http://127.0.0.1:8000 (интерфейс), http://127.0.0.1:8000/health, http://127.0.0.1:8000/ready
+(200 — воркер прогрет, можно отдавать адрес жюри; 503 — ещё грузит модели или анализатор не стартовал — см. storage/server.log).
+
+Или всё в Docker одной командой (GPU + Ollama + туннель): `powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel` — см. `deploy/DOCKER.md`.
 
 ## 3. Публичный адрес (Cloudflare Tunnel)
 
@@ -44,7 +47,7 @@ python tools/smoke_test.py --url https://<адрес> --key <ключ> --dir dat
 
 ## 4. Перед сдачей
 
-- `API_KEY` в `.env` задан явно (иначе ключ лежит в `storage/api_key.txt`).
+- `API_KEY` и `ADMIN_KEY` в `.env` заданы явно (иначе ключ лежит в `storage/api_key.txt`); `PUBLIC_URL` — адрес туннеля.
 - `HF_HUB_OFFLINE=1` в `.env` — сервис не ходит в интернет за весами.
-- Прогнаны все 40 видео и 5 видео одновременно через публичный адрес; каждое < 300 с.
+- Прогнаны все 40 видео и 10 видео одновременно через публичный адрес (`tools/loadtest.py --uploads 10 --unique`); каждое < 300 с, `partial 0`.
 - Терминалы с `run_server.ps1` и `cloudflared` открыты, ноутбук на зарядке.

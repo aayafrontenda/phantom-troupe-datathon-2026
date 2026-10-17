@@ -2,205 +2,64 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CashGuard — проверка кассы</title>
-<style>
-  :root {
-    --bg: #f6f7f9; --card: #ffffff; --ink: #14171f; --muted: #5d6573; --line: #e3e6eb;
-    --accent: #c8102e; --ok: #127a3a; --ok-bg: #e7f5ec; --bad: #b42318; --bad-bg: #fdecea;
-    --chip: #eef1f5; --track: #dfe3e8; --mark: #c8102e;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --ink: #e8eaee; --muted: #9aa3b2; --line: #2a2f39;
-      --ok: #4cc27a; --ok-bg: #12301f; --bad: #ff7a6b; --bad-bg: #3a1714; --chip: #222733; --track: #2a2f39; --mark: #ff5a6e; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
-  header b { font-size: 17px; } header .sp { flex: 1; } header a { color: var(--muted); text-decoration: none; font-size: 14px; }
-  .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; color: #fff; font-weight: 700; }
-  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
-  .drop { display: block; border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center; background: var(--card); cursor: pointer; }
-  .drop.over { border-color: var(--accent); }
-  .drop p { margin: 6px 0; color: var(--muted); }
-  .btn { display: inline-block; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; margin-top: 16px; align-items: start; }
-  .grid > .card { position: sticky; top: 12px; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } .grid > .card { position: static; } .sub { display: none; } }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
-  video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; display: block; }
-  .bar { position: relative; height: 16px; background: var(--track); border-radius: 8px; margin-top: 10px; cursor: pointer; }
-  .bar .m { position: absolute; top: -3px; width: 4px; height: 22px; background: var(--mark); border-radius: 2px; transform: translateX(-2px); }
-  .bar .ph { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .6; }
-  .tracks { margin-top: 10px; display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; font-size: 12px; color: var(--muted); align-items: center; }
-  .tracks canvas { width: 100%; height: 10px; border-radius: 3px; background: var(--track); }
-  .status { margin-top: 10px; }
-  .progress { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; margin-top: 6px; }
-  .progress > div { height: 100%; background: var(--accent); width: 0; transition: width .4s; }
-  .verdict { border-radius: 12px; padding: 14px 16px; font-size: 18px; font-weight: 650; margin-bottom: 12px; }
-  .verdict.ok { background: var(--ok-bg); color: var(--ok); } .verdict.bad { background: var(--bad-bg); color: var(--bad); }
-  .note { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
-  .v { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; background: var(--card); }
-  .v h3 { margin: 0 0 4px; font-size: 16px; } .v .meta { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; }
-  .tc { color: var(--accent); font-weight: 650; cursor: pointer; }
-  .frames { display: flex; gap: 6px; margin: 8px 0; overflow-x: auto; }
-  .frames img { height: 120px; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; }
-  .chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 1px 9px; font-size: 12px; }
-  details { margin-top: 6px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-  .ref { font-size: 13px; margin: 6px 0; } .ref q { color: var(--muted); } .ref a { color: inherit; }
-  .fb { display: flex; gap: 6px; margin-top: 8px; } .fb .btn { padding: 4px 10px; font-size: 13px; }
-  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; place-items: center; z-index: 9; }
-  .lightbox img { max-width: 95vw; max-height: 92vh; }
-  .err { color: var(--bad); }
-  .hidden { display: none !important; }
-</style>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CashGuard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23C8235F'/%3E%3Ccircle cx='12' cy='12' r='6' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<script>try{const t=localStorage.getItem('cg_theme');if(t)document.documentElement.dataset.theme=t;const l=localStorage.getItem('cg_lang');if(l)document.documentElement.lang=l;}catch(e){}</script>
+<link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<header>
-  <div class="logo">C</div><b>CashGuard</b><span class="sub" style="color:var(--muted)">проверка кассовой дисциплины по видео</span>
-  <span class="sp"></span><a href="/live.html">Live-режим →</a>
-</header>
-<main>
-  <label class="drop" id="drop">
-    <input type="file" id="file" accept=".mov,.mp4,.m4v,video/quicktime,video/mp4" hidden>
-    <b>Перетащите видео (.mov) или нажмите, чтобы выбрать</b>
-    <p>Анализ выполняется локально на сервере команды, видео не передаётся в облачные сервисы</p>
-  </label>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 15v4.5h14V15"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4.2M12 17.2v.3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.6-3.4 8.1-8 9-4.6-.9-8-4.4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 3.5v17M16 3.5v17M4 9h4M4 15h4M16 9h4M16 15h4"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><rect x="3" y="6.5" width="13" height="11" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5M18 14v5.5H4.5V6H10"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.5v5l4-2.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+</svg>
 
-  <div class="grid hidden" id="work">
-    <div class="card">
-      <video id="video" controls playsinline></video>
-      <div class="bar" id="bar"><div class="ph" id="ph"></div></div>
-      <div class="tracks" id="tracks"></div>
-      <div class="status" id="status"></div>
-      <div class="progress"><div id="pbar"></div></div>
-    </div>
-    <div>
-      <div id="result"></div>
-    </div>
+<header class="top">
+  <a class="brand" href="/" data-nav="checks">
+    <span class="lens" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></svg></span>
+    <b>CashGuard</b>
+  </a>
+  <nav class="tabs" aria-label="Sections" data-i18n-aria="nav.sections">
+    <a href="/" class="tab" data-nav="checks"><span data-i18n="nav.checks">Checks</span></a>
+    <a href="/?view=live" class="tab" data-nav="live"><span data-i18n="nav.live">Live monitoring</span> <span class="badge" id="alertBadge" hidden></span></a>
+    <a href="/?view=rules" class="tab" data-nav="rules"><span data-i18n="nav.rules">Rules</span></a>
+  </nav>
+  <div class="top-right">
+    <span class="status" id="status" data-i18n-title="status.title"><i class="dot"></i><span data-i18n="status.connecting">Connecting…</span></span>
+    <div class="lang-sw" role="group" aria-label="Language" data-i18n-aria="lang"><button data-lang="ru" lang="ru">РУС</button><button data-lang="kk" lang="kk">ҚАЗ</button><button data-lang="en" lang="en">ENG</button></div>
+    <button class="icon-btn ghost" id="themeBtn" aria-label="Switch theme" data-i18n-aria="theme" data-i18n-title="theme"><svg class="i"><use href="#i-moon"/></svg></button>
   </div>
-</main>
-<div class="lightbox" id="lb"><img id="lbimg" alt=""></div>
+</header>
 
-<script>
-const $ = s => document.querySelector(s);
-const STAGES = { queued: 'В очереди', started: 'Запуск', frames: 'Чтение кадров', detection: 'Детекция людей и предметов',
-  vlm: 'Проверка событий моделью', report: 'Формирование отчёта', done: 'Готово', failed: 'Ошибка' };
-const KIND = { direct: 'прямая норма', indirect: 'косвенная норма', internal: 'внутренний регламент' };
-let jobId = null, duration = 0, current = null;
+<main id="main"></main>
 
-function key() { try { return localStorage.getItem('apiKey') || ''; } catch { return ''; } }
-async function api(path, opts = {}) {
-  const headers = Object.assign({}, opts.headers || {}, key() ? { 'X-API-Key': key() } : {});
-  const r = await fetch(path, Object.assign({}, opts, { headers }));
-  if (r.status === 401) {
-    const k = prompt('Введите API-ключ');
-    if (k) { try { localStorage.setItem('apiKey', k); } catch {} return api(path, opts); }
-  }
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || r.statusText);
-  return data;
-}
-const fmt = s => { const m = Math.floor(s / 60), x = (s - m * 60).toFixed(1).padStart(4, '0'); return `${String(m).padStart(2, '0')}:${x}`; };
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+<div class="modal" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" id="modalCard"></div></div>
+<div class="lightbox" id="lightbox" hidden><img alt="Evidence frame"><div class="lb-cap mono" id="lbCap"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<input type="file" id="filePick" accept=".mov,.mp4,.m4v,video/quicktime,video/mp4" multiple hidden>
 
-const drop = $('#drop');
-['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', ev => ev.dataTransfer.files[0] && start(ev.dataTransfer.files[0]));
-$('#file').addEventListener('change', ev => ev.target.files[0] && start(ev.target.files[0]));
-
-async function start(file) {
-  $('#work').classList.remove('hidden');
-  $('#result').innerHTML = ''; $('#tracks').innerHTML = '';
-  document.querySelectorAll('#bar .m').forEach(m => m.remove());
-  const v = $('#video'); v.src = URL.createObjectURL(file);
-  v.onloadedmetadata = () => { duration = v.duration; };
-  setStatus('Загрузка видео…', 0.02);
-  const fd = new FormData(); fd.append('file', file);
-  try {
-    const r = await api('/ui/api/analyze', { method: 'POST', body: fd });
-    jobId = r.job_id; poll();
-  } catch (e) { setStatus(`<span class="err">Ошибка загрузки: ${esc(e.message)}</span>`, 0); }
-}
-function setStatus(html, p) { $('#status').innerHTML = html; $('#pbar').style.width = `${Math.round((p || 0) * 100)}%`; }
-
-async function poll() {
-  const id = jobId;
-  const t0 = Date.now();
-  while (id === jobId) {
-    let j;
-    try { j = await api(`/ui/api/jobs/${id}`); } catch (e) { setStatus(`<span class="err">${esc(e.message)}</span>`, 0); return; }
-    const sec = ((Date.now() - t0) / 1000).toFixed(0);
-    if (j.status === 'processing') {
-      setStatus(`${STAGES[j.stage] || j.stage || 'Обработка'} · ${sec} с` + (j.queue_position ? ` · в очереди: ${j.queue_position}` : ''), j.progress);
-      await new Promise(r => setTimeout(r, 1000));
-      continue;
-    }
-    if (j.status === 'failed') { setStatus(`<span class="err">Не удалось обработать видео: ${esc(j.error)}</span>`, 0); return; }
-    setStatus(`Готово за ${j.processing_sec ?? sec} с`, 1);
-    render(j); return;
-  }
-}
-
-function render(j) {
-  current = j;
-  const dur = duration || j.meta?.duration_sec || 1;
-  const bad = j.verdict === 'violation';
-  let html = `<div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? 'Обнаружены признаки возможных нарушений' : 'Нарушение не обнаружено'}</div>
-    <p class="note">Результат — подсказка для проверки человеком, а не окончательное юридическое или дисциплинарное заключение.</p>`;
-  j.violations.forEach((v, i) => {
-    const refs = (v.rule?.refs || []).map(r => `<div class="ref">• ${esc(r.point)} — ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.document)}</a>` : esc(r.document)}
-      ${r.quote ? `<br><q>${esc(r.quote)}</q>` : r.paraphrase ? `<br><i>${esc(r.paraphrase)}</i>` : ''}</div>`).join('');
-    html += `<div class="v" id="v${i}">
-      <h3>${i + 1}. ${esc(v.type)}</h3>
-      <div class="meta"><span class="tc" data-t="${v.timecode_sec}">▶ ${fmt(v.timecode_sec)}</span>
-        ${v.confidence != null ? `<span>уверенность ${Math.round(v.confidence * 100)}%</span>` : ''}
-        ${v.rule?.kind ? `<span class="chip">${KIND[v.rule.kind] || v.rule.kind}</span>` : ''}</div>
-      <div class="frames">${v.evidence_frames.map(f => `<img src="data:image/jpeg;base64,${f.image_base64}" data-t="${f.timestamp_sec}" title="${fmt(f.timestamp_sec)}" alt="кадр ${fmt(f.timestamp_sec)}">`).join('')}</div>
-      <div>${esc(v.description)}</div>
-      ${refs ? `<details><summary>Нормативное основание</summary>${refs}${v.rule?.caveat ? `<div class="ref"><i>${esc(v.rule.caveat)}</i></div>` : ''}</details>` : ''}
-      <div class="fb"><button class="btn" data-fb="confirm" data-i="${i}">✓ Подтвердить</button><button class="btn" data-fb="reject" data-i="${i}">✕ Ложное срабатывание</button></div>
-    </div>`;
-    const m = document.createElement('div'); m.className = 'm'; m.style.left = `${Math.min(100, v.timecode_sec / dur * 100)}%`; m.title = `${fmt(v.timecode_sec)} — ${v.type}`;
-    m.onclick = ev => { ev.stopPropagation(); seek(v.timecode_sec); document.getElementById(`v${i}`).scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
-    $('#bar').appendChild(m);
-  });
-  $('#result').innerHTML = html;
-  drawTracks(j.timeline, dur);
-}
-
-function drawTracks(tl, dur) {
-  if (!tl || !tl.t?.length) return;
-  const rows = [['people', 'Людей в кадре'], ['screen_on', 'Экран включён'], ['phone', 'Телефон'], ['drink', 'Еда/напиток'], ['bag', 'Сумка']];
-  const box = $('#tracks'); box.innerHTML = '';
-  const css = getComputedStyle(document.documentElement);
-  rows.forEach(([k, label]) => {
-    const vals = tl[k]; if (!vals || !vals.some(Boolean)) return;
-    const name = document.createElement('div'); name.textContent = label;
-    const c = document.createElement('canvas'); c.width = 600; c.height = 10;
-    const g = c.getContext('2d'); const max = Math.max(...vals, 1);
-    tl.t.forEach((t, i) => { if (!vals[i]) return; g.globalAlpha = 0.35 + 0.65 * vals[i] / max; g.fillStyle = css.getPropertyValue('--mark');
-      const x = t / dur * 600, w = Math.max(2, 600 / tl.t.length); g.fillRect(x, 0, w, 10); });
-    box.append(name, c);
-  });
-}
-
-function seek(t) { const v = $('#video'); v.currentTime = Math.max(0, t - 1); v.play().catch(() => {}); }
-$('#bar').addEventListener('click', ev => { const r = ev.currentTarget.getBoundingClientRect(); seek(((ev.clientX - r.left) / r.width) * (duration || 0) + 1); });
-$('#video').addEventListener('timeupdate', ev => { if (duration) $('#ph').style.left = `${ev.target.currentTime / duration * 100}%`; });
-$('#result').addEventListener('click', async ev => {
-  const el = ev.target;
-  if (el.matches('.tc')) seek(+el.dataset.t);
-  if (el.matches('.frames img')) { $('#lbimg').src = el.src; $('#lb').style.display = 'grid'; }
-  if (el.dataset.fb) {
-    try { await api(`/ui/api/jobs/${jobId}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ violation_index: +el.dataset.i, decision: el.dataset.fb }) });
-      el.parentElement.innerHTML = `<span class="chip">${el.dataset.fb === 'confirm' ? 'Подтверждено' : 'Отмечено как ложное'}</span>`; } catch (e) { alert(e.message); }
-  }
-});
-$('#lb').addEventListener('click', () => { $('#lb').style.display = 'none'; });
-</script>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

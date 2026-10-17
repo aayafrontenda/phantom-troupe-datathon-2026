@@ -1,0 +1,50 @@
+# Alert policy. Severity decides who is notified and how fast it escalates.
+# Roles: operator (cashier's supervisor on the floor), supervisor (branch / security), admin (service health).
+defaults:
+  severity: medium
+  dedup_window_sec: 300        # same type on the same camera/job within this window -> one alert with a counter
+  cooldown_sec: 60             # minimum gap between two alerts of the same type on the same camera
+
+severity_by_type:
+  T03: critical   # safe left open
+  T05: critical   # unauthorized person in the cash area
+  T02: high       # cash left unattended
+  T04: high       # cash room door left open
+  T07: high       # previous client's cash still on the desk
+  T08: high       # cash of two clients handled at once
+  T11: high       # collector bag without paperwork
+  T12: high       # valuables into the safe without counting
+  T01: medium     # workstation not locked
+  T06: medium     # cash accepted without a document
+  T09: medium     # client left before the operation ended
+  T10: medium     # banknote returned after verification
+  T15: medium     # smartphone in the cash area
+  T99: medium     # unclassified
+  T13: low        # personal items on the desk
+  T14: low        # food / drinks
+  EMPTY: info     # workplace empty (live only)
+  MOTION: info    # mock live analyzer (no model) — never notifies anyone
+
+routing:
+  critical:
+    notify: [operator, supervisor]   # both at once; operator cannot hide it
+    escalate_after_sec: 120          # unacknowledged -> escalation level 1 (supervisor again + webhook)
+  high:
+    notify: [operator]
+    escalate_to: supervisor
+    escalate_after_sec: 300
+  medium:
+    notify: [operator]
+    escalate_to: supervisor
+    escalate_after_sec: 900
+  low:
+    notify: [operator]
+    escalate_after_sec: 0            # 0 = never escalate
+  info:
+    notify: []
+    escalate_after_sec: 0
+
+channels:
+  operator: [web, telegram]
+  supervisor: [web, telegram, email, webhook]
+  admin: [web, telegram]
