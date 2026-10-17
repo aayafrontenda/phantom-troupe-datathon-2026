@@ -172,7 +172,7 @@ class CameraManager:
             src: Any = cam["url"]
             if isinstance(src, str) and src.isdigit():
                 src = int(src)
-            cap = cv2.VideoCapture(src)
+            cap = _open(src)
             if not cap.isOpened():
                 st.status, st.last_error = "offline", f"cannot open {_redact(str(cam['url']))}"
                 self._refresh_gauge()
@@ -277,3 +277,14 @@ def _redact(url: str) -> str:
         scheme, rest = url.split("://", 1)
         return f"{scheme}://***@{rest.split('@', 1)[1]}"
     return url
+
+
+def _open(src: Any):
+    """Network streams get open/read timeouts: a dead RTSP camera turns offline in seconds, not after FFmpeg's 30 s."""
+    if isinstance(src, str) and "://" in src:
+        ms = int(get_settings().camera_reconnect_sec * 1000) or 5000
+        try:
+            return cv2.VideoCapture(src, cv2.CAP_FFMPEG, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, ms, cv2.CAP_PROP_READ_TIMEOUT_MSEC, ms])
+        except Exception:
+            pass
+    return cv2.VideoCapture(src)

@@ -126,7 +126,10 @@ def _mount_frontend(app: FastAPI) -> None:
     index = dist / "index.html"
     if not index.exists():
         @app.get("/", include_in_schema=False)
-        def _no_frontend():
+        def _no_frontend(request: Request):
+            if _is_api_host(request):
+                from .routers.jury import api_index
+                return JSONResponse(api_index(request.app.state.st))
             return JSONResponse({"detail": "Frontend is not built: run `npm ci && npm run build` in frontend/ "
                                            "(or ./deploy/run_server.sh). The API is available under /api, /ui/api."})
         return
@@ -135,8 +138,7 @@ def _mount_frontend(app: FastAPI) -> None:
     @app.get("/{path:path}", include_in_schema=False)
     def _spa(path: str, request: Request):
         st = request.app.state.st
-        host = (request.headers.get("host") or "").split(":")[0].lower()
-        if host and host in st.settings.api_hosts:
+        if _is_api_host(request):
             from .routers.jury import api_index
             if not path:
                 return JSONResponse(api_index(st))
@@ -145,6 +147,11 @@ def _mount_frontend(app: FastAPI) -> None:
         if path and candidate.is_file() and dist in candidate.resolve().parents:
             return FileResponse(str(candidate))
         return FileResponse(str(index), headers={"Cache-Control": "no-cache"})
+
+
+def _is_api_host(request: Request) -> bool:
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    return bool(host) and host in request.app.state.st.settings.api_hosts
 
 
 def _plain(errors: list) -> list:

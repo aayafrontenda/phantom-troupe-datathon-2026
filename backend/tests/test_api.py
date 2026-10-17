@@ -466,4 +466,7 @@ def test_api_host_serves_no_ui(app_factory):
         assert c.get("/health", headers={"Host": "api.example.com"}).status_code == 200
         assert c.get("/api/v1/jobs/x", headers={"Host": "api.example.com", "X-API-Key": "test-key"}).status_code == 404
         ui = c.get("/", headers={"Host": "ui.example.com"})
-        assert ui.status_code == 200 and "text/html" in ui.headers["content-type"]
+        from pathlib import Path
+        built = (Path(__file__).resolve().parents[2] / "frontend" / "dist" / "index.html").exists()
+        assert ui.status_code == 200
+        assert ("text/html" in ui.headers["content-type"]) if built else ("not built" in ui.json()["detail"])
