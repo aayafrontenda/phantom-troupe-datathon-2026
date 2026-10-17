@@ -6,6 +6,17 @@ import { useI18n } from '../i18n';
 import type { Finding, FindingBrief, Frame, Rule } from '../types';
 import { Icon, observedPart, shortDesc, tc, useUi } from '../ui';
 
+export function Conf({ f }: { f: { confidence: number | null; below_threshold?: boolean } }) {
+  const { t } = useI18n();
+  if (f.confidence == null) return null;
+  return (
+    <span className="muted small" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+      {t('f.confidence', { p: Math.round(f.confidence * 100) })}
+      {f.below_threshold && <span className="pill xs neutral" title={t('f.belowThresholdTip')}>{t('f.belowThreshold')}</span>}
+    </span>
+  );
+}
+
 export function FrameStrip({ frames, keyT, caption }: { frames: Frame[]; keyT?: number | null; caption: string }) {
   const { t } = useI18n();
   const { zoom } = useUi();
@@ -119,12 +130,12 @@ export function DecisionBar({ f, onChange, editable, names }: { f: FindingBrief;
           {editable && <button className="btn xs ghost" disabled={busy} onClick={e => { e.stopPropagation(); decide(null); }}><Icon id="undo" />{t('f.undo')}</button>}
         </div>
         <span className="sp" />
-        {f.confidence != null && <span className="muted small">{t('f.confidence', { p: Math.round(f.confidence * 100) })}</span>}
+        <Conf f={f} />
       </div>
     );
   }
   if (!editable) {
-    return <div className="find-f"><span className="pill warn">{t('fd.notDecided')}</span><span className="sp" />{f.confidence != null && <span className="muted small">{t('f.confidence', { p: Math.round(f.confidence * 100) })}</span>}</div>;
+    return <div className="find-f"><span className="pill warn">{t('fd.notDecided')}</span><span className="sp" /><Conf f={f} /></div>;
   }
   return (
     <div className="find-f" onClick={e => e.stopPropagation()}>
@@ -132,7 +143,7 @@ export function DecisionBar({ f, onChange, editable, names }: { f: FindingBrief;
       <button className="btn sm yes" disabled={busy} onClick={() => decide('confirm')}><Icon id="check" />{t('f.yes')}</button>
       <button className="btn sm no" disabled={busy} onClick={() => decide('reject')}><Icon id="x" />{t('f.no')}</button>
       <input className="field sm" style={{ flex: '1 1 200px', maxWidth: 360 }} placeholder={t('f.comment')} value={comment} onChange={e => setComment(e.target.value)} maxLength={1000} />
-      {f.confidence != null && <span className="muted small">{t('f.confidence', { p: Math.round(f.confidence * 100) })}</span>}
+      <Conf f={f} />
     </div>
   );
 }

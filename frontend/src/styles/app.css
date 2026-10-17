@@ -382,6 +382,48 @@ details.tech[open] > summary .i{transform:rotate(90deg)}
 .toast.err{background:var(--bad);color:#fff}
 @keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 
+/* ---- AI quality ---- */
+.q-stats .stat{cursor:default}
+.q-stats .stat:hover{background:var(--surface-2)}
+.stat .sub{margin-top:10px;font-size:13px;min-height:22px}
+.stat .sub a{font-weight:600;text-decoration:none}
+.stat .sub a:hover{text-decoration:underline}
+.q-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;margin-bottom:20px}
+.q-grid h2,.q-card-head h2,.q-loop h2{font-size:20px;margin-bottom:4px}
+.q-grid .card.pad > p{margin-bottom:18px}
+.q-grid .note{margin:18px 0 0}
+.q-card-head{padding:22px 22px 8px}
+.q-bars{display:grid;gap:12px}
+.q-bar{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 170px;gap:14px;align-items:center;cursor:pointer;border-radius:10px}
+.q-bar:hover .lab span:last-child{color:var(--brand)}
+.q-bar .lab{display:flex;gap:10px;align-items:center;min-width:0;font-size:14px}
+.q-bar .lab span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q-bar .code{font-weight:700;color:var(--plum);font-size:12.5px;background:var(--surface-2);padding:2px 8px;border-radius:999px;flex:none}
+.q-bar .track{position:relative;height:14px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.q-bar .track i{position:absolute;inset:0 auto 0 0;background:var(--brand);border-radius:999px}
+.q-bar .track em{position:absolute;left:0;bottom:0;height:3px;background:var(--line-2);border-radius:999px;opacity:0}
+.q-bar .val{font-size:14px;white-space:nowrap;color:var(--muted);display:flex;flex-direction:column;align-items:flex-start;gap:3px;line-height:1.2}
+.q-cols{display:flex;gap:10px;align-items:stretch;height:190px;padding-top:4px}
+.q-col{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.q-col .v{font-size:12.5px;color:var(--muted);height:18px}
+.q-col .stack{flex:1;width:100%;display:flex;align-items:flex-end;background:var(--surface-3);border-radius:10px;padding:0 6px}
+.q-col .stack i{display:block;width:100%;border-radius:8px 8px 4px 4px;background:var(--line-2)}
+.q-col .stack i.now{background:var(--brand)}
+.q-col .w{font-size:12px;color:var(--faint)}
+.q-mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.q-mini div{background:var(--surface-2);border-radius:var(--r2);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.q-mini b{font-size:22px;color:var(--plum);line-height:1.1}
+.q-mini span{font-size:12.5px;color:var(--muted)}
+.table tr.q-flag td{background:var(--brand-soft)}
+.table tr.q-flag.click:hover td{background:var(--brand-soft);filter:brightness(.97)}
+.q-why{color:var(--brand-ink);font-weight:600}
+.q-hot{color:var(--brand-ink);font-weight:700}
+.q-loop p{margin-bottom:18px}
+.q-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.q-steps li{background:var(--surface-2);border-radius:var(--r2);padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.q-steps .n{width:28px;height:28px;border-radius:999px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+.q-steps b{color:var(--plum);font-size:15px;line-height:1.25}
+
 @media (max-width:1500px){
   .status span{display:none}
   .tab{margin-right:18px}
@@ -395,6 +437,8 @@ details.tech[open] > summary .i{transform:rotate(90deg)}
   .steps{grid-template-columns:repeat(3,minmax(0,1fr))}
   .stats.five{grid-template-columns:repeat(3,minmax(0,1fr))}
   .two-col{grid-template-columns:minmax(0,1fr)}
+  .q-grid{grid-template-columns:minmax(0,1fr)}
+  .q-steps{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 @media (max-width:720px){
   .top{gap:12px;height:auto;flex-wrap:wrap;padding:10px max(20px,env(safe-area-inset-left)) 0}
@@ -423,5 +467,10 @@ details.tech[open] > summary .i{transform:rotate(90deg)}
   .drop{flex-wrap:wrap} .drop .btn{margin-left:0}
   .btn{height:44px;font-size:15px}
   .form-grid{grid-template-columns:minmax(0,1fr)}
+  .q-bar{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px} .q-bar .track{grid-column:1/3}
+  .table td[data-l]::before{content:attr(data-l) ': ';color:var(--muted);font-size:12.5px}
+  .q-steps,.q-mini{grid-template-columns:minmax(0,1fr)}
+  .q-cols{height:150px;gap:6px}
+  .table tr.q-flag td{background:transparent}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

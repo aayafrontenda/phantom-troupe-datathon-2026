@@ -395,3 +395,63 @@ def test_camera_alert_creates_finding_with_frames(app_factory, video):
         c.post(f"/ui/api/findings/{found['id']}/decision", json={"decision": "confirm"})
         assert c.get(f"/ui/api/alerts/{f['alert_id']}" if False else "/ui/api/alerts").json()["alerts"][0]["state"] in ("resolved", "open")
         assert c.delete(f"/ui/api/cameras/{cam['id']}").status_code == 200
+
+
+def test_quality_stats_thresholds_and_dataset(app_factory, video):
+    import io
+    import time
+    import zipfile
+    from backend.tests.conftest import login
+    with app_factory(ANALYZER="backend.tests.fake_analyzers:quick", AUTH_REQUIRED="1", QUALITY_MIN_SAMPLES="6") as (c, st):
+        wait_ready(c)
+        login(c, "operator", "op123")
+        jid = upload(c, video, key=None, ui=True).json()["job_id"]
+        f = wait_done(c, jid, ui=True)["findings"][0]
+        assert c.get("/ui/api/quality").status_code == 403
+        c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "reject"})
+        # a jury upload also gets a finding, but it never reaches the dataset
+        rj = upload(c, video, key="test-key"); assert rj.status_code == 200, rj.text
+        jury = rj.json()["job_id"]
+        assert jury == jid or wait_done(c, jury)["status"] == "done"
+        # synthetic history: T13 is rejected whenever the model was unsure, T02 is solid
+        now = time.time()
+        for i in range(8):
+            conf = 0.52 + 0.05 * i
+            st.db.insert("findings", {"source": "camera", "camera_id": "cam1", "camera_name": "Касса 1", "type_code": "T13",
+                                      "type_name": "Личные вещи", "t_sec": 1.0, "confidence": conf, "description_ai": "x",
+                                      "rule": {}, "decision": "confirm" if conf >= 0.7 else "reject", "decided_by": "operator",
+                                      "decided_at": now, "verified": 1, "verify_result": "agree", "verified_by": "supervisor",
+                                      "verified_at": now, "created_at": now - 86400 * (i % 3), "updated_at": now})
+        st.quality.invalidate()
+        c.post("/ui/api/auth/logout")
+        login(c, "supervisor", "sv123")
+        r = c.post(f"/ui/api/findings/{f['id']}/verify", json={"result": "disagree", "comment": "видно наличные"})
+        assert r.status_code == 200
+        q = c.get("/ui/api/quality?days=30").json()
+        s = q["summary"]
+        assert s["decided"] == 9 and s["verified"] == 9 and s["flagged"] == 1 and s["basis"] == "verified"
+        assert s["accuracy"] == round(5 / 9, 3)  # 4 T13 confirmed + the overruled rejection
+        t13 = next(x for x in q["by_type"] if x["type_code"] == "T13")
+        assert t13["decided"] == 8 and t13["confirm_rate"] == 0.5
+        assert t13["threshold"]["status"] == "raised" and t13["threshold"]["applied"] == 0.65
+        assert "T13" in q["thresholds"]["raised"]
+        op = next(x for x in q["operators"] if x["login"] == "operator")
+        assert op["decided"] == 9 and op["rejected"] == 5 and op["disagreed"] == 1 and op["name"] == "Operator One"
+        assert len(q["weekly"]) == 8 and q["weekly"][-1]["decided"] >= 7
+        # the raised threshold marks weak findings and downgrades their alerts
+        assert st.quality.below_threshold("T13", 0.55) and not st.quality.below_threshold("T13", 0.67)
+        assert not st.quality.below_threshold("T02", 0.55)
+        ev = st._apply_threshold({"type_code": "T13", "confidence": 0.55, "source": "live"})
+        assert ev["severity"] == "low" and ev["below_threshold"]
+        lst = c.get("/ui/api/findings?type_code=T13").json()["findings"]
+        assert sum(1 for x in lst if x["below_threshold"]) == 3
+        # dataset: labels + frames, jury finding excluded
+        r = c.get("/ui/api/quality/dataset.zip")
+        assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        rows = [json.loads(l) for l in z.read("labels.jsonl").decode("utf-8").splitlines()]
+        assert len(rows) == 9 and all(x["job_id"] != jury or jury == jid for x in rows)
+        mine = next(x for x in rows if x["finding_id"] == f["id"])
+        assert mine["label"] == 1 and mine["label_source"] == "supervisor" and mine["operator_decision"] == "reject"
+        assert mine["frames"] and z.read(mine["frames"][0])[:2] == b"\xff\xd8"
+        assert "README.txt" in z.namelist() and "labels.csv" in z.namelist()

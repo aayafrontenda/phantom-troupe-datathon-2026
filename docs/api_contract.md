@@ -63,6 +63,10 @@ multipart/form-data, поле `file` — видео `.mov` (~29 МБ). Тело 
 - `timeline.detections` — рамки детектора на каждый кадр выборки (2 кадра/с): `[[группа, score, x1, y1, x2, y2], …]`, координаты в долях кадра (0…1)
 - `processing_sec` — от начала загрузки до результата; `filename`, `duration_sec`, `created_at`, `analyzer`
 
+### `GET /api/v1`
+
+Без ключа: `{"service": "CashGuard", "version", "api": "v1", "auth", "endpoints", "docs", "health"}` — чтобы по адресу API было видно, куда слать видео.
+
 ### `GET /api/v1/rules`
 
 Реестр типов нарушений и нормативных источников (из `ml/rules_kb.yaml`) — жюри может проверить ссылки.
@@ -127,6 +131,21 @@ curl https://<адрес>/api/v1/jobs/<job_id> -H "X-API-Key: <ключ>"
 | DELETE | `/ui/api/findings/{id}` | **admin** |
 
 Решение оператора синхронно закрывает алерт (`resolved` / `false_positive`), отмена — открывает заново.
+В списках и карточке есть `below_threshold: true`, если уверенность ИИ ниже адаптивного порога этого типа (см. «Качество ИИ»).
+
+### Качество ИИ (supervisor)
+
+Из решённых находок считается итоговая метка: решение оператора, при `disagree` супервайзера — наоборот.
+По меткам: точность по типам, ложные срабатывания по неделям, статистика операторов и **адаптивные пороги**:
+если тип подтверждают реже `QUALITY_TARGET_PRECISION` (0,75) при ≥ `QUALITY_MIN_SAMPLES` (10) решениях, порог уверенности
+для него поднимается до минимального значения, где подтверждённые примеры достигают цели (шаг 0,05, не выше 0,90).
+Порог ничего не скрывает: алерт ниже порога получает серьёзность `low`, находка — флаг `below_threshold`. API жюри не затрагивается.
+
+| Метод | Путь | Что делает |
+| --- | --- | --- |
+| GET | `/ui/api/quality?days=30\|7\|0&camera_id=` | `summary{decided, verified, accuracy, coverage, flagged, accuracy_delta_pp, basis}`, `by_type[]` (с `threshold{base, applied, status: few\|ok\|raised\|retrain}`), `weekly[]` (8 недель), `operators[]` (`reject_rate`, `disagree_rate`, `flagged`, `flag_reason`), `thresholds`, `dataset` |
+| GET | `/ui/api/quality/thresholds` | пороги по типам |
+| GET | `/ui/api/quality/dataset.zip?days=0` | датасет для дообучения: `labels.jsonl` + `labels.csv` (тип, уверенность, решение оператора и его формулировка, результат супервайзера, итоговая метка) + `frames/<id>/*.jpg`. Видео жюри исключены |
 
 ### Алерты
 

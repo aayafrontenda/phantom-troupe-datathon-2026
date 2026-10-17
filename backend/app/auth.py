@@ -140,15 +140,16 @@ def _extract(x_api_key: str | None, authorization: str | None, key_q: str | None
 
 
 def resolve_principal(st, cookies: dict, key: str | None, allow_open: bool = True) -> Principal | None:
-    """Session cookie first, then API key, then (UI only) the open-UI fallback for AUTH_REQUIRED=0."""
-    user = st.users.resolve(cookies.get(SESSION_COOKIE))
-    if user is not None:
-        return _user_principal(user)
+    """An explicit API key first (a script is a script even from a signed-in browser), then the session cookie,
+    then (UI only) the open-UI fallback for AUTH_REQUIRED=0."""
     p = st.keys.verify(key) if key else None
     if p is not None:
         if p.role == "admin":
             p.display_name = p.display_name or "API admin"
         return p
+    user = st.users.resolve(cookies.get(SESSION_COOKIE))
+    if user is not None:
+        return _user_principal(user)
     if allow_open and not get_settings().auth_required:
         return Principal("admin", "dev", kind="anon", display_name="Developer")
     return None

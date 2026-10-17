@@ -51,6 +51,7 @@ export default function Header() {
         {tab('/live', t('nav.live'), openCount)}
         {tab('/checks', t('nav.checks'))}
         {can('supervisor') && tab('/review', t('nav.review'))}
+        {can('supervisor') && tab('/quality', t('nav.quality'))}
         {tab('/rules', t('nav.rules'))}
         {can('admin') && tab('/admin', t('nav.admin'))}
       </nav>

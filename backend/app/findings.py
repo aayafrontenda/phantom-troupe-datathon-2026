@@ -29,10 +29,11 @@ LIST_COLUMNS = ("id, source, job_id, violation_index, camera_id, camera_name, al
 
 
 class FindingService:
-    def __init__(self, db: Database, bus: EventBus, alerts=None):
+    def __init__(self, db: Database, bus: EventBus, alerts=None, quality=None):
         self.db = db
         self.bus = bus
         self.alerts = alerts
+        self.quality = quality
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ create
@@ -172,6 +173,7 @@ class FindingService:
             r["edited"] = bool(r["description_edit"])
             r["decided_by_name"] = names.get(r.get("decided_by") or "", r.get("decided_by"))
             r["verified_by_name"] = names.get(r.get("verified_by") or "", r.get("verified_by"))
+            r["below_threshold"] = bool(self.quality and self.quality.below_threshold(r.get("type_code"), r.get("confidence")))
         return rows
 
     def for_job(self, job_id: str) -> list[dict]:
@@ -317,6 +319,8 @@ class FindingService:
         return self._changed(fid)
 
     def _changed(self, fid: int) -> dict:
+        if self.quality is not None:
+            self.quality.invalidate()
         f = self.get(fid)
         self.bus.publish("findings", {"type": "finding_update", "findings": [self._brief(f)]})
         if f.get("job_id"):

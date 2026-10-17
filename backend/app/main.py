@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from . import metrics
 from .config import REPO_DIR, get_settings
 from .logging_setup import request_id_var, setup_logging
-from .routers import admin, auth, findings, jury, system, ui
+from .routers import admin, auth, findings, jury, quality, system, ui
 from .state import AppState
 
 log = logging.getLogger("backend")
@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(jury.router)
     app.include_router(auth.router)
     app.include_router(findings.router)
+    app.include_router(quality.router)
     app.include_router(ui.router)
     app.include_router(admin.router)
     app.include_router(system.router)

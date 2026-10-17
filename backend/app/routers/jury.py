@@ -12,6 +12,16 @@ from ..storage import save_upload
 router = APIRouter(prefix="/api/v1", tags=["jury"])
 
 
+@router.get("")
+def index(request: Request):
+    """What the jury sees when opening the API address in a browser: where to send videos and how."""
+    st = request.app.state.st
+    return {"service": "CashGuard", "version": st.settings.version, "api": "v1", "auth": "X-API-Key header",
+            "endpoints": {"analyze": "POST /api/v1/analyze (multipart, field 'file', .mov)",
+                          "job": "GET /api/v1/jobs/{job_id}", "rules": "GET /api/v1/rules"},
+            "docs": "/docs", "health": "/health"}
+
+
 @router.post("/analyze")
 async def analyze(request: Request, file: UploadFile = File(...), p: Principal = Depends(require_role("jury"))):
     st = request.app.state.st

@@ -112,6 +112,11 @@ class Settings:
     camera_clip_pre_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_PRE_SEC", 8))
     camera_clip_post_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_POST_SEC", 4))
 
+    # --- AI quality (verified decisions -> per-type confidence thresholds, training dataset) ---
+    quality_base_confidence: float = field(default_factory=lambda: _float("MIN_CONFIDENCE", 0.5))   # same env as the pipeline
+    quality_min_samples: int = field(default_factory=lambda: _int("QUALITY_MIN_SAMPLES", 10))       # decisions per type before a threshold moves
+    quality_target_precision: float = field(default_factory=lambda: _float("QUALITY_TARGET_PRECISION", 0.75))
+
     # --- alerts ---
     alerts_config: Path = field(default_factory=lambda: Path(_env("ALERTS_CONFIG", str(REPO_DIR / "backend" / "alerts.yaml"))))
     telegram_bot_token: str = field(default_factory=lambda: _env("TELEGRAM_BOT_TOKEN", ""))
