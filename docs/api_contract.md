@@ -66,6 +66,7 @@ multipart/form-data, поле `file` — видео `.mov` (~29 МБ). Тело 
 ### `GET /api/v1`
 
 Без ключа: `{"service": "CashGuard", "version", "api": "v1", "auth", "endpoints", "docs", "health"}` — чтобы по адресу API было видно, куда слать видео.
+На хостах из `API_HOSTS` (отдельный домен API) интерфейса нет: `/` отдаёт этот же JSON, остальные не-API пути — 404.
 
 ### `GET /api/v1/rules`
 

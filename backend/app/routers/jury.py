@@ -12,14 +12,17 @@ from ..storage import save_upload
 router = APIRouter(prefix="/api/v1", tags=["jury"])
 
 
-@router.get("")
-def index(request: Request):
-    """What the jury sees when opening the API address in a browser: where to send videos and how."""
-    st = request.app.state.st
+def api_index(st) -> dict:
     return {"service": "CashGuard", "version": st.settings.version, "api": "v1", "auth": "X-API-Key header",
             "endpoints": {"analyze": "POST /api/v1/analyze (multipart, field 'file', .mov)",
                           "job": "GET /api/v1/jobs/{job_id}", "rules": "GET /api/v1/rules"},
             "docs": "/docs", "health": "/health"}
+
+
+@router.get("")
+def index(request: Request):
+    """What the jury sees when opening the API address in a browser: where to send videos and how."""
+    return api_index(request.app.state.st)
 
 
 @router.post("/analyze")

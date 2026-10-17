@@ -133,7 +133,14 @@ def _mount_frontend(app: FastAPI) -> None:
     app.mount("/assets", StaticFiles(directory=str(dist / "assets")), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
-    def _spa(path: str):
+    def _spa(path: str, request: Request):
+        st = request.app.state.st
+        host = (request.headers.get("host") or "").split(":")[0].lower()
+        if host and host in st.settings.api_hosts:
+            from .routers.jury import api_index
+            if not path:
+                return JSONResponse(api_index(st))
+            return JSONResponse({"detail": "Not found", "status": 404}, status_code=404)
         candidate = (dist / path) if path else index
         if path and candidate.is_file() and dist in candidate.resolve().parents:
             return FileResponse(str(candidate))

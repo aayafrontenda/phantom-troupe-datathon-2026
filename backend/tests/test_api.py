@@ -455,3 +455,15 @@ def test_quality_stats_thresholds_and_dataset(app_factory, video):
         assert mine["label"] == 1 and mine["label_source"] == "supervisor" and mine["operator_decision"] == "reject"
         assert mine["frames"] and z.read(mine["frames"][0])[:2] == b"\xff\xd8"
         assert "README.txt" in z.namelist() and "labels.csv" in z.namelist()
+
+
+def test_api_host_serves_no_ui(app_factory):
+    with app_factory(API_HOSTS="api.example.com") as (c, st):
+        r = c.get("/", headers={"Host": "api.example.com"})
+        assert r.status_code == 200 and r.json()["api"] == "v1"
+        assert c.get("/checks", headers={"Host": "api.example.com"}).status_code == 404
+        assert c.get("/api/v1", headers={"Host": "api.example.com"}).json()["endpoints"]["analyze"].startswith("POST")
+        assert c.get("/health", headers={"Host": "api.example.com"}).status_code == 200
+        assert c.get("/api/v1/jobs/x", headers={"Host": "api.example.com", "X-API-Key": "test-key"}).status_code == 404
+        ui = c.get("/", headers={"Host": "ui.example.com"})
+        assert ui.status_code == 200 and "text/html" in ui.headers["content-type"]

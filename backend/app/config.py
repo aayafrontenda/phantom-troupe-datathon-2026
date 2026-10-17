@@ -102,6 +102,7 @@ class Settings:
     secure_cookies: bool = field(default_factory=lambda: _bool("SECURE_COOKIES", False))
     rate_limit_per_min: int = field(default_factory=lambda: _int("RATE_LIMIT_PER_MIN", 60))
     cors_origins: list[str] = field(default_factory=lambda: _list("CORS_ORIGINS", "*"))
+    api_hosts: list[str] = field(default_factory=lambda: [h.lower() for h in _list("API_HOSTS", "")])  # hostnames that serve only the API, no UI
 
     # --- live ---
     live_fps: float = field(default_factory=lambda: _float("LIVE_FPS", 4))
