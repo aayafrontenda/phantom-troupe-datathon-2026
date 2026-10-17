@@ -31,6 +31,7 @@ REUSE_PIX_DIFF, REUSE_FRAC, MAX_REUSE_SEC = 20, 0.04, 8.0
 
 PERSON = {"сидит": "sit", "стоит": "stand", "нет": "none"}
 SCREEN = {"программа": "app", "блокировка": "lock", "тёмный": "dark", "темный": "dark", "закрыт": "closed"}
+ACTION = {"пьёт": "drink", "пьет": "drink", "ест": "drink", "телефон": "phone", "другое": "other", "нет": "none"}
 
 
 @dataclass
@@ -38,6 +39,8 @@ class DeskState:
     t: float
     person: str          # sit | stand | none | ?
     screen: str          # app | lock | dark | closed | ?
+    action: str          # drink | phone | other | none
+    personal: bool       # личные вещи (сумка, рюкзак, одежда) на рабочем столе
     cash: bool
     bag: bool
     safe_open: bool | None
@@ -87,6 +90,8 @@ def ask_state(vlm: VLMClient, frame: Frame, roi) -> DeskState:
         t=frame.t,
         person=PERSON.get(norm(d.get("person")), "?"),
         screen=SCREEN.get(norm(d.get("screen")), "?"),
+        action=ACTION.get(norm(d.get("action")), "other"),
+        personal=norm(d.get("personal")) == "да",
         cash=norm(d.get("cash")) == "да",
         bag=norm(d.get("bag")) == "да",
         safe_open=True if safe.startswith("откр") else False if safe.startswith("закр") else None,
@@ -213,4 +218,22 @@ def desk_findings(states: list[DeskState]) -> list[dict]:
         found.append({"code": "T03", "t": t, "confidence": 0.75,
                       "observed": "Кассир отходит от сейфа; дверца сейфа остаётся открытой" +
                                   (", кассир работает за столом" if states[idle].person == "sit" else "")})
+
+    # T14/T15/T13 — действия кассира и вещи на столе; считаем только настоящие ответы VLM, не повторы
+    asked = [s for s in states if not s.reused]
+    rules = [
+        ("T14", lambda s: s.action == "drink", 1, 0.7, "Кассир пьёт или ест на рабочем месте"),
+        ("T15", lambda s: s.action == "phone", 2, 0.7, "Кассир держит в руке мобильный телефон (смартфон) на рабочем месте"),
+        # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) — считаем, когда села или отошла
+        ("T13", lambda s: s.personal and s.person in ("sit", "none"), 2, 0.65,
+         "На рабочем столе кассира лежат личные вещи (сумка, рюкзак или верхняя одежда)"),
+    ]
+    for code, pred, need, conf, observed in rules:
+        hits = [s for s in asked if pred(s)]
+        if len(hits) < need:
+            continue
+        t = hits[0].t
+        if code == "T14" and any(s.cash and abs(s.t - t) <= 10 for s in states):
+            observed += "; на столе рядом лежат наличные"
+        found.append({"code": code, "t": t, "confidence": conf, "observed": observed})
     return found
