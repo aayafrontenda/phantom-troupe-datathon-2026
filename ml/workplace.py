@@ -28,6 +28,8 @@ ROI_EXPAND = (1.2, 1.2, 1.2, 1.5)
 CROP_SIDE = 448
 # повтор прошлого состояния без вызова VLM: фрагмент 64×64 почти не изменился и с вопроса прошло < MAX_REUSE_SEC
 REUSE_PIX_DIFF, REUSE_FRAC, MAX_REUSE_SEC = 20, 0.04, 8.0
+# сколько замеров подряд должно длиться «рабочее место пусто» / «сейф открыт без работы с ним»
+MIN_AWAY_STATES = 2
 
 PERSON = {"сидит": "sit", "стоит": "stand", "нет": "none"}
 SCREEN = {"программа": "app", "блокировка": "lock", "тёмный": "dark", "темный": "dark", "закрыт": "closed"}
@@ -190,12 +192,27 @@ def _leave_time(states: list[DeskState], i0: int) -> float:
     return states[i0 - 1].t
 
 
-def desk_findings(states: list[DeskState]) -> list[dict]:
+def phone_times(frames: list[Frame], dets: list[list[Det]], roi) -> list[float]:
+    """Моменты, когда детектор видит телефон внутри рабочего места — подтверждение для T15."""
+    x1, y1, x2, y2 = roi
+    out = []
+    for f, ds in zip(frames, dets):
+        for d in ds:
+            cx, cy = d.center
+            if d.group == "phone" and x1 <= cx <= x2 and y1 <= cy <= y2:
+                out.append(f.t)
+                break
+    return out
+
+
+def desk_findings(states: list[DeskState], phones: list[float] | None = None) -> list[dict]:
     """T01–T03 по дорожке состояний: кассир был на месте, потом рабочее место пусто; сейф открыт без работы с ним."""
     found: list[dict] = []
     for i0, i1 in _runs(states, lambda s: not s.present):
         if i0 == 0:
             continue  # пусто с самого начала — ухода не видели (кассир ещё не пришёл)
+        if i1 - i0 + 1 < MIN_AWAY_STATES:
+            continue  # один пустой замер — кассир наклонилась/вышла из фрагмента на секунду (Х-12, Х-25)
         away = states[i0:i1 + 1]
         t_leave = _leave_time(states, i0)
         n = len(away)
@@ -211,9 +228,10 @@ def desk_findings(states: list[DeskState]) -> list[dict]:
     for i0, i1 in _runs(states, lambda s: s.safe_open is True):
         if i1 - i0 < 1:
             continue  # один кадр — открыла и закрыла, это норма
-        idle = next((i for i in range(i0, i1 + 1) if states[i].person in ("sit", "none")), None)
-        if idle is None:
-            continue
+        idle_all = [i for i in range(i0, i1 + 1) if states[i].person in ("sit", "none")]
+        if len(idle_all) < MIN_AWAY_STATES:
+            continue  # сейф открыт, пока с ним работают (стоят у него) — норма
+        idle = idle_all[0]
         t = (states[idle - 1].t + states[idle].t) / 2 if idle > 0 else states[idle].t
         found.append({"code": "T03", "t": t, "confidence": 0.75,
                       "observed": "Кассир отходит от сейфа; дверца сейфа остаётся открытой" +
@@ -221,11 +239,16 @@ def desk_findings(states: list[DeskState]) -> list[dict]:
 
     # T14/T15/T13 — действия кассира и вещи на столе; считаем только настоящие ответы VLM, не повторы
     asked = [s for s in states if not s.reused]
+    # телефон VLM часто «видит» у клиента или в пустых руках — засчитываем, только если детектор тоже видит
+    # телефон на рабочем месте в пределах 3 с (phones=None — подтверждения нет, верим VLM)
+    phone_ok = (lambda s: True) if phones is None else (lambda s: any(abs(s.t - t) <= 3.0 for t in phones))  # noqa: E731
     rules = [
         ("T14", lambda s: s.action == "drink", 1, 0.7, "Кассир пьёт или ест на рабочем месте"),
-        ("T15", lambda s: s.action == "phone", 2, 0.7, "Кассир держит в руке мобильный телефон (смартфон) на рабочем месте"),
-        # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) — считаем, когда села или отошла
-        ("T13", lambda s: s.personal and s.person in ("sit", "none"), 2, 0.65,
+        ("T15", lambda s: s.action == "phone" and phone_ok(s), 2, 0.7,
+         "Кассир держит в руке мобильный телефон (смартфон) на рабочем месте"),
+        # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) — считаем, когда села или отошла;
+        # 3 подтверждения: инкассаторскую сумку на столе модель иногда принимает за личную (Х-16 — 2 раза)
+        ("T13", lambda s: s.personal and s.person in ("sit", "none"), 3, 0.65,
          "На рабочем столе кассира лежат личные вещи (сумка, рюкзак или верхняя одежда)"),
     ]
     for code, pred, need, conf, observed in rules:

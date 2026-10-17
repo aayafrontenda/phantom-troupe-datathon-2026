@@ -19,7 +19,7 @@ from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
 from .entry import door_findings
-from .workplace import desk_findings, find_roi, scan
+from .workplace import desk_findings, find_roi, phone_times, scan
 
 log = logging.getLogger("ml.pipeline")
 Progress = Callable[[str, float], None]
@@ -134,7 +134,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
             if not st.reused:
                 vlm_calls += 1
                 scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
-        for f in desk_findings(desk_states):
+        for f in desk_findings(desk_states, phone_times(frames, dets, roi)):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
 
     if vlm.enabled and s.vlm_generic:
