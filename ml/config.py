@@ -48,7 +48,7 @@ class Settings:
     # --- VLM (локально: Ollama или OpenAI-совместимый сервер, например vLLM) ---
     vlm_backend: str = field(default_factory=lambda: os.getenv("VLM_BACKEND", "ollama"))  # ollama|openai|none
     vlm_url: str = field(default_factory=lambda: os.getenv("VLM_URL", "http://127.0.0.1:11434"))
-    vlm_model: str = field(default_factory=lambda: os.getenv("VLM_MODEL", "qwen2.5vl:7b"))
+    vlm_model: str = field(default_factory=lambda: os.getenv("VLM_MODEL", "qwen3.5:4b"))
     vlm_timeout: float = field(default_factory=lambda: _f("VLM_TIMEOUT", 60))
     vlm_image_side: int = field(default_factory=lambda: _i("VLM_IMAGE_SIDE", 448))
     vlm_frames_per_call: int = field(default_factory=lambda: _i("VLM_FRAMES_PER_CALL", 5))

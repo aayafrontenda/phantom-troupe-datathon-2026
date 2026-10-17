@@ -99,7 +99,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
 
     # --- детектор ---
     progress("detection", 0.15)
-    sig = []
+    sig, dets = [], []
     try:
         from .detector import get_detector
         det = get_detector()
@@ -149,11 +149,19 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     kept = [f for f in _merge(findings, s.merge_sec) if f["confidence"] >= s.min_confidence]
     violations = [to_violation(f, frames, s) for f in kept]
 
+    tl = timeline(sig) if sig else None
+    if tl and dets:
+        # рамки для плеера: [группа, score, x1, y1, x2, y2] в долях кадра — не зависят от размера плеера
+        tl["detections"] = [
+            [[d.group, round(d.score, 2), *(round(v / dim, 4) for v, dim in zip(d.box, (w, h, w, h)))] for d in ds]
+            for f, ds in zip(frames, dets) for h, w in [f.image.shape[:2]]
+        ]
+
     return {
         "verdict": "violation" if violations else "no_violation",
         "violations": violations,
         # --- дополнительные поля ---
-        "timeline": timeline(sig) if sig else None,
+        "timeline": tl,
         "meta": {
             "duration_sec": round(duration, 2),
             "processing_sec": round(time.time() - started, 1),

@@ -53,7 +53,8 @@ multipart/form-data, поле `file` — видео `.mov` (~29 МБ).
 На уровне задачи:
 - `stage` — `queued` · `started` · `frames` · `detection` · `vlm` · `report` · `done` · `failed`
 - `progress` — 0…1
-- `timeline` — дорожки состояний: `{"t": [...], "people": [...], "screen_on": [0/1], "phone": [...], "drink": [...], "bag": [...]}` (значение на каждый кадр выборки, 2 кадра/с)
+- `timeline` — дорожки состояний: `{"t": [...], "people": [...], "screen_on": [0/1], "phone": [...], "drink": [...], "bag": [...]}` (значение на каждый кадр выборки, 2 кадра/с);
+  `detections` — рамки детектора на каждый кадр выборки: `[[группа, score, x1, y1, x2, y2], …]`, координаты в долях кадра (0…1)
 - `meta` — `duration_sec`, `processing_sec`, `vlm_calls`, `candidates`, `scenes`, …
 - `processing_sec` — от загрузки до результата
 - `error` — текст ошибки при `failed`

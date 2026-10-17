@@ -1,7 +1,7 @@
 """Клиент локальной визуально-языковой модели.
 
 Поддерживаются два локальных сервера (облачные AI-API запрещены ТЗ):
-  - Ollama:   VLM_BACKEND=ollama  VLM_URL=http://127.0.0.1:11434  VLM_MODEL=qwen2.5vl:7b
+  - Ollama:   VLM_BACKEND=ollama  VLM_URL=http://127.0.0.1:11434  VLM_MODEL=qwen3.5:4b
   - OpenAI-совместимый (vLLM, LM Studio, mlx_vlm.server):
               VLM_BACKEND=openai  VLM_URL=http://127.0.0.1:8001   VLM_MODEL=<имя модели на сервере>
 """
@@ -74,9 +74,10 @@ class VLMClient:
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt, "images": images_b64}],
                 "stream": False,
+                "think": False,  # Qwen3.5 по умолчанию «размышляет» — в разы медленнее
                 "format": "json",
                 "keep_alive": "30m",
-                "options": {"temperature": 0, "num_ctx": 8192},
+                "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 600},  # без лимита может зациклиться
             })
             r.raise_for_status()
             return r.json()["message"]["content"]
