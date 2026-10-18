@@ -144,6 +144,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     findings: list[dict] = []
     vlm_calls, vlm_errors, scenes = 0, 0, []
     desk_trace: list[dict] = []  # ответы VLM по каждому замеру рабочего места - для разбора ошибок
+    desk_objects: list[dict] = []  # предметы на столе при смене клиентов и что о них сказала VLM
     if dets:
         findings += door_findings(frames, dets)  # T04: дверь после входа в пустую кассу, без VLM
         _emit_partial(progress, findings, frames, s)
@@ -180,6 +181,10 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
         if stats.get("errors", 0) < 2 and time.time() < deadline - DESK_CALL_TIMEOUT - 5:
             for f in left_items_findings(vlm, frames, roi, desk_states):
                 findings.append({**f, "source": "vlm", "candidate": "уход кассира"})
+            # предметы на столе при смене клиентов: пятно, появившееся с уходом клиента, - тесный кроп - VLM (T07)
+            from .objects import changeover_findings
+            for f in changeover_findings(vlm, frames, dets, roi, desk_states, desk_objects):
+                findings.append({**f, "source": "vlm", "candidate": "предмет на столе"})
             _emit_partial(progress, findings, frames, s)
 
     if vlm.enabled and s.vlm_generic:
@@ -232,6 +237,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
             "vlm_calls": vlm_calls,
             "vlm_errors": vlm_errors,
             "desk_states": desk_trace,
+            "desk_objects": desk_objects,
             "scenes": scenes,
             "raw_findings": [{k: v for k, v in f.items()} for f in findings],
         },

@@ -45,10 +45,11 @@ def main() -> int:
     ap.add_argument("--gpus", type=int, default=1)
     ap.add_argument("--only", help="номера видео через запятую")
     ap.add_argument("--out", default=str(HERE / "out"))
+    ap.add_argument("--labels", default=str(HERE / "labels_typed.csv"))
     a = ap.parse_args()
 
     vids = video_map(Path(a.videos).expanduser())
-    nums = [r["num"] for r in load_labels(HERE / "labels_typed.csv") if r["num"] in vids]
+    nums = [r["num"] for r in load_labels(Path(a.labels).expanduser()) if r["num"] in vids]
     if a.only:
         keep = {int(x) for x in a.only.split(",")}
         nums = [n for n in nums if n in keep]
@@ -64,7 +65,7 @@ def main() -> int:
         env = dict(os.environ, PYTHONUNBUFFERED="1")
         if a.gpus > 1:
             env.update(CUDA_VISIBLE_DEVICES=str(gpu), VLM_URL=f"http://127.0.0.1:{11434 + gpu}")
-        cmd = [sys.executable, "-m", "ml.eval.evaluate", "--videos", a.videos, "--out", a.out,
+        cmd = [sys.executable, "-m", "ml.eval.evaluate", "--videos", a.videos, "--out", a.out, "--labels", a.labels,
                "--only", ",".join(map(str, part)), "--force"]
         log = open(log_dir / f"part{i + 1}.log", "w", encoding="utf-8")
         procs.append((subprocess.Popen(cmd, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT), log))
@@ -84,7 +85,7 @@ def main() -> int:
     print(f"все части за {time.time() - started:.0f} с\n")
 
     # общий отчёт: все результаты уже в кеше, ничего не пересчитывается
-    cmd = [sys.executable, "-m", "ml.eval.evaluate", "--videos", a.videos, "--out", a.out]
+    cmd = [sys.executable, "-m", "ml.eval.evaluate", "--videos", a.videos, "--out", a.out, "--labels", a.labels]
     if a.only:
         cmd += ["--only", ",".join(map(str, nums))]
     return subprocess.call(cmd, cwd=REPO) or (1 if failed else 0)
