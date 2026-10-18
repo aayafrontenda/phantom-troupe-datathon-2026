@@ -140,20 +140,28 @@ def _before(frames: list[Frame], dets: list[list[Det]], o: DeskObject) -> Frame:
 
 def classify_objects(vlm, frames: list[Frame], dets: list[list[Det]], objects: list[DeskObject]) -> None:
     """VLM сравнивает место предмета «до» и «после» и называет, что появилось (change captioning): по одному кропу
-    маленькая модель охотно называет деньгами что угодно (Х-4: кресло → «деньги»). Два кадра «после»; тип
-    засчитывается, только если оба ответа совпали."""
+    маленькая модель охотно называет деньгами что угодно (Х-4: кресло → «деньги»). Тип - большинство ответов по
+    кадрам «после»: два кадра; если ответы разошлись - третий (Х-38 в зеркальном варианте: «деньги» / «документ»).
+    Без большинства - «?», правила по такому предмету не срабатывают."""
     from .vlm import _extract_json
+
+    def ask(o: DeskObject, before: str, t: float) -> str | None:
+        f = min(frames, key=lambda f: abs(f.t - t))
+        try:
+            raw = vlm.ask(OBJECT_PROMPT, [before, to_jpeg_b64(object_crop(f.image, o.box), CROP_SIDE, 92)])
+            return KINDS.get(str(_extract_json(raw).get("appeared", "")).strip().lower(), "none")
+        except Exception as e:  # нет ответа - не голос
+            log.warning("VLM ошибка (предмет на столе, t=%.1f): %s", t, e)
+            return None
+
     for o in objects:
         before = to_jpeg_b64(object_crop(_before(frames, dets, o).image, o.box), CROP_SIDE, 92)
-        answers = []
-        for t in dict.fromkeys([o.seen[min(1, len(o.seen) - 1)], o.seen[len(o.seen) // 2]]):
-            f = min(frames, key=lambda f: abs(f.t - t))
-            try:
-                raw = vlm.ask(OBJECT_PROMPT, [before, to_jpeg_b64(object_crop(f.image, o.box), CROP_SIDE, 92)])
-                answers.append(KINDS.get(str(_extract_json(raw).get("appeared", "")).strip().lower(), "none"))
-            except Exception as e:  # предмет без ответа остаётся «?» - правила по нему не срабатывают
-                log.warning("VLM ошибка (предмет на столе, t=%.1f): %s", t, e)
-        o.kind = answers[0] if answers and len(set(answers)) == 1 else "?"
+        times = list(dict.fromkeys([o.seen[min(1, len(o.seen) - 1)], o.seen[len(o.seen) // 2], o.seen[-1]]))
+        answers = [a for a in (ask(o, before, t) for t in times[:2]) if a]
+        if len(set(answers)) > 1 and len(times) > 2:
+            answers += [a for a in [ask(o, before, times[2])] if a]
+        top = max(set(answers), key=answers.count) if answers else None
+        o.kind = top if top and answers.count(top) >= 2 else "?"
 
 
 # кандидат для T07: держится от MIN_LIVE кадров, площадь от доли рабочего места, лежит на столе - по высоте между

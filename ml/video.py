@@ -114,3 +114,28 @@ def to_jpeg_b64(img: np.ndarray, max_side: int = 640, quality: int = 85) -> str:
 
 def nearest(frames: list[Frame], t: float) -> Frame:
     return min(frames, key=lambda f: abs(f.t - t))
+
+
+# кадр без изображения (обрыв сигнала): почти однотонный - чёрный экран или заливка «нет сигнала»
+BLANK_STD, BLANK_DARK = 6.0, 12.0
+# застывший кадр (зависание камеры): средняя разница с прошлым кадром по яркости на полном разрешении. На 42 обучающих
+# видео даже самая спокойная пара кадров (пустая касса, 0.5 с) - не меньше 0.70 (шум матрицы и сжатия), у заморозки
+# после пережатия - 0.00–0.07. Порог посередине с запасом ~3 раза в обе стороны
+FROZEN_DIFF = 0.25
+
+
+def drop_blank(frames: list[Frame]) -> tuple[list[Frame], int]:
+    """Выкидывает кадры без изображения и застывшие кадры. Для правил это разрыв во времени, а не «все ушли» и не
+    «предмет лежит 3 с»: иначе 3 с чёрного экрана дают «касса опустела → вход» и ложную «дверь не закрыта» на каждом
+    видео, а заморозка растягивает взмах руки в «лежащий предмет». Время кадров остаётся исходным."""
+    keep, prev = [], None
+    for f in frames:
+        small = cv2.cvtColor(cv2.resize(f.image, (64, 64), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+        if float(small.std()) < BLANK_STD or float(small.mean()) < BLANK_DARK:
+            continue
+        gray = cv2.cvtColor(f.image, cv2.COLOR_BGR2GRAY)
+        if prev is not None and float(cv2.absdiff(gray, prev).mean()) < FROZEN_DIFF:
+            continue
+        keep.append(f)
+        prev = gray
+    return (keep or frames), len(frames) - len(keep)

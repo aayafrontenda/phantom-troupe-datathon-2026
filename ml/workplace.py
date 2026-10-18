@@ -296,6 +296,31 @@ def bag_drop_findings(states: list[DeskState], company: list[float], duration: f
     return found
 
 
+# T12: пересчёт содержимого инкассаторских сумок (полистно, вручную или на машинке) + сверка - не меньше этого
+COUNT_MIN_SEC = 30.0
+
+
+def safe_without_count_findings(states: list[DeskState]) -> list[dict]:
+    """T12: после вскрытия инкассаторских сумок деньги ушли в сейф, не пролежав на столе столько, сколько нужно на
+    пересчёт. Х-13: сумки → деньги на столе 23–42 с (19 с) → сейф 49 с; норма Х-14: деньги на столе 36–98 с (62 с),
+    кассир пересчитывает руками, сейф - 120 с. Только без клиента (это не обслуживание) и только по цепочке
+    «сумки → деньги → открытый сейф»: на остальных 40 обучающих видео такой цепочки нет."""
+    if _visits(states):
+        return []
+    bags = [s for s in states if s.bag]
+    if len(bags) < 2:
+        return []
+    safe = [s for s in states if s.safe_open is True and s.t > bags[0].t]
+    if not safe:
+        return []
+    cash = [s for s in states if s.cash and bags[0].t <= s.t < safe[0].t]
+    if len(cash) < 2 or cash[-1].t - cash[0].t >= COUNT_MIN_SEC:
+        return []
+    return [{"code": "T12", "t": (cash[-1].t + safe[0].t) / 2, "confidence": 0.6,
+             "observed": f"Вложения инкассаторских сумок лежат на столе около {cash[-1].t - cash[0].t:.0f} с и "
+                         "уносятся в сейф; пересчёта за это время на видео не зафиксировано"}]
+
+
 def _visits(states: list[DeskState]) -> list[tuple[int, int]]:
     """Визиты клиентов: client in (sit, stand) не меньше MIN_AWAY_STATES замеров подряд."""
     has_client = lambda s: s.client in ("sit", "stand")  # noqa: E731
@@ -373,7 +398,8 @@ def stranger_findings(frames: list[Frame], dets: list[list[Det]], roi) -> list[d
                      for p in ps if p is not cashier)
         run = run + 1 if ok else 0
         if run == STRANGER_RUN:
-            return [{"code": "T05", "t": frames[i - STRANGER_RUN + 1].t, "confidence": 0.6, "source": "detector",
+            # таймкод - когда стало видно, что посторонний задержался рядом (Х-18: разметка 20 с, появился 15.5 с)
+            return [{"code": "T05", "t": f.t, "confidence": 0.6, "source": "detector",
                      "observed": "Рядом с кассиром, на служебной стороне стола, находится ещё один человек "
                                  "(не клиент напротив) и держится рядом не меньше 3 секунд"}]
     return []
@@ -434,7 +460,7 @@ def company_times(frames: list[Frame], dets: list[list[Det]]) -> list[float]:
 
 
 def desk_findings(states: list[DeskState], phones: list[float] | None = None,
-                  company: list[float] | None = None) -> list[dict]:
+                  company: list[float] | None = None, drinks: list[float] | None = None) -> list[dict]:
     """T01–T03 по дорожке состояний: кассир был на месте, потом рабочее место пусто; сейф открыт без работы с ним."""
     found: list[dict] = []
     for i0, i1 in _runs(states, lambda s: not s.present):
@@ -480,11 +506,14 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None,
     # телефон VLM часто «видит» у клиента или в пустых руках - засчитываем, только если детектор тоже видит
     # телефон на рабочем месте в пределах 3 с (phones=None - подтверждения нет, верим VLM)
     phone_ok = (lambda s: True) if phones is None else (lambda s: any(abs(s.t - t) <= 3.0 for t in phones))  # noqa: E731
+    # «пьёт» - один ответ VLM; засчитываем, только если детектор в пределах 3 с видит напиток или еду (Х-16 после
+    # чёрного экрана: «пьёт» на одном кадре, стакана нет). drinks=None - подтверждения нет, верим VLM
+    drink_ok = (lambda s: True) if drinks is None else (lambda s: any(abs(s.t - t) <= 3.0 for t in drinks))  # noqa: E731
     # личные вещи засчитываем, только когда кассир у стола одна: при втором человеке рядом сумка скорее его
     alone = (lambda s: True) if company is None else (  # noqa: E731
         lambda s: not any(abs(s.t - t) <= COMPANY_NEAR_SEC for t in company))
     rules = [
-        ("T14", lambda s: s.action == "drink", 1, 0.7, "Кассир пьёт или ест на рабочем месте"),
+        ("T14", lambda s: s.action == "drink" and drink_ok(s), 1, 0.7, "Кассир пьёт или ест на рабочем месте"),
         ("T15", lambda s: s.action == "phone" and phone_ok(s), 2, 0.7,
          "Кассир держит в руке мобильный телефон (смартфон) на рабочем месте"),
         # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) - считаем, когда села или отошла;
@@ -498,6 +527,14 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None,
         if len(hits) < need:
             continue
         t = hits[0].t
+        if code == "T13":
+            # вещи кладут на стол раньше, чем кассир садится: середина между началом отрезка «личные вещи на столе»
+            # и первым засчитанным замером (Х-40: вещи с 14 с, села с 20 с, разметка 17 с). Не начало отрезка: стоя
+            # с сумкой в руках модель тоже отвечает «вещи на столе», и отрезок уезжает назад (Х-40 на искажениях: 6 с)
+            i = states.index(hits[0])
+            while i > 0 and states[i - 1].personal:
+                i -= 1
+            t = (states[i].t + hits[0].t) / 2
         if code == "T14" and any(s.cash and abs(s.t - t) <= 10 for s in states):
             observed += "; на столе рядом лежат наличные"
         found.append({"code": code, "t": t, "confidence": conf, "observed": observed})

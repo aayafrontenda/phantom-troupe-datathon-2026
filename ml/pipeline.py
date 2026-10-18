@@ -17,10 +17,10 @@ from typing import Callable
 from . import kb
 from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
-from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
+from .video import Frame, drop_blank, iter_frames, nearest, probe, to_jpeg_b64
 from .entry import door_findings
 from .workplace import (bag_drop_findings, client_findings, company_times, desk_findings, find_roi,
-                        left_items_findings, phone_times, scan, stranger_findings)
+                        left_items_findings, phone_times, safe_without_count_findings, scan, stranger_findings)
 
 log = logging.getLogger("ml.pipeline")
 DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
@@ -118,6 +118,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     info = probe(path)
     progress("frames", 0.05)
     frames = list(iter_frames(path, s.sample_fps))
+    frames, blank = drop_blank(frames)
     if not frames:
         raise ValueError("В видео не удалось прочитать ни одного кадра")
     duration = max(info.duration, frames[-1].t)
@@ -172,8 +173,9 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
                        "action": st.action, "personal": st.personal, "cash": st.cash, "bag": st.bag,
                        "safe_open": st.safe_open, "reused": st.reused} for st in desk_states]
         company = company_times(frames, dets)
-        for f in (desk_findings(desk_states, phone_times(frames, dets, roi), company) + client_findings(desk_states)
-                  + bag_drop_findings(desk_states, company, duration,
+        drinks = [f.t for f, ds in zip(frames, dets) if any(d.group in ("drink", "food") for d in ds)]
+        for f in (desk_findings(desk_states, phone_times(frames, dets, roi), company, drinks) + client_findings(desk_states)
+                  + safe_without_count_findings(desk_states) + bag_drop_findings(desk_states, company, duration,
                                       [f.t for f, ds in zip(frames, dets) if any(d.group == "bag" for d in ds)])):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
         _emit_partial(progress, findings, frames, s)
@@ -233,6 +235,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
             "duration_sec": round(duration, 2),
             "processing_sec": round(time.time() - started, 1),
             "frames": len(frames),
+            "blank_frames": blank,  # кадры без изображения или застывшие (обрыв, зависание): выброшены до анализа
             "candidates": [{"t": round(c.t, 1), "reason": c.reason, "priority": c.priority} for c in cands],
             "vlm_calls": vlm_calls,
             "vlm_errors": vlm_errors,

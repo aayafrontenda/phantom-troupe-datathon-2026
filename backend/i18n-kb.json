@@ -116,10 +116,12 @@
     "T14": {
       "en": {"name": "Eating or drinking at the workplace while handling cash",
              "visual": "The cashier eats or drinks with cash lying nearby.",
-             "why": "Food and drinks at the workplace risk damaging valuables and distract the cashier."},
+             "why": "Only medicines, medical devices and communication devices without photo or video capture may be brought into the cash unit; food and drinks are not on this list.",
+             "caveat": "The Rules contain no direct ban on food and drinks: paragraph 12 gives a closed list of what employees may bring into the cash unit, and food and drinks are not on it."},
       "kk": {"name": "Қолма-қол ақшамен жұмыс кезінде жұмыс орнында тамақтану немесе сусын ішу",
              "visual": "Кассир тамақ жейді немесе сусын ішеді, жанында қолма-қол ақша жатыр.",
-             "why": "Жұмыс орнындағы тамақ пен сусын құндылықтарды бүлдіру және назар аударту қаупін туғызады."}
+             "why": "Кассалық торапқа тек дәрілік заттарды, медициналық бұйымдарды және фото- мен бейнетіркеу функциясы жоқ байланыс құралдарын енгізуге рұқсат етіледі; тамақ пен сусын бұл тізімге кірмейді.",
+             "caveat": "Қағидаларда тамақ пен сусынға тікелей тыйым жоқ: 12-тармақ қызметкерлерге кассалық торапқа енгізуге рұқсат етілетін заттардың жабық тізімін береді, онда тамақ пен сусын жоқ."}
     },
     "T15": {
       "en": {"name": "Smartphone in the cash room",
