@@ -33,8 +33,26 @@ powershell -ExecutionPolicy Bypass -File deploy\docker.ps1 -Tunnel
 
 **Ollama уже стоит на Windows?** В `.env` `VLM_URL_DOCKER=http://host.docker.internal:11434` - контейнер Ollama тогда не запускается.
 
-**Аслан поменял модель.** Код `ml/` копируется в образ, поэтому после изменений: `deploy\docker.ps1 -Tunnel` (пересоберёт только верхний слой, ~10 с).
-Для быстрой итерации над моделью удобнее без Docker: `deploy\run_server.ps1` (см. `deploy/README.md`).
+**Модель изменилась.** Код `ml/` копируется в образ, поэтому после изменений: `deploy\docker.ps1 -Tunnel` (пересоберёт только верхний слой, ~10 с).
+Для быстрой итерации над моделью без Docker: `deploy\run_server.ps1` (venv + Ollama на самой Windows, те же настройки из `.env`).
+
+**Ноутбук не должен засыпать** (PowerShell от администратора, один раз):
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0
+powercfg /setactive SCHEME_CURRENT
+```
+Зарядка подключена, режим «Производительность», обновления Windows приостановлены.
+
+## Перед сдачей
+
+- `/ready` отвечает 200 через публичный адрес (воркер прогрет, детектор и VLM загружены).
+- `API_KEY` и `ADMIN_KEY` в `.env` заданы явно; `PUBLIC_URL` - адрес интерфейса (ссылки в уведомлениях).
+- Камеры и симуляторы остановлены: пока идёт проверка жюри, GPU нужна только задачам.
+- Прогнано с чужой сети: `python tools/smoke_test.py --url https://<адрес> --key <ключ> --dir data/open/videos --limit 5`
+  и `python tools/loadtest.py --url https://<адрес> --key <ключ> --dir data/open/videos --uploads 10 --unique` - каждое видео < 300 с, `partial 0`.
+- `DEDUP=0` на время финальных правок модели (иначе повторная загрузка того же файла вернёт старый результат); перед сдачей можно вернуть `1`.
 
 ## Mac (демо без модели)
 

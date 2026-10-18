@@ -179,7 +179,7 @@ class CameraManager:
                 stop.wait(s.camera_reconnect_sec)
                 continue
             try:
-                session = la.new_session()
+                session = la.new_session(busy=self.busy)
             except Exception as e:
                 st.status, st.last_error = "offline", f"analyzer: {e}"
                 cap.release()

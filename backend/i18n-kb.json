@@ -5,11 +5,11 @@
       "en": {"name": "Workstation not locked when leaving the desk",
              "visual": "The cashier leaves the desk or the cash room while the laptop or monitor screen stays on and unlocked.",
              "why": "An unattended unlocked workstation creates a risk of unauthorized access to banking systems.",
-             "caveat": "The public rule requires an automatic lock after 30 minutes of inactivity; locking manually when leaving is the bank's internal information security policy."},
+             "caveat": "The rules require that only the responsible employee has access to the workplace and that workplaces are protected from unauthorized access; they do not literally say \"lock the screen when leaving\" - an unlocked computer left unattended opens that access."},
       "kk": {"name": "Жұмыс орнынан кеткенде компьютер бұғатталмаған",
              "visual": "Кассир үстелден немесе кассадан кетеді, ноутбук не монитор экраны қосулы әрі бұғатталмаған күйде қалады.",
              "why": "Қараусыз қалған бұғатталмаған жұмыс станциясы банк жүйелеріне рұқсатсыз қол жеткізу қаупін туғызады.",
-             "caveat": "Жария норма 30 минут әрекетсіздіктен кейін автоматты бұғаттауды талап етеді; кетерде қолмен бұғаттау - банктің ішкі ақпараттық қауіпсіздік саясаты."}
+             "caveat": "Нормалар жұмыс орнына тек жауапты қызметкер қол жеткізуін және жұмыс орындарының рұқсатсыз қол жеткізуден қорғалуын талап етеді; оларда «кетерде экранды бұғаттау» деген сөз жоқ - қараусыз қалған бұғатталмаған компьютер осы қол жеткізуді ашады."}
     },
     "T02": {
       "en": {"name": "Cash or valuables left unattended at the workplace",
@@ -116,12 +116,12 @@
     "T14": {
       "en": {"name": "Eating or drinking at the workplace while handling cash",
              "visual": "The cashier eats or drinks with cash lying nearby.",
-             "why": "Only medicines, medical devices and communication devices without photo or video capture may be brought into the cash unit; food and drinks are not on this list.",
-             "caveat": "The Rules contain no direct ban on food and drinks: paragraph 12 gives a closed list of what employees may bring into the cash unit, and food and drinks are not on it."},
+             "why": "Only medicines, medical devices and communication devices may be brought into the cash unit; food and drinks next to cash risk damaging it.",
+             "caveat": "The item lists what employees may bring into the cash unit; food and drinks are not on that list."},
       "kk": {"name": "Қолма-қол ақшамен жұмыс кезінде жұмыс орнында тамақтану немесе сусын ішу",
              "visual": "Кассир тамақ жейді немесе сусын ішеді, жанында қолма-қол ақша жатыр.",
-             "why": "Кассалық торапқа тек дәрілік заттарды, медициналық бұйымдарды және фото- мен бейнетіркеу функциясы жоқ байланыс құралдарын енгізуге рұқсат етіледі; тамақ пен сусын бұл тізімге кірмейді.",
-             "caveat": "Қағидаларда тамақ пен сусынға тікелей тыйым жоқ: 12-тармақ қызметкерлерге кассалық торапқа енгізуге рұқсат етілетін заттардың жабық тізімін береді, онда тамақ пен сусын жоқ."}
+             "why": "Кассалық торапқа тек дәрі-дәрмек, медициналық бұйымдар және байланыс құралдарын алып кіруге рұқсат етіледі; қолма-қол ақшаның жанындағы тамақ пен сусын оны бүлдіру қаупін туғызады.",
+             "caveat": "Тармақ қызметкерлерге кассалық торапқа не алып кіруге рұқсат етілетінін тізбелейді; бұл тізбеде тамақ пен сусын жоқ."}
     },
     "T15": {
       "en": {"name": "Smartphone in the cash room",
@@ -164,6 +164,11 @@
       "match": "V2000020075",
       "en": "Rules for the security and layout of bank premises (National Bank Board resolution No. 14 of 24.02.2020)",
       "kk": "Банк үй-жайларының күзетін ұйымдастыру және оларды жайластыру қағидалары (ҚР Ұлттық Банкі Басқармасының 2020 жылғы 24 ақпандағы № 14 қаулысы)"
+    },
+    "NB34": {
+      "match": "V1600013256",
+      "en": "Requirements for the security and continuity of banks' information systems (National Bank Board resolution No. 34 of 28.01.2016)",
+      "kk": "Банктердің ақпараттық жүйелерінің қауіпсіздігі мен үздіксіз жұмысына қойылатын талаптар (ҚР Ұлттық Банкі Басқармасының 2016 жылғы 28 қаңтардағы № 34 қаулысы)"
     },
     "ARDFM53": {
       "match": "V2600038336",

@@ -1,7 +1,9 @@
 /* Upload manager: XHR with progress, local preview URLs for freshly uploaded videos, drag-and-drop anywhere. */
+import { Upload } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
+import { cn } from '../lib/utils';
 import { useUi } from '../ui';
 
 export interface UploadItem { key: string; name: string; sent: number; total: number }
@@ -58,7 +60,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     const over = (e: DragEvent) => e.preventDefault();
     const drop = (e: DragEvent) => {
       e.preventDefault();
-      if ((e.target as HTMLElement)?.closest?.('.drop')) return;
+      if ((e.target as HTMLElement)?.closest?.('[data-dropzone]')) return;
       if (e.dataTransfer?.files.length) uploadFiles([...e.dataTransfer.files]);
     };
     document.addEventListener('dragover', over);
@@ -82,27 +84,20 @@ export function useUploads(): Ctx {
   return v;
 }
 
-export function DropZone({ big, onPick }: { big?: boolean; onPick: () => void }) {
+export function DropZone({ onPick, className }: { onPick: () => void; className?: string }) {
   const { t } = useI18n();
   const { uploadFiles } = useUploads();
   const [over, setOver] = useState(false);
-  const Icon = () => <svg className="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 15v4.5h14V15" /></svg>;
   return (
-    <div className={`drop ${big ? 'big' : ''} ${over ? 'over' : ''}`}
+    <div data-dropzone
+      className={cn('flex cursor-pointer flex-wrap items-center gap-4 rounded-xl border border-dashed px-5 py-[18px] transition-colors sm:flex-nowrap',
+        over ? 'border-primary bg-primary-soft' : 'border-border-strong bg-subtle hover:border-primary hover:bg-primary-soft', className)}
       onDragEnter={e => { e.preventDefault(); setOver(true); }} onDragOver={e => { e.preventDefault(); setOver(true); }}
       onDragLeave={e => { e.preventDefault(); setOver(false); }}
       onDrop={e => { e.preventDefault(); setOver(false); uploadFiles([...e.dataTransfer.files]); }}
       onClick={e => { if (!(e.target as HTMLElement).closest('button')) onPick(); }}>
-      <span className="up"><Icon /></span>
-      {big ? (
-        <>
-          <b>{t('drop.bigTitle')}</b>
-          <small>{t('drop.bigHint')}</small>
-          <button className="btn primary" onClick={onPick}>{t('drop.choose')}</button>
-        </>
-      ) : (
-        <div><b>{t('drop.title')}</b><small>{t('drop.hint')}</small></div>
-      )}
+      <span className="grid size-[42px] shrink-0 place-items-center rounded-[9px] border border-border bg-card text-primary"><Upload className="size-5" strokeWidth={1.7} /></span>
+      <div><b className="block text-[15.5px] font-semibold text-foreground">{t('drop.title')}</b><small className="text-[13.5px] text-muted-foreground">{t('drop.hint')}</small></div>
     </div>
   );
 }

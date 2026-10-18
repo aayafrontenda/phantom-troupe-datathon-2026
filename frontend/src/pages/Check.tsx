@@ -1,16 +1,47 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Check, ChevronRight, FileText, Play, ShieldCheck, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api';
 import { useAuth } from '../auth';
 import { refreshFeed } from '../components/events';
+import { DecisionBar, DescriptionBlock, FrameStrip, labelClass, RuleBlock } from '../components/finding';
 import { VideoInspectionCard } from '../components/inspection/VideoInspectionCard';
-import { DecisionBar, DescriptionBlock, FrameStrip, RuleBlock } from '../components/finding';
+import { Crumb, EmptyState, Loading, Note, Page } from '../components/page';
 import { Player, type Marker, type PlayerHandle } from '../components/Player';
+import { Button } from '../components/ui/button';
+import { Card, cardClass } from '../components/ui/card';
+import { Ticks } from '../components/ui/state-line';
 import { useUploads } from '../components/uploads';
 import { useI18n } from '../i18n';
+import { cn } from '../lib/utils';
 import type { Finding, FindingBrief, Job } from '../types';
-import { Icon, keyFrame, tc, useAgo, useUi } from '../ui';
+import { keyFrame, tc, useAgo, useUi } from '../ui';
 import { reportUrl } from './Checks';
+
+const VERDICT = {
+  bad: { box: 'border-transparent bg-primary-soft', icon: 'bg-card text-primary-ink' },
+  ok: { box: 'border-transparent bg-success-soft', icon: 'bg-card text-success' },
+  fail: { box: 'border-transparent bg-destructive-soft', icon: 'bg-card text-destructive' },
+  done: { box: 'border-border bg-card', icon: 'bg-success-soft text-success' },
+  info: { box: 'border-transparent bg-info-soft', icon: 'bg-card text-info' },
+};
+export function Verdict({ tone, icon, title, text, aside }: { tone: keyof typeof VERDICT; icon: ReactNode; title: ReactNode; text: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className={cn('flex flex-wrap items-center gap-[18px] rounded-xl border p-[18px] sm:flex-nowrap sm:px-6 sm:py-5', VERDICT[tone].box)}>
+      <div className="flex min-w-0 flex-1 items-center gap-[18px]">
+        <span className={cn('grid size-11 shrink-0 place-items-center rounded-[10px] [&_svg]:size-[22px]', VERDICT[tone].icon)}>{icon}</span>
+        <div className="min-w-0">
+          <h2 className="text-[21px] font-semibold tracking-tight">{title}</h2>
+          <p className="mt-0.5 max-w-[70ch] text-[14.5px] text-muted-foreground">{text}</p>
+        </div>
+      </div>
+      {aside && <div className="flex w-full flex-col items-start gap-2 text-left sm:ml-auto sm:w-auto sm:min-w-[180px] sm:items-end sm:text-right">{aside}</div>}
+    </div>
+  );
+}
+
+const sceneBtn = 'grid w-full grid-cols-[64px_minmax(0,1fr)_auto] gap-3 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-subtle';
+const sceneT = 'text-xs font-semibold tracking-wide text-primary-ink tabular-nums';
 
 export default function CheckPage() {
   const { id = '' } = useParams();
@@ -83,13 +114,13 @@ export default function CheckPage() {
   // keyboard-driven selection jumps instantly; only pointer selection scrolls smoothly
   const select = useCallback((i: number, jump: boolean, smooth = true) => {
     setSel(i);
-    document.querySelector(`.find[data-i="${i}"]`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest' });
+    document.querySelector(`[data-finding="${i}"]`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest' });
     if (jump && viols[i]) player.current?.seek(Math.max(0, viols[i].timecode_sec - 1), true);
   }, [viols]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input,textarea,select') || document.querySelector('.modal')) return;
+      if ((e.target as HTMLElement).closest('input,textarea,select') || document.querySelector('[role="dialog"]')) return;
       if (!job || job.status !== 'done') return;
       const n = viols.length;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -130,24 +161,31 @@ export default function CheckPage() {
   };
 
   if (err) {
-    return <div className="page"><Link className="crumb" to="/checks"><Icon id="back" />{t('crumb')}</Link>
-      <div className="card empty"><b>{t(err.status === 404 ? 'chk.gone' : 'chk.loadErr')}</b>{err.status === 404 ? t('chk.goneHint') : err.message}</div></div>;
+    return (
+      <Page><Crumb to="/checks">{t('crumb')}</Crumb>
+        <Card><EmptyState title={t(err.status === 404 ? 'chk.gone' : 'chk.loadErr')}>{err.status === 404 ? t('chk.goneHint') : err.message}</EmptyState></Card></Page>
+    );
   }
-  if (!job) return <div className="page"><p className="loading">{t('loading')}</p></div>;
+  if (!job) return <Page><Loading /></Page>;
 
   const meta = [job.duration_sec ? t('meta.long', { t: tc(job.duration_sec) }) : '', job.created_at ? t('meta.uploaded', { ago: ago(job.created_at) }) : '',
     job.created_by ? t('meta.by', { n: job.created_by }) : '', job.processing_sec ? t('meta.analysed', { s: job.processing_sec }) : ''].filter(Boolean);
-  const head = (extra?: React.ReactNode) => (
+  const head = (extra?: ReactNode) => (
     <>
-    <Link className="crumb" to="/checks"><Icon id="back" />{t('crumb')}</Link>
-    <div className="check-head"><div><h1>{job.filename}</h1><div className="meta">{meta.map(m => <span key={m}>{m}</span>)}</div></div>
-      <div className="acts">{extra}{can('operator') && job.status !== 'processing' && <button className="btn danger" onClick={del}><Icon id="trash" />{t('act.delete')}</button>}</div></div>
+      <Crumb to="/checks">{t('crumb')}</Crumb>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold tracking-tight break-words">{job.filename}</h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-[18px] gap-y-1 text-[13.5px] text-muted-foreground">{meta.map(m => <span key={m}>{m}</span>)}</div>
+        </div>
+        <div className="flex flex-wrap gap-2">{extra}{can('operator') && job.status !== 'processing' && <Button variant="destructive" onClick={del}><Trash2 />{t('act.delete')}</Button>}</div>
+      </div>
     </>
   );
 
   if (job.status === 'processing') {
     return (
-      <div className="page">{head()}
+      <Page>{head()}
         <VideoInspectionCard job={job} onCancel={can('operator') ? del : undefined}>
           {local[id] && (
             <div className="border-t border-border/60 p-4 sm:px-5">
@@ -156,22 +194,24 @@ export default function CheckPage() {
             </div>
           )}
         </VideoInspectionCard>
-      </div>
+      </Page>
     );
   }
 
   const n = viols.length, failed = job.status === 'failed';
   const decided = findings.filter(f => f.decision).length;
   const confirmed = findings.filter(f => f.decision === 'confirm').length;
-  let verdict: React.ReactNode;
-  if (failed) verdict = <div className="verdict fail"><span className="vi"><Icon id="x" /></span><div><h2>{t('v.failTitle')}</h2><p>{t('v.failText', { err: job.error || t('v.unknownErr') })}</p></div></div>;
+  let verdict: ReactNode;
+  if (failed) verdict = <Verdict tone="fail" icon={<X />} title={t('v.failTitle')} text={t('v.failText', { err: job.error || t('v.unknownErr') })} />;
   else if (n) verdict = (
-    <div className={`verdict ${decided === n ? 'done' : 'bad'}`}><span className="vi"><Icon id={decided === n ? 'check' : 'alert'} /></span>
-      <div><h2>{t(decided === n ? 'v.doneTitle' : 'v.badTitle')}</h2><p>{decided === n ? t('v.doneText', { c: confirmed, d: decided - confirmed }) : t('v.badText', { n })}</p></div>
-      <div className="rv"><b>{t('rev.progress', { a: decided, b: n })}</b>
-        <div className="ticks" aria-hidden="true">{viols.map((_, i) => <i key={i} className={fById[i]?.decision === 'confirm' ? 'c' : fById[i]?.decision ? 'd' : ''} />)}</div></div></div>
+    <Verdict tone={decided === n ? 'done' : 'bad'} icon={decided === n ? <Check /> : <AlertTriangle />}
+      title={t(decided === n ? 'v.doneTitle' : 'v.badTitle')} text={decided === n ? t('v.doneText', { c: confirmed, d: decided - confirmed }) : t('v.badText', { n })}
+      aside={<>
+        <b className="text-[13.5px] font-semibold text-foreground">{t('rev.progress', { a: decided, b: n })}</b>
+        <Ticks className="justify-start sm:justify-end" states={viols.map((_, i) => fById[i]?.decision === 'confirm' ? 'c' : fById[i]?.decision ? 'd' : '')} />
+      </>} />
   );
-  else verdict = <div className="verdict ok"><span className="vi"><Icon id="shield" /></span><div><h2>{t('v.okTitle')}</h2><p>{t('v.okText')}</p></div></div>;
+  else verdict = <Verdict tone="ok" icon={<ShieldCheck />} title={t('v.okTitle')} text={t('v.okText')} />;
 
   const markers: Marker[] = viols.map((v, i) => ({ t: v.timecode_sec, label: String(i + 1), title: `${typeName(v.type_code, v.type)} · ${tc(v.timecode_sec)}`,
     state: fById[i]?.decision === 'confirm' ? 'confirm' : fById[i]?.decision ? 'done' : '', thumb: keyFrame(v.evidence_frames, v.timecode_sec) }));
@@ -180,40 +220,57 @@ export default function CheckPage() {
   const scenes = ((job.meta as { scenes?: { t: number; scene: string }[] } | undefined)?.scenes) || [];
 
   return (
-    <div className="page">
-      {head(job.status === 'done' ? <a className={`btn ${n && decided === n ? 'primary' : ''}`} href={reportUrl(id, lang)} target="_blank" rel="noopener"><Icon id="doc" />{t('act.report')}</a> : null)}
+    <Page>
+      {head(job.status === 'done' ? (
+        <Button asChild variant={n && decided === n ? 'default' : 'secondary'}><a href={reportUrl(id, lang)} target="_blank" rel="noopener"><FileText />{t('act.report')}</a></Button>
+      ) : null)}
       {verdict}
-      {job.partial && <div className="note"><Icon id="alert" /><span>{t('v.partial')}</span></div>}
-      <div className="layout">
-        <div className="card player-card">
+      {job.partial && <Note className="-mt-2">{t('v.partial')}</Note>}
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(280px,380px)_minmax(0,1fr)]">
+        <Card className="overflow-visible p-3 xl:sticky xl:top-0">
           <Player ref={player} src={src} poster={poster} duration={dur} markers={markers} selected={sel} onSelect={i => select(i, true)} onTime={onTime}
             initialT={n ? Math.max(0, viols[0].timecode_sec - 1) : 0}
             hint={n ? <span dangerouslySetInnerHTML={{ __html: t('keys') }} /> : null} />
-        </div>
-        <div>
-          <div className="findings">
+        </Card>
+        <div className="min-w-0">
+          <div className="flex flex-col gap-3.5">
             {!n ? (
-              <div className="card clear-card"><h3>{t(failed ? 'c.noResult' : 'c.whatChecked')}</h3>
-                <p className="muted">{failed ? '' : scenes.length ? t('c.scenes', { n: scenes.length }) : t('c.scanned')}</p>
-                {scenes.length > 0 && <ul className="scenes">{scenes.map((s, i) => <li key={i}><button onClick={() => player.current?.seek(s.t, true)}><span className="t num">{tc(s.t)}</span><span lang="ru">{s.scene}</span></button></li>)}</ul>}
-              </div>
+              <Card className="p-7">
+                <h3 className="mb-1.5 text-lg font-semibold">{t(failed ? 'c.noResult' : 'c.whatChecked')}</h3>
+                <p className="text-muted-foreground">{failed ? '' : scenes.length ? t('c.scenes', { n: scenes.length }) : t('c.scanned')}</p>
+                {scenes.length > 0 && (
+                  <ul className="mt-3.5 flex flex-col gap-px">
+                    {scenes.map((s, i) => <li key={i}><button type="button" className={sceneBtn} onClick={() => player.current?.seek(s.t, true)}><span className={sceneT}>{tc(s.t)}</span><span lang="ru">{s.scene}</span></button></li>)}
+                  </ul>
+                )}
+              </Card>
             ) : viols.map((v, i) => {
               const f: FindingBrief | undefined = fById[i];
+              const on = i === sel;
               return (
-                <article key={i} data-i={i} className={`card find ${i === sel ? 'on' : ''} ${f?.decision === 'confirm' ? 'confirm' : f?.decision ? 'reject' : ''}`}
+                <article key={i} data-finding={i}
+                  className={cn(cardClass, 'transition-[border-color,box-shadow] duration-200', on && 'border-foreground ring-1 ring-foreground')}
                   onClick={e => { if (!(e.target as HTMLElement).closest('button,a,summary,textarea,input')) select(i, true); }}>
-                  <div className="find-h"><span className="num">{i + 1}</span><h3>{typeName(v.type_code, v.type)}</h3>
-                    <div className="tc">{f && <Link className="btn xs ghost" to={`/findings/${f.id}`} onClick={e => e.stopPropagation()}>{t('ev.open')}</Link>}
-                      <button className="btn sm" onClick={e => { e.stopPropagation(); select(i, false); player.current?.seek(Math.max(0, v.timecode_sec - 1), true); }}><Icon id="play" /><span className="num">{tc(v.timecode_sec)}</span></button></div></div>
-                  <div className="find-b">
-                    <FrameStrip frames={v.evidence_frames || []} keyT={v.timecode_sec} caption={job.filename || ''} />
-                    <div>
-                      {f ? <DescriptionBlock f={f} editable={can('operator')} onChange={onFindingChange} />
-                        : <><p className="label">{t('f.seen')}</p><p className="desc" lang="ru">{v.description}</p></>}
-                      <RuleBlock rule={v.rule || {}} typeCode={v.type_code} clipUrl={(job.clips || []).includes(i) ? `/ui/api/jobs/${id}/violations/${i}/clip.mp4` : null} />
+                    <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3.5 sm:px-5 sm:py-4">
+                      <span className={cn('grid h-7 min-w-7 shrink-0 place-items-center rounded-md px-1.5 text-[13px] font-semibold tabular-nums',
+                        f?.decision === 'confirm' ? 'bg-destructive text-white' : f?.decision ? 'bg-muted text-faint' : 'bg-primary text-white')}>{i + 1}</span>
+                      <h3 className="flex-[1_1_60%] text-[17px] font-semibold leading-tight sm:text-lg">{typeName(v.type_code, v.type)}</h3>
+                      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                        {f && <Button asChild size="xs" variant="ghost"><Link to={`/findings/${f.id}`} onClick={e => e.stopPropagation()}>{t('ev.open')}</Link></Button>}
+                        <Button size="sm" variant="secondary" onClick={e => { e.stopPropagation(); select(i, false); player.current?.seek(Math.max(0, v.timecode_sec - 1), true); }}>
+                          <Play className="fill-current" /><span className="tracking-wide tabular-nums">{tc(v.timecode_sec)}</span>
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  {f && <DecisionBar f={f} editable={can('operator')} onChange={onFindingChange} />}
+                    <div className="grid gap-5 px-4 py-[18px] sm:grid-cols-[auto_minmax(0,1fr)] sm:px-5">
+                      <FrameStrip frames={v.evidence_frames || []} keyT={v.timecode_sec} caption={job.filename || ''} />
+                      <div className="min-w-0">
+                        {f ? <DescriptionBlock f={f} editable={can('operator')} onChange={onFindingChange} />
+                          : <><p className={labelClass}>{t('f.seen')}</p><p className="max-w-[68ch] text-[15px] leading-relaxed" lang="ru">{v.description}</p></>}
+                        <RuleBlock rule={v.rule || {}} typeCode={v.type_code} open={i === sel} clipUrl={(job.clips || []).includes(i) ? `/ui/api/jobs/${id}/violations/${i}/clip.mp4` : null} />
+                      </div>
+                    </div>
+                    {f && <DecisionBar f={f} editable={can('operator')} onChange={onFindingChange} />}
                 </article>
               );
             })}
@@ -221,7 +278,7 @@ export default function CheckPage() {
           <TechDetails job={job} dur={dur} onSeek={tt => player.current?.seek(tt, true)} />
         </div>
       </div>
-    </div>
+    </Page>
   );
 }
 
@@ -235,27 +292,47 @@ function TechDetails({ job, dur, onSeek }: { job: Job; dur: number; onSeek: (t: 
     if (k === 'people') {
       let d = 'M0 16';
       tl!.t.forEach((tt, i) => { d += ` L${(tt / dur * 1000).toFixed(1)} ${(16 - Math.min(3, vals[i] || 0) / 3 * 13).toFixed(1)}`; });
-      return <path d={`${d} L1000 16 Z`} fill="var(--info)" fillOpacity=".25" stroke="var(--info)" vectorEffect="non-scaling-stroke" />;
+      return <path d={`${d} L1000 16 Z`} className="fill-info/25 stroke-info" vectorEffect="non-scaling-stroke" />;
     }
-    const rects: React.ReactNode[] = []; let start: number | null = null;
-    const push = (a: number, b: number) => rects.push(<rect key={rects.length} x={(a / dur * 1000).toFixed(1)} y="3" width={Math.max(2, (b - a) / dur * 1000).toFixed(1)} height="10" rx="2" fill="var(--warn)" />);
+    const rects: ReactNode[] = []; let start: number | null = null;
+    const push = (a: number, b: number) => rects.push(<rect key={rects.length} x={(a / dur * 1000).toFixed(1)} y="3" width={Math.max(2, (b - a) / dur * 1000).toFixed(1)} height="10" rx="2" className="fill-warning" />);
     tl!.t.forEach((tt, i) => { if (vals[i] && start === null) start = tt; if (!vals[i] && start !== null) { push(start, tt); start = null; } });
     if (start !== null) push(start, dur);
     return <>{rects}</>;
   };
   const scenes = (m.scenes as { t: number; scene: string }[] | undefined) || [];
+  const kv: [string, ReactNode][] = [
+    [t('kv.analyzer'), job.analyzer || '-'], [t('kv.frames'), String(m.frames ?? '-')],
+    [t('kv.moments'), ((m.candidates as unknown[]) || []).length || '-'], [t('kv.calls'), String(m.vlm_calls ?? '-')],
+    [t('kv.time'), `${job.processing_sec ?? '-'} ${t('sec')}`], [t('kv.id'), job.job_id],
+  ];
   return (
-    <details className="tech card">
-      <summary><Icon id="chev" />{t('tech.title')}</summary>
-      <div className="tech-body">
-        <div className="kv">
-          <div>{t('kv.analyzer')}<b>{job.analyzer || '-'}</b></div><div>{t('kv.frames')}<b>{String(m.frames ?? '-')}</b></div>
-          <div>{t('kv.moments')}<b>{((m.candidates as unknown[]) || []).length || '-'}</b></div><div>{t('kv.calls')}<b>{String(m.vlm_calls ?? '-')}</b></div>
-          <div>{t('kv.time')}<b>{job.processing_sec ?? '-'} {t('sec')}</b></div><div>{t('kv.id')}<b>{job.job_id}</b></div>
+    <details className="group mt-5 border-t border-border">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 py-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-[15px] transition-transform duration-200 group-open:rotate-90" />{t('tech.title')}
+      </summary>
+      <div className="flex flex-col gap-4 pb-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-px overflow-hidden rounded-[10px] border border-border bg-border">
+          {kv.map(([k, v]) => <div key={k} className="bg-card px-3 py-2.5 text-xs text-muted-foreground">{k}<b className="block truncate text-[15px] font-semibold text-foreground tabular-nums">{v}</b></div>)}
         </div>
-        {lanes.length > 0 && <div><p className="label">{t('tech.signals')}</p><div className="lanes">{lanes.map(k => <div key={k} className="lrow"><span className="lab">{t(`lane.${k}`)}</span><div className="track"><svg viewBox="0 0 1000 16" preserveAspectRatio="none">{lane(k)}</svg></div></div>)}</div></div>}
-        {scenes.length > 0 && <div><p className="label">{t('tech.saw')}</p><ul className="scenes">{scenes.map((s, i) => <li key={i}><button onClick={() => onSeek(s.t)}><span className="t num">{tc(s.t)}</span><span lang="ru">{s.scene}</span></button></li>)}</ul></div>}
-        {job.warning && <div className="muted small">{job.warning}</div>}
+        {lanes.length > 0 && (
+          <div><p className={labelClass}>{t('tech.signals')}</p>
+            <div className="flex flex-col gap-1">
+              {lanes.map(k => (
+                <div key={k} className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{t(`lane.${k}`)}</span>
+                  <div className="relative h-4 rounded-[3px] bg-subtle"><svg viewBox="0 0 1000 16" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">{lane(k)}</svg></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {scenes.length > 0 && (
+          <div><p className={labelClass}>{t('tech.saw')}</p>
+            <ul className="flex flex-col gap-px">{scenes.map((s, i) => <li key={i}><button type="button" className={sceneBtn} onClick={() => onSeek(s.t)}><span className={sceneT}>{tc(s.t)}</span><span lang="ru">{s.scene}</span></button></li>)}</ul>
+          </div>
+        )}
+        {job.warning && <div className="text-[13px] text-muted-foreground">{job.warning}</div>}
       </div>
     </details>
   );

@@ -1,17 +1,34 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, Download, Film, Flag, Pencil, Search, Video } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
+import { ErrorBanner } from '../components/ErrorBanner';
 import { useFeed } from '../components/events';
+import { EmptyState, Page, PageHeader } from '../components/page';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
+import { Chip } from '../components/ui/chip';
+import { Input } from '../components/ui/input';
+import { Select } from '../components/ui/select';
 import { useI18n } from '../i18n';
-import type { FindingBrief, RuleType } from '../types';
-import { Icon, tc, useAgo } from '../ui';
+import { useRules } from '../lib/rules';
+import { cn } from '../lib/utils';
+import type { FindingBrief } from '../types';
+import { tc, useAgo } from '../ui';
 
 type Quick = 'all' | 'pending' | 'rejected' | 'confirmed' | 'toVerify' | 'verified' | 'disagreed' | 'edited';
 const QUICK: Record<Quick, Record<string, string>> = {
   all: {}, pending: { decision: 'pending' }, rejected: { decision: 'reject' }, confirmed: { decision: 'confirm' },
-  toVerify: { decision: 'decided', verified: 'false' }, verified: { verified: 'true' }, disagreed: { verified: 'true', disagree: '1' }, edited: { edited: 'true' },
+  toVerify: { decision: 'decided', verified: 'false' }, verified: { verified: 'true' }, disagreed: { verified: 'true', verify_result: 'disagree' }, edited: { edited: 'true' },
 };
 const PAGE = 50;
+const PERIOD_SEC: Record<string, number> = { today: 86400, week: 7 * 86400, month: 30 * 86400 };
+
+interface ListResponse { findings: FindingBrief[]; total: number; counts: Record<string, number>; operators: string[] }
+
+const th = 'px-5 py-3 text-left text-xs font-semibold text-muted-foreground';
+const td = 'md:px-5 md:py-3.5 md:align-middle';
 
 export default function ReviewPage() {
   const { t, typeName } = useI18n();
@@ -26,88 +43,132 @@ export default function ReviewPage() {
   const text = sp.get('text') || '';
   const [rows, setRows] = useState<FindingBrief[]>([]);
   const [total, setTotal] = useState(0);
-  const [limit, setLimit] = useState(PAGE);
-  const [types, setTypes] = useState<RuleType[]>([]);
   const [ops, setOps] = useState<string[]>([]);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const { types } = useRules();
   const feed = useFeed();
   const counts = feed.counts;
+  const rowsRef = useRef(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
 
-  const set = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); setSp(n, { replace: true }); setLimit(PAGE); };
+  const set = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); setSp(n, { replace: true }); };
 
-  const load = useCallback(async () => {
-    const p = new URLSearchParams({ limit: String(limit) });
+  const params = useCallback((limit: number, offset: number) => {
+    const p = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     const q = QUICK[quick] || {};
-    if (q.decision) p.set('decision', q.decision);
-    if (q.verified) p.set('verified', q.verified);
-    if (q.edited) p.set('edited', q.edited);
+    Object.entries(q).forEach(([k, v]) => p.set(k, v));
     if (source) p.set('source', source);
     if (type) p.set('type_code', type);
     if (op) p.set('decided_by', op);
     if (text) p.set('q', text);
-    if (period) p.set('since', String(Date.now() / 1000 - { today: 86400, week: 7 * 86400, month: 30 * 86400 }[period]!));
+    if (period && PERIOD_SEC[period]) p.set('since', String(Date.now() / 1000 - PERIOD_SEC[period]));
+    return p;
+  }, [quick, source, type, op, text, period]);
+
+  // a refresh re-reads everything already on screen (offset 0, limit = rows loaded); "more" appends the next page
+  const load = useCallback(async (append = false) => {
+    const have = rowsRef.current.length;
+    const p = append ? params(PAGE, have) : params(Math.max(PAGE, have), 0);
+    setBusy(true);
     try {
-      const d = await api<{ findings: FindingBrief[]; total: number }>(`/ui/api/findings?${p}`);
-      const list = q.disagree ? d.findings.filter(f => f.verify_result === 'disagree') : d.findings;
-      setRows(list); setTotal(q.disagree ? list.length : d.total);
-      setOps(o => Array.from(new Set([...o, ...d.findings.map(f => f.decided_by).filter((x): x is string => !!x)])).sort());
-    } catch { /* keep */ }
-  }, [quick, source, type, op, text, period, limit]);
+      const d = await api<ListResponse>(`/ui/api/findings?${p}`);
+      setRows(r => append ? [...r, ...d.findings] : d.findings);
+      setTotal(d.total);
+      setOps(d.operators || []);
+      setFailed(null);
+    } catch (e) { setFailed((e as Error).message); }
+    finally { setBusy(false); }
+  }, [params]);
 
+  // filters changed: start from the first page; live updates re-read what is on screen
+  useEffect(() => { rowsRef.current = []; }, [params]);
   useEffect(() => { load(); }, [load, feed.items]);
-  useEffect(() => { api<{ types: RuleType[] }>('/ui/api/rules').then(d => setTypes(d.types)).catch(() => { }); }, []);
 
-  const tiles: [Quick, string, number | undefined][] = useMemo(() => [
-    ['rejected', 'attn', counts.rejected], ['toVerify', 'warn', counts.to_verify], ['confirmed', 'bad', counts.confirmed],
-    ['pending', '', counts.pending], ['verified', 'ok', counts.verified], ['disagreed', 'bad', counts.disagreed], ['edited', '', counts.edited], ['all', '', counts.total],
+  const tiles: [Quick, number | undefined][] = useMemo(() => [
+    ['rejected', counts.rejected], ['toVerify', counts.to_verify], ['confirmed', counts.confirmed],
+    ['pending', counts.pending], ['verified', counts.verified], ['disagreed', counts.disagreed], ['edited', counts.edited], ['all', counts.total],
   ], [counts]);
 
+  const where = (f: FindingBrief) => f.source === 'camera' ? f.camera_name || f.camera_id : f.filename || f.job_id;
+
   return (
-    <div className="page wide">
-      <div className="page-head">
-        <div><h1>{t('rv.title')}</h1><p>{t('rv.lead')}</p></div>
-        <div className="acts"><a className="btn" href="/ui/api/findings.csv"><Icon id="download" />{t('rv.export')}</a></div>
+    <Page wide>
+      <PageHeader title={t('rv.title')} lead={t('rv.lead')}
+        actions={<Button asChild variant="secondary"><a href="/ui/api/findings.csv"><Download />{t('rv.export')}</a></Button>} />
+      <div className="flex flex-wrap gap-1.5">
+        {tiles.map(([k, n]) => <Chip key={k} on={quick === k} count={n} onClick={() => set('q', k)}>{t(`rv.${k}`)}</Chip>)}
       </div>
-      <div className="chips" style={{ marginBottom: 20 }}>
-        {tiles.map(([k, c, n]) => <button key={k} className={`chip ${quick === k ? 'on' : ''} ${c}`} onClick={() => set('q', k)}>{t(`rv.${k}`)}{n != null && <span className="n">{n}</span>}</button>)}
-      </div>
-      <div className="filters">
-        <select className="field sm" value={source} onChange={e => set('source', e.target.value)}>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('rv.filters')}>
+        <Select size="sm" wrapperClassName="w-auto min-w-[150px]" aria-label={t('rv.source')} value={source} onChange={e => set('source', e.target.value)}>
           <option value="">{t('rv.src.all')}</option><option value="upload">{t('rv.src.upload')}</option><option value="camera">{t('rv.src.camera')}</option>
-        </select>
-        <select className="field sm" value={type} onChange={e => set('type', e.target.value)}>
+        </Select>
+        <Select size="sm" wrapperClassName="w-auto min-w-[150px] max-w-[340px]" aria-label={t('rv.type')} value={type} onChange={e => set('type', e.target.value)}>
           <option value="">{t('rv.anyType')}</option>{types.map(x => <option key={x.code} value={x.code}>{x.code} · {typeName(x.code, x.type)}</option>)}
-        </select>
-        <select className="field sm" value={op} onChange={e => set('op', e.target.value)}>
+        </Select>
+        <Select size="sm" wrapperClassName="w-auto min-w-[150px]" aria-label={t('rv.operator')} value={op} onChange={e => set('op', e.target.value)}>
           <option value="">{t('rv.anyOp')}</option>{ops.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <select className="field sm" value={period} onChange={e => set('period', e.target.value)}>
+        </Select>
+        <Select size="sm" wrapperClassName="w-auto min-w-[150px]" aria-label={t('rv.period')} value={period} onChange={e => set('period', e.target.value)}>
           <option value="">{t('rv.any')}</option><option value="today">{t('rv.today')}</option><option value="week">{t('rv.week')}</option><option value="month">{t('rv.month')}</option>
-        </select>
-        <label className="search" style={{ maxWidth: 280 }}><span style={{ position: 'absolute', left: 14, top: 11, color: 'var(--faint)' }}><Icon id="search" /></span><input className="field sm" style={{ paddingLeft: 40 }} placeholder={t('search.any')} defaultValue={text} onKeyDown={e => { if (e.key === 'Enter') set('text', (e.target as HTMLInputElement).value); }} /></label>
+        </Select>
+        <label className="relative w-full max-w-[280px] min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-faint" aria-hidden="true" />
+          <Input size="sm" className="pl-8" placeholder={t('search.any')} aria-label={t('search.any')} defaultValue={text}
+            onKeyDown={e => { if (e.key === 'Enter') set('text', (e.target as HTMLInputElement).value); }} />
+        </label>
       </div>
-      <div className="card">
-        {!rows.length ? <div className="empty"><b>{t('rv.empty')}</b>{t('rv.emptyHint')}</div> : (
+      {failed && <ErrorBanner message={failed} onRetry={() => load()} />}
+      <Card>
+        {!rows.length ? <EmptyState title={t('rv.empty')}>{t('rv.emptyHint')}</EmptyState> : (
           <>
-            <table className="table">
-              <thead><tr><th>{t('rv.th.when')}</th><th>{t('rv.th.where')}</th><th>{t('rv.th.type')}</th><th>{t('rv.th.ai')}</th><th>{t('rv.th.decision')}</th><th>{t('rv.th.verify')}</th><th /></tr></thead>
-              <tbody>
-                {rows.map(f => (
-                  <tr key={f.id} className="click" onClick={() => nav(`/findings/${f.id}?from=review`)}>
-                    <td className="muted">{ago(f.created_at)}</td>
-                    <td><div className="fname"><span className="ic"><Icon id={f.source === 'camera' ? 'cam' : 'film'} /></span><div><b>{f.source === 'camera' ? f.camera_name || f.camera_id : f.filename || f.job_id}</b>{f.t_sec != null && <small className="num">{tc(f.t_sec)}</small>}</div></div></td>
-                    <td>{typeName(f.type_code, f.type_name)}{f.edited && <> <span className="pill xs info" title={t('rv.edited')}><Icon id="edit" /></span></>}</td>
-                    <td><span className="pill xs warn">{f.confidence != null ? t('rv.aiViolation', { p: Math.round(f.confidence * 100) }) : t('v.badTitle')}</span>{f.below_threshold && <> <span className="pill xs neutral" title={t('f.belowThresholdTip')}>{t('f.belowThreshold')}</span></>}</td>
-                    <td>{f.decision ? <><span className={`pill xs ${f.decision === 'confirm' ? 'bad' : 'neutral'}`}>{t(f.decision === 'confirm' ? 'f.confirmed' : 'f.notViolation')}</span><div className="muted small">{f.decided_by_name || f.decided_by}</div></> : <span className="pill xs warn">{t('fd.notDecided')}</span>}</td>
-                    <td>{f.verified ? <><span className={`pill xs ${f.verify_result === 'agree' ? 'ok' : 'bad'}`}><Icon id={f.verify_result === 'agree' ? 'check' : 'flag'} />{t(f.verify_result === 'agree' ? 'fd.agree' : 'fd.disagree')}</span><div className="muted small">{f.verified_by_name || f.verified_by}</div></> : f.decision ? <span className="muted">{t('fd.notVerified')}</span> : <span className="muted">-</span>}</td>
-                    <td className="c-acts"><div className="row-acts"><span className={`btn xs ${f.decision && !f.verified ? 'primary' : ''}`}>{t(f.decision && !f.verified ? 'rv.verifyBtn' : 'act.open')}</span></div></td>
-                  </tr>
-                ))}
+            <table className="w-full text-sm">
+              <thead className="hidden border-b border-border md:table-header-group">
+                <tr><th className={th}>{t('rv.th.when')}</th><th className={th}>{t('rv.th.where')}</th><th className={th}>{t('rv.th.type')}</th><th className={th}>{t('rv.th.ai')}</th><th className={th}>{t('rv.th.decision')}</th><th className={th}>{t('rv.th.verify')}</th><th className={th}><span className="sr-only">{t('act.open')}</span></th></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map(f => {
+                  const primary = f.decision && !f.verified;
+                  return (
+                    <tr key={f.id} className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 px-4 py-3 transition-colors hover:bg-subtle md:table-row md:p-0"
+                      onClick={e => { if (!(e.target as HTMLElement).closest('a,button')) nav(`/findings/${f.id}?from=review`); }}>
+                      <td className={cn(td, 'text-xs whitespace-nowrap text-muted-foreground md:text-sm')}>{ago(f.created_at)}</td>
+                      <td className={cn(td, 'col-start-1')}>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="hidden size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground md:grid">{f.source === 'camera' ? <Video className="size-4" /> : <Film className="size-4" />}</span>
+                          <div className="min-w-0"><b className="block max-w-[34ch] truncate font-semibold">{where(f)}</b>{f.t_sec != null && <small className="text-xs text-muted-foreground tabular-nums">{tc(f.t_sec)}</small>}</div>
+                        </div>
+                      </td>
+                      <td className={cn(td, 'col-start-1')}>{typeName(f.type_code, f.type_name)}{f.edited && <> <Badge variant="info" title={t('rv.edited')}><Pencil /></Badge></>}</td>
+                      <td className={cn(td, 'col-start-1 flex flex-wrap gap-1 md:table-cell')}>
+                        <Badge variant="warning">{f.confidence != null ? t('rv.aiViolation', { p: Math.round(f.confidence * 100) }) : t('v.badTitle')}</Badge>
+                        {f.below_threshold && <> <Badge variant="muted" title={t('f.belowThresholdTip')}>{t('f.belowThreshold')}</Badge></>}
+                      </td>
+                      <td className={cn(td, 'col-start-1')}>
+                        {f.decision ? <><Badge variant={f.decision === 'confirm' ? 'destructive' : 'muted'}>{t(f.decision === 'confirm' ? 'f.confirmed' : 'f.notViolation')}</Badge><div className="text-[13px] text-muted-foreground">{f.decided_by_name || f.decided_by}</div></>
+                          : <Badge variant="warning">{t('fd.notDecided')}</Badge>}
+                      </td>
+                      <td className={cn(td, 'col-start-1')}>
+                        {f.verified ? <><Badge variant={f.verify_result === 'agree' ? 'success' : 'destructive'}>{f.verify_result === 'agree' ? <Check /> : <Flag />}{t(f.verify_result === 'agree' ? 'fd.agree' : 'fd.disagree')}</Badge><div className="text-[13px] text-muted-foreground">{f.verified_by_name || f.verified_by}</div></>
+                          : <span className="text-muted-foreground">{f.decision ? t('fd.notVerified') : '-'}</span>}
+                      </td>
+                      <td className={cn(td, 'col-start-2 row-span-6 row-start-1 self-center md:text-right')}>
+                        <Button asChild size="xs" variant={primary ? 'default' : 'secondary'}>
+                          <Link to={`/findings/${f.id}?from=review`}>{t(primary ? 'rv.verifyBtn' : 'act.open')}</Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            <div className="pager"><span>{t('rv.total', { n: rows.length, t: total })}</span>{rows.length < total && <button className="btn xs" onClick={() => setLimit(l => l + PAGE)}>{t('rv.more')}</button>}</div>
+            <div className="flex items-center justify-end gap-2.5 border-t border-border px-5 py-3 text-[13.5px] text-muted-foreground">
+              <span>{t('rv.total', { n: rows.length, t: total })}</span>
+              {rows.length < total && <Button size="xs" variant="secondary" disabled={busy} onClick={() => load(true)}>{t('rv.more')}</Button>}
+            </div>
           </>
         )}
-      </div>
-    </div>
+      </Card>
+    </Page>
   );
 }

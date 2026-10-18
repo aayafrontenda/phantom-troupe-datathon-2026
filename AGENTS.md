@@ -56,7 +56,7 @@ backend/app/         (подробно - docs/backend.md; контракт - doc
   live/            WebSocket браузера, RTSP/файл-камеры (кольцевой буфер кадров → клип при тревоге), live-анализатор
 backend/i18n-kb.json  переводы типов нарушений и норм (en, kk); источник правды по-русски - ml/rules_kb.yaml
 backend/templates/ печатный отчёт проверки (ru/kk/en)
-frontend/          интерфейс: React + Vite + TS, дизайн forte.kz; роли оператор / супервайзер / админ - docs/tasks/FRONTEND.md
+frontend/          интерфейс: React + Vite + TS + Tailwind, дизайн forte.kz; роли оператор / супервайзер / админ - frontend/README.md
 tools/smoke_test.py       проверка «как жюри»: N видео параллельно, время и схема
 tools/loadtest.py         нагрузка: параллельные загрузки / шторм live-сессий
 tools/simulate_cameras.py камеры-симуляторы из файлов датасета
@@ -100,7 +100,7 @@ deploy/                   run_server.sh/.ps1, docker.ps1/.sh, Dockerfile (compos
 
 ```bash
 pip install -r requirements.txt                    # база: backend, mock, видео
-pip install -r ml/requirements-ml.txt              # модель (на ROG), torch с CUDA - см. docs/tasks/ML.md
+pip install -r ml/requirements-ml.txt              # модель (на ROG), torch с CUDA - см. README.md
 pytest -q                                          # тесты (backend + ml)
 ./deploy/run_server.sh                             # mock + hot reload; собирает frontend/dist при необходимости (Node 20+)
 (cd frontend && npm run dev)                       # интерфейс с горячей перезагрузкой на :5173
@@ -117,8 +117,11 @@ python tools/smoke_test.py --url http://127.0.0.1:8000 --key <KEY> --dir data/op
 - **Администратор** - пользователи, роли, камеры по операторам, состояние сервиса.
 Учётные записи: `SEED_USERS` в `.env` при первом запуске, дальше - раздел «Администрирование».
 
-## Роли в команде
+## Контракт ML ↔ бэкенд
 
-- ML (ROG, RTX 4070 8 ГБ): `ml/` - `docs/tasks/ML.md`
-- Backend + live (MacBook Pro M5 Pro): `backend/`, `deploy/`, `tools/` - `docs/tasks/BACKEND.md`
-- Frontend + сдача (MacBook Air M1): `frontend/`, `docs/` - `docs/tasks/FRONTEND.md`
+`ml.pipeline.analyze(path, on_progress=None, deadline=None) -> dict`. Бэкенд запускает её в отдельном процессе-воркере (один на GPU):
+- `on_progress(stage, 0..1)` - хотя бы раз в 1–2 минуты, иначе процесс считается зависшим (`WORKER_STALL_SEC`);
+- `on_progress.partial(result)` - промежуточный результат в формате ответа после детектора и после каждого блока вопросов VLM:
+  если к дедлайну пайплайн не успел, жюри получит его, а не пустой `no_violation`;
+- `deadline` - unix-время; при пачке загрузок бэкенд сокращает его, чтобы время досталось и следующим видео (не меньше `MIN_JOB_BUDGET_SEC`);
+- ответ проверяется по `ml/schema.py` и при мелких ошибках чинится (`warning` в ответе).

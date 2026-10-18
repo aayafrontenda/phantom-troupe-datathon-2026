@@ -1,31 +1,58 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Film, Plus, Video, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, wsUrl } from '../api';
 import { useAuth } from '../auth';
-import { Button } from '../components/ui/button';
-import { Film, Plus, Video } from 'lucide-react';
 import { CameraGallery } from '../components/CameraGallery';
-import { useFeed } from '../components/events';
+import { ErrorBanner } from '../components/ErrorBanner';
+import { refreshFeed, useFeed } from '../components/events';
+import { Button } from '../components/ui/button';
+import { DialogBody, DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
+import { Input, Label } from '../components/ui/input';
+import { Segmented } from '../components/ui/segmented';
+import { StateLine } from '../components/ui/state-line';
 import { useI18n } from '../i18n';
+import { useCameras } from '../lib/cameras';
+import { useTypeNames } from '../lib/rules';
+import { cn } from '../lib/utils';
 import type { Camera, FindingBrief } from '../types';
-import { Icon, serial, tc, useAgo, useUi } from '../ui';
+import { serial, tc, useAgo, useUi } from '../ui';
+
+export { useCameras } from '../lib/cameras';
 
 interface Det { group?: string; label?: string; score?: number; box: number[] }
+const WARN_GROUPS = ['phone', 'bag', 'drink', 'food'];
+const STATE_CODES = ['MOTION', 'EMPTY'];
+
+/* overlay inks come from the design tokens, so the canvas follows the theme like the rest of the page */
+interface Ink { warn: string; person: string; object: string; text: string; font: string }
+let inkCache: { theme: string; ink: Ink } | null = null;
+function inks(): Ink {
+  const theme = document.documentElement.dataset.theme || 'light';
+  if (inkCache?.theme === theme) return inkCache.ink;
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+  const ink = { warn: v('--salmon', '#E7798F'), person: v('--cv-person', '#93ABFF'), object: v('--cv-object', '#62D2C4'), text: v('--video', '#121216'), font: `600 12px ${v('--ui', 'system-ui, sans-serif')}` };
+  inkCache = { theme, ink };
+  return ink;
+}
 
 function drawBoxes(ctx: CanvasRenderingContext2D, dets: Det[], sx: number, sy: number) {
+  const ink = inks();
   dets.forEach(d => {
-    const [x1, y1, x2, y2] = d.box, warn = ['phone', 'bag', 'drink', 'food'].includes(d.group || '');
-    ctx.strokeStyle = warn ? '#FC9385' : d.group === 'person' ? '#93ABFF' : '#62D2C4'; ctx.lineWidth = 2;
+    const [x1, y1, x2, y2] = d.box, warn = WARN_GROUPS.includes(d.group || '');
+    ctx.strokeStyle = warn ? ink.warn : d.group === 'person' ? ink.person : ink.object; ctx.lineWidth = 2;
     ctx.strokeRect(x1 * sx, y1 * sy, (x2 - x1) * sx, (y2 - y1) * sy);
-    ctx.font = '600 12px "Open Sans", sans-serif';
+    ctx.font = ink.font;
     const label = `${d.label || d.group} ${(Number(d.score) || 0).toFixed(2)}`;
     ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(x1 * sx - 1, y1 * sy - 18, ctx.measureText(label).width + 10, 17);
-    ctx.fillStyle = '#120F14'; ctx.fillText(label, x1 * sx + 4, y1 * sy - 5);
+    ctx.fillStyle = ink.text; ctx.fillText(label, x1 * sx + 4, y1 * sy - 5);
   });
 }
 
 function CameraTile({ cam, onRemove }: { cam: Camera; onRemove?: () => void }) {
-  const { t, typeName, has } = useI18n();
+  const { t, has } = useI18n();
+  const typeName = useTypeNames();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [ms, setMs] = useState<number | null>(null);
   const [active, setActive] = useState<string[]>([]);
@@ -50,24 +77,37 @@ function CameraTile({ cam, onRemove }: { cam: Camera; onRemove?: () => void }) {
     open();
     return () => { closed = true; if (timer) clearTimeout(timer); ws?.close(); };
   }, [cam.id]);
-  const alarmed = active.some(c => !['MOTION', 'EMPTY'].includes(c));
+  const alarmed = active.some(c => !STATE_CODES.includes(c));
   const st = cam.state?.status || 'stopped';
   return (
-    <div className={`tile h-full w-full ${alarmed ? 'alarmed' : ''}`}>
-      <canvas ref={canvas} />
-      <div className="tile-bar"><span className={`rec ${st === 'online' ? '' : 'off'}`} /><span>{cam.name}</span><span className="sp" />
-        <small>{ms != null ? `${ms} ms` : has(`cam.${st}`) ? t(`cam.${st}`) : st}</small>
-        {onRemove && <button className="icon-btn" onClick={onRemove} title={t('live.removeCam')}><Icon id="x" /></button>}</div>
-      <div className="tile-foot">{active.map(c => <span key={c} className={`pill xs ${['MOTION', 'EMPTY'].includes(c) ? 'neutral' : 'bad'}`} title={typeName(c, c)}>{c}</span>)}</div>
+    <div className={cn('relative h-full w-full overflow-hidden rounded-xl bg-video outline-2 outline-offset-2 transition-[outline-color] duration-300', alarmed ? 'outline-primary' : 'outline-transparent')}>
+      <canvas ref={canvas} className="block h-full w-full object-contain" />
+      {/* neutral scrim over live video */}
+      <div className="absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/80 to-transparent px-3.5 pt-3 pb-5 text-[13.5px] font-semibold text-white">
+        <span aria-hidden="true" className={cn('size-[7px] rounded-full', st === 'online' ? 'animate-blink bg-salmon' : 'bg-white/40')} />
+        <span className="truncate">{cam.name}</span><span className="flex-1" />
+        <small className="text-[11.5px] font-medium text-white/70 tabular-nums">{ms != null ? `${ms} ms` : has(`cam.${st}`) ? t(`cam.${st}`) : st}</small>
+        {onRemove && (
+          <button type="button" onClick={onRemove} title={t('live.removeCam')} aria-label={t('live.removeCam')}
+            className="grid size-[26px] place-items-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"><X className="size-4" /></button>
+        )}
+      </div>
+      {active.length > 0 && (
+        <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-1.5 bg-gradient-to-t from-black/80 to-transparent px-3.5 pt-5 pb-3">
+          {active.map(c => {
+            const neutral = STATE_CODES.includes(c);
+            const name = neutral ? t(c === 'MOTION' ? 'live.motion' : 'live.empty') : typeName(c);
+            return (
+              <span key={c} className={cn('inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-semibold text-white', neutral ? 'bg-white/15' : 'bg-primary')}>
+                <span>{name}</span>
+                {name !== c && <span className="rounded-sm bg-white/20 px-1 text-[10px] leading-4 tracking-wider tabular-nums">{c}</span>}
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
-}
-
-export function useCameras() {
-  const [cams, setCams] = useState<Camera[]>([]);
-  const refresh = useCallback(async () => { try { setCams((await api<{ cameras: Camera[] }>('/ui/api/cameras')).cameras); } catch { /* keep */ } }, []);
-  useEffect(() => { refresh(); const id = setInterval(refresh, 10000); return () => clearInterval(id); }, [refresh]);
-  return { cams, refresh };
 }
 
 export async function addCameraDialog(modal: ReturnType<typeof useUi>['modal'], t: (k: string, v?: Record<string, string | number>) => string) {
@@ -75,12 +115,12 @@ export async function addCameraDialog(modal: ReturnType<typeof useUi>['modal'], 
     let name = '', url = '';
     return (
       <form onSubmit={e => { e.preventDefault(); if (url.trim()) close({ name: name.trim() || t('cam.default'), url: url.trim() }); }}>
-        <h3>{t('live.addCam')}</h3><p>{t('cam.addText')}</p>
-        <div className="form">
-          <div><label className="lbl">{t('cam.name')}</label><input className="field" placeholder={t('cam.namePh')} onChange={e => { name = e.target.value; }} autoFocus /></div>
-          <div><label className="lbl">{t('cam.address')}</label><input className="field" placeholder="rtsp://10.20.4.17:554/stream1" spellCheck={false} onChange={e => { url = e.target.value; }} /><small className="muted">{t('adm.camUrlHint')}</small></div>
-        </div>
-        <div className="acts"><button type="button" className="btn sm" onClick={() => close(null)}>{t('cancel')}</button><button type="submit" className="btn sm primary">{t('cam.connect')}</button></div>
+        <DialogTitle>{t('live.addCam')}</DialogTitle><DialogDescription>{t('cam.addText')}</DialogDescription>
+        <DialogBody>
+          <div><Label htmlFor="cam-name">{t('cam.name')}</Label><Input id="cam-name" placeholder={t('cam.namePh')} onChange={e => { name = e.target.value; }} autoFocus /></div>
+          <div><Label htmlFor="cam-url">{t('cam.address')}</Label><Input id="cam-url" placeholder="rtsp://10.20.4.17:554/stream1" spellCheck={false} onChange={e => { url = e.target.value; }} /><small className="mt-1 block text-xs text-muted-foreground">{t('adm.camUrlHint')}</small></div>
+        </DialogBody>
+        <DialogFooter><Button type="button" variant="secondary" size="sm" onClick={() => close(null)}>{t('cancel')}</Button><Button type="submit" size="sm">{t('cam.connect')}</Button></DialogFooter>
       </form>
     );
   });
@@ -91,8 +131,7 @@ export default function LivePage() {
   const { can } = useAuth();
   const { modal, confirm, toast } = useUi();
   const ago = useAgo();
-  const nav = useNavigate();
-  const { cams, refresh } = useCameras();
+  const { cams, refresh, error: camsError } = useCameras();
   const [tab, setTab] = useState<'open' | 'all'>('open');
   const feed = useFeed();
   // ids present when the page opened; anything newer is "fresh" and gets the arrival animation
@@ -128,6 +167,7 @@ export default function LivePage() {
         </div>
         {can('admin') && <Button onClick={addCam}><Plus />{t('live.addCam')}</Button>}
       </div>
+      {camsError && <ErrorBanner message={camsError} onRetry={refresh} />}
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {/* the stage: like a shared screen in a call, it takes the main part of the window */}
         <section aria-label={t('live.title')} className="relative flex min-h-[420px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-video p-3 shadow-sm sm:p-4">
@@ -150,15 +190,10 @@ export default function LivePage() {
           <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-4">
             <h2 className="text-[15px] font-semibold text-heading">{t('live.events')}</h2>
             {feed.counts.pending ? <span className="min-w-5 rounded-md bg-primary px-1.5 text-center text-[11px] leading-5 font-semibold text-primary-foreground tabular-nums">{feed.counts.pending}</span> : null}
-            <div role="tablist" className="ml-auto flex gap-0.5 rounded-lg bg-muted p-0.5">
-              {(['open', 'all'] as const).map(k => (
-                <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-                  className={`h-7 rounded-md px-2.5 text-[13px] font-medium transition-colors ${tab === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                  {t(k === 'open' ? 'live.open' : 'live.allEv')}
-                </button>
-              ))}
-            </div>
+            <Segmented className="ml-auto" value={tab} onChange={setTab} aria-label={t('live.events')}
+              options={[{ value: 'open', label: t('live.open') }, { value: 'all', label: t('live.allEv') }]} />
           </div>
+          {feed.error && <ErrorBanner className="m-3 mb-0 rounded-lg" onRetry={refreshFeed} />}
           <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-4">
             {!chat.length ? (
               <div className="m-auto max-w-[30ch] text-center text-sm text-muted-foreground text-pretty">
@@ -169,8 +204,8 @@ export default function LivePage() {
               const state = f.decision === 'confirm' ? 'confirm' : f.decision ? 'dismiss' : 'pending';
               const fresh = seen.current && !seen.current.has(f.id);
               return (
-                <Link key={f.id} to={`/findings/${f.id}?from=live`} onClick={e => { e.preventDefault(); nav(`/findings/${f.id}?from=live`); }}
-                  className={`group flex gap-2.5 text-left no-underline ${fresh ? '[animation:pop-in_.32s_var(--ease-out)_both]' : ''}`}>
+                <Link key={f.id} to={`/findings/${f.id}?from=live`}
+                  className={cn('group flex gap-2.5 text-left no-underline', fresh && '[animation:pop-in_.32s_var(--ease-out)_both]')}>
                   <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
                     {f.source === 'camera' ? <Video className="size-4" /> : <Film className="size-4" />}
                   </span>
@@ -180,9 +215,9 @@ export default function LivePage() {
                       <span className="shrink-0">{ago(f.created_at)}</span>
                       <span className="ml-auto shrink-0">№ {serial(f.id)}</span>
                     </div>
-                    <div className={`mt-1 rounded-2xl rounded-tl-md border px-3 py-2.5 transition-colors group-hover:border-border-strong ${state === 'pending' ? 'border-primary/25 bg-primary-soft/50' : 'border-border/60 bg-subtle'}`}>
-                      <span className={`state ${state}`}>{t(f.decision === 'confirm' ? 'f.confirmed' : f.decision ? 'f.notViolation' : 'ev.pending')}</span>
-                      <p className={`mt-1 text-sm leading-snug ${f.decision ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{typeName(f.type_code, f.type_name)}</p>
+                    <div className={cn('mt-1 rounded-2xl rounded-tl-md border px-3 py-2.5 transition-colors group-hover:border-border-strong', state === 'pending' ? 'border-primary/25 bg-primary-soft/50' : 'border-border/60 bg-subtle')}>
+                      <StateLine state={state}>{t(f.decision === 'confirm' ? 'f.confirmed' : f.decision ? 'f.notViolation' : 'ev.pending')}</StateLine>
+                      <p className={cn('mt-1 text-sm leading-snug', f.decision ? 'text-muted-foreground' : 'font-medium text-foreground')}>{typeName(f.type_code, f.type_name)}</p>
                       {(f.t_sec != null || f.verified) && (
                         <p className="mt-1 flex gap-2 text-xs text-muted-foreground tabular-nums">
                           {f.t_sec != null && <span>{t('ev.at', { t: tc(f.t_sec) })}</span>}{f.verified && <span>{t('fd.verified')}</span>}

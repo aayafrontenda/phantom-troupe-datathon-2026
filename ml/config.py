@@ -65,7 +65,7 @@ class Settings:
     merge_sec: float = field(default_factory=lambda: _f("MERGE_SEC", 5.0))
 
     # --- бюджет времени на одно видео (жюри ждёт максимум 300 с, с учётом очереди) ---
-    time_budget_sec: float = field(default_factory=lambda: _f("TIME_BUDGET_SEC", 120))
+    time_budget_sec: float = field(default_factory=lambda: _f("TIME_BUDGET_SEC", 90))
 
     # --- выход ---
     evidence_max_side: int = field(default_factory=lambda: _i("EVIDENCE_MAX_SIDE", 640))

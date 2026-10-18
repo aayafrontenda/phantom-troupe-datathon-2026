@@ -56,7 +56,8 @@ class AppState:
         pool = WorkerPool(settings.analyzer, mode=settings.worker_mode, workers=settings.workers,
                           warmup=settings.warmup, grace_sec=settings.watchdog_grace_sec,
                           stall_sec=settings.worker_stall_sec, max_attempts=settings.max_attempts,
-                          retry_on_error=settings.retry_on_error, log_file=log_file)
+                          retry_on_error=settings.retry_on_error, log_file=log_file,
+                          min_budget_sec=settings.min_job_budget_sec)
         state = cls(settings=settings, db=db, keys=keys, users=users, bus=bus, pool=pool, jobs=None, alerts=alerts,  # type: ignore[arg-type]
                     findings=findings, quality=quality, cameras=None, retention=Retention(db), limiter=RateLimiter(settings.rate_limit_per_min),  # type: ignore[arg-type]
                     log_file=log_file)

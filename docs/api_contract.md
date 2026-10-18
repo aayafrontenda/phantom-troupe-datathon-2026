@@ -124,7 +124,7 @@ curl https://<адрес>/api/v1/jobs/<job_id> -H "X-API-Key: <ключ>"
 
 | Метод | Путь | Что делает |
 | --- | --- | --- |
-| GET | `/ui/api/findings?source=&decision=pending\|confirm\|reject\|decided&verified=true\|false&type_code=&camera_id=&decided_by=&edited=&since=&until=&q=&limit=&offset=` | список + `total` + `counts{pending, confirmed, rejected, to_verify, rejected_unverified, verified, disagreed, edited}` |
+| GET | `/ui/api/findings?source=&decision=pending\|confirm\|reject\|decided&verified=true\|false&verify_result=agree\|disagree&type_code=&camera_id=&decided_by=&edited=&since=&until=&q=&limit=&offset=` | список + `total` + `counts{pending, confirmed, rejected, to_verify, rejected_unverified, verified, disagreed, edited}` + `operators[]` (логины, принимавшие решения) |
 | GET | `/ui/api/findings/stream` | **SSE**: `finding`, `finding_update`, `finding_deleted` |
 | GET | `/ui/api/findings/{id}` | находка целиком: `description_ai`, `description_edit`, `rule`, `frames[]` (base64), `video_url` / `clip_url` / `sequence[]` (кадры камеры), `history[]`, `siblings[]`, `alert` |
 | PATCH | `/ui/api/findings/{id}/description` | **operator** · `{"text": "..."}` - формулировка оператора (пустая или равная тексту ИИ = сброс) |

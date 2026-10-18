@@ -58,10 +58,10 @@ export function QueueTable({ rows, uploads, counts, filter, onFilter, q, onQuery
   return (
     <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
       <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-4 py-3">
-        <div role="tablist" aria-label={t('nav.checks')} className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+        <div role="tablist" aria-label={t('nav.checks')} className="flex max-w-full gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5">
           {tabs.map(k => (
             <button key={k} role="tab" aria-selected={filter === k} onClick={() => onFilter(k)}
-              className={cn('flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors',
+              className={cn('flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
                 filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
               {t(`f.${k}`)}
               <span className={cn('tabular-nums', k === 'review' && counts.review ? 'text-primary-ink' : 'text-faint')}>{counts[k]}</span>
@@ -92,7 +92,7 @@ export function QueueTable({ rows, uploads, counts, filter, onFilter, q, onQuery
           </thead>
           <tbody className="divide-y divide-border/60">
             {uploads.map(u => {
-              const f = u.sent / Math.max(1, u.total);
+              const f = Math.min(1, u.sent / Math.max(1, u.total));
               return (
                 <tr key={u.key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 px-4 py-3 md:table-row md:p-0">
                   <td className="md:px-4 md:py-3"><FileCell icon={<Upload className="size-4" />} name={u.name} sub={t('row.uploading', { a: (u.sent / 1e6).toFixed(1), b: (u.total / 1e6).toFixed(1) })} /></td>

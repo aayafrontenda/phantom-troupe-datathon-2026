@@ -1,50 +1,85 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { ExternalLink } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { KindLabel } from '../components/finding';
+import { EmptyState, Loading, Page, PageHeader } from '../components/page';
+import { Badge } from '../components/ui/badge';
+import { Card } from '../components/ui/card';
 import { useI18n } from '../i18n';
+import { useRules } from '../lib/rules';
 import type { RuleType } from '../types';
-import { Icon } from '../ui';
 
 // codes the live mode can raise: ml/live.py (desk_findings: T01/T02/T03/T16, detector conditions: T05/T13/T14/T15)
 const LIVE_CODES = new Set(['T01', 'T02', 'T03', 'T05', 'T13', 'T14', 'T15', 'T16']);
 
+const th = 'px-4 py-3 text-left text-xs font-semibold text-muted-foreground';
+const td = 'px-4 py-3.5 align-top';
+const link = 'inline-flex items-center gap-1 underline decoration-border-strong underline-offset-[3px] hover:decoration-foreground';
+
 export default function RulesPage() {
-  const { t, lang, typeName, typeField, docName, pointName, docUrl, has } = useI18n();
-  const [data, setData] = useState<{ types: RuleType[]; sources: Record<string, { url?: string; label?: string; short?: string }> } | null>(null);
-  const [err, setErr] = useState('');
-  useEffect(() => { api<typeof data>('/ui/api/rules').then(setData).catch(e => setErr((e as Error).message)); }, []);
+  const { t, lang, typeName, typeField, docName, pointName, docUrl } = useI18n();
+  const { data, error } = useRules();
+
+  const regulation = (ty: RuleType): ReactNode => (
+    <div className="flex flex-col gap-2 text-[13px]">
+      {ty.refs?.length ? ty.refs.map((r, i) => (
+        <div key={i}>
+          {r.point && <b className="font-semibold">{pointName(r.point)} - </b>}{docName(r)}
+          {r.url && <> <a href={docUrl(r.url)} target="_blank" rel="noopener" aria-label={t('f.openAdilet')} className={link}><ExternalLink className="size-3.5" /></a></>}
+          {r.quote ? <div className="text-muted-foreground"><q lang="ru">{r.quote}</q>{lang !== 'ru' && t('f.quoteRu') ? <> ({t('f.quoteRu')})</> : null}</div>
+            : r.paraphrase ? <div className="text-muted-foreground"><span lang="ru">{r.paraphrase}</span> ({t('f.paraphrase')})</div> : null}
+        </div>
+      )) : <span className="text-muted-foreground">{t('f.noPublic')}</span>}
+      {typeField(ty.code, 'caveat', ty.caveat) && <div className="text-xs text-warning">{typeField(ty.code, 'caveat', ty.caveat)}</div>}
+    </div>
+  );
+  const live = (ty: RuleType) => LIVE_CODES.has(ty.code) ? <Badge variant="success">{t('yes')}</Badge> : <span className="text-muted-foreground">{t('rules.recordings')}</span>;
+  const code = (ty: RuleType) => <Badge variant="secondary" className="tracking-wider">{ty.code}</Badge>;
+
   return (
-    <div className="page">
-      <div className="page-head"><div><h1>{t('rules.title')}</h1><p>{t('rules.lead')}</p></div></div>
-      <div className="card">
-        {err ? <div className="empty"><b>{t('rules.loadErr')}</b>{err}</div> : !data ? <div className="empty">{t('loading')}</div> : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table rules-table">
-              <thead><tr><th>{t('th.code')}</th><th>{t('th.violation')}</th><th>{t('th.looks')}</th><th>{t('th.regulation')}</th><th>{t('th.live')}</th></tr></thead>
-              <tbody>
+    <Page>
+      <PageHeader title={t('rules.title')} lead={t('rules.lead')} />
+      <Card>
+        {error ? <EmptyState title={t('rules.loadErr')}>{error}</EmptyState> : !data ? <Loading /> : (
+          <>
+            {/* wide screens: a table */}
+            <table className="hidden w-full text-sm lg:table">
+              <thead className="border-b border-border">
+                <tr><th className={th}>{t('th.code')}</th><th className={th}>{t('th.violation')}</th><th className={th}>{t('th.looks')}</th><th className={th}>{t('th.regulation')}</th><th className={th}>{t('th.live')}</th></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
                 {data.types.map(ty => (
                   <tr key={ty.code}>
-                    <td><span className="code">{ty.code}</span></td>
-                    <td><b>{typeName(ty.code, ty.type)}</b><div style={{ marginTop: 6 }}><span className={`kind ${ty.norm_kind || 'direct'}`}>{has(`kind.${ty.norm_kind || 'direct'}`) ? t(`kind.${ty.norm_kind || 'direct'}`) : ty.norm_kind}</span></div></td>
-                    <td className="vis">{typeField(ty.code, 'visual', ty.visual)}</td>
-                    <td style={{ fontSize: 13 }}>
-                      {ty.refs?.length ? ty.refs.map((r, i) => (
-                        <div key={i} style={{ marginBottom: 8 }}>
-                          {r.point && <b>{pointName(r.point)} - </b>}{docName(r)}{r.url && <> <a href={docUrl(r.url)} target="_blank" rel="noopener" aria-label={t('f.openAdilet')}><Icon id="link" /></a></>}
-                          {r.quote ? <div className="muted"><q lang="ru">{r.quote}</q>{lang !== 'ru' && t('f.quoteRu') ? <> ({t('f.quoteRu')})</> : null}</div>
-                            : r.paraphrase ? <div className="muted"><span lang="ru">{r.paraphrase}</span> ({t('f.paraphrase')})</div> : null}
-                        </div>
-                      )) : <span className="muted">{t('f.noPublic')}</span>}
-                      {typeField(ty.code, 'caveat', ty.caveat) && <div className="caveat">{typeField(ty.code, 'caveat', ty.caveat)}</div>}
-                    </td>
-                    <td>{LIVE_CODES.has(ty.code) ? <span className="pill ok">{t('yes')}</span> : <span className="muted">{t('rules.recordings')}</span>}</td>
+                    <td className={`${td} w-[72px]`}>{code(ty)}</td>
+                    <td className={`${td} w-[22%] min-w-[180px]`}><b className="font-semibold">{typeName(ty.code, ty.type)}</b><div className="mt-1.5"><KindLabel kind={ty.norm_kind || 'direct'} /></div></td>
+                    <td className={`${td} w-[26%] max-w-[34ch] text-muted-foreground`}>{typeField(ty.code, 'visual', ty.visual)}</td>
+                    <td className={td}>{regulation(ty)}</td>
+                    <td className={`${td} w-[110px] whitespace-nowrap`}>{live(ty)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+            {/* narrow screens: stacked cards, one per type */}
+            <ul className="divide-y divide-border lg:hidden">
+              {data.types.map(ty => (
+                <li key={ty.code} className="flex flex-col gap-3 px-4 py-4 text-sm">
+                  <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                    {code(ty)}
+                    <div className="min-w-0 flex-1"><b className="font-semibold">{typeName(ty.code, ty.type)}</b><div className="mt-1"><KindLabel kind={ty.norm_kind || 'direct'} /></div></div>
+                    <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"><span>{t('th.live')}:</span>{live(ty)}</div>
+                  </div>
+                  <div><div className="mb-1 text-xs font-semibold text-muted-foreground">{t('th.looks')}</div><p className="text-muted-foreground">{typeField(ty.code, 'visual', ty.visual)}</p></div>
+                  <div><div className="mb-1 text-xs font-semibold text-muted-foreground">{t('th.regulation')}</div>{regulation(ty)}</div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
-      </div>
-      {data && <p className="muted small" style={{ marginTop: 12 }}>{t('rules.sources')} {Object.values(data.sources).filter(s => s.url).map((s, i) => <span key={i}>{i > 0 && ' · '}<a href={s.url} target="_blank" rel="noopener">{s.label || s.short}</a></span>)}</p>}
-    </div>
+      </Card>
+      {data && (
+        <p className="-mt-2 text-[13px] text-muted-foreground">{t('rules.sources')} {Object.values(data.sources).filter(s => s.url).map((s, i) => (
+          <span key={i}>{i > 0 && ' · '}<a href={s.url} target="_blank" rel="noopener" className={link}>{s.label || s.short}</a></span>
+        ))}</p>
+      )}
+    </Page>
   );
 }

@@ -3,10 +3,10 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { FindingBrief } from '../types';
 
-interface FeedState { items: FindingBrief[]; counts: Record<string, number>; loaded: boolean }
+interface FeedState { items: FindingBrief[]; counts: Record<string, number>; loaded: boolean; error: string | null }
 type Listener = (s: FeedState) => void;
 
-let state: FeedState = { items: [], counts: {}, loaded: false };
+let state: FeedState = { items: [], counts: {}, loaded: false, error: null };
 const listeners = new Set<Listener>();
 let es: EventSource | null = null;
 let timer: number | null = null;
@@ -17,9 +17,13 @@ function emit() { listeners.forEach(l => l(state)); }
 async function reload() {
   try {
     const d = await api<{ findings: FindingBrief[]; counts: Record<string, number> }>('/ui/api/findings?limit=80', { silent401: true });
-    state = { items: d.findings, counts: d.counts, loaded: true };
+    state = { items: d.findings, counts: d.counts, loaded: true, error: null };
     emit();
-  } catch { /* keep the previous state */ }
+  } catch (e) {
+    // keep the previous list, but let the pages say the server is unreachable
+    state = { ...state, error: (e as Error).message || 'error' };
+    emit();
+  }
 }
 
 function scheduleReload() {

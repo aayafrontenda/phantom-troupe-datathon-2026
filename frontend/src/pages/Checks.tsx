@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyQueue } from '../components/inspection/EmptyQueue';
 import { PageBanner } from '../components/inspection/PageBanner';
 import { isActive, QUEUE_FILTERS, QueueTable, type QueueFilter } from '../components/inspection/QueueTable';
@@ -18,11 +19,13 @@ export default function ChecksPage() {
   const { uploads, pick, version } = useUploads();
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [filter, setFilter] = useState<QueueFilter>('all');
   const [q, setQ] = useState('');
 
   const refresh = useCallback(async () => {
-    try { setJobs((await api<{ jobs: JobRow[] }>('/ui/api/jobs?limit=200')).jobs); setLoaded(true); } catch { /* keep */ }
+    try { setJobs((await api<{ jobs: JobRow[] }>('/ui/api/jobs?limit=200')).jobs); setLoaded(true); setFailed(null); }
+    catch (e) { setFailed((e as Error).message); }
   }, []);
   useEffect(() => { refresh(); }, [refresh, version]);
   useEffect(() => {
@@ -48,6 +51,7 @@ export default function ChecksPage() {
   return (
     <div className="mx-auto flex max-w-[1280px] flex-col gap-5 pb-8">
       <PageBanner onUpload={pick} />
+      {failed && <ErrorBanner message={failed} onRetry={refresh} />}
       {loaded && !jobs.length && !uploads.length ? <EmptyQueue /> : (
         <>
           <DropZone onPick={pick} />
