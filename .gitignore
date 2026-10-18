@@ -15,7 +15,10 @@ frontend/dist/
 frontend/.vite/
 
 .DS_Store
+# secrets: copy .env.example to .env
+.env
 # AI-assistant scratch files
+.claude/
 .agents/
 .aider-desk/
 skills-lock.json
