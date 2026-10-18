@@ -25,7 +25,7 @@ export default function App() {
   const { t } = useI18n();
   if (!ready) return <div className="loading" style={{ paddingTop: '30vh' }}>{t('loading')}</div>;
   if (!user) return <LoginPage />;
-  const home = user.role === 'supervisor' ? '/review' : '/live';
+  const home = user.role === 'supervisor' ? '/review' : '/checks';
   return (
     <UploadProvider>
       <AppShell>

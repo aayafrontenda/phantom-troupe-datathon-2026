@@ -35,7 +35,7 @@ async def browser_session(ws: WebSocket, on_alert: Callable[[dict], None], busy:
     metrics.SSE_CLIENTS.inc()
     session: la.LiveSession | None = None
     try:
-        session = await asyncio.to_thread(la.new_session)
+        session = await asyncio.to_thread(la.new_session, busy)
     except Exception as e:
         await ws.send_text(json.dumps({"error": f"детектор недоступен: {e}"}, ensure_ascii=False))
     min_gap = 0.0

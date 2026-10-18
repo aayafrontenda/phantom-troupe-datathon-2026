@@ -44,7 +44,7 @@ export function RuleBlock({ rule, typeCode, clipUrl }: { rule: Rule; typeCode?: 
   const title = refs.length ? `${refs[0].point ? pointName(refs[0].point) + ', ' : ''}${docName(refs[0])}` : t('f.internalReg');
   const caveat = typeField(typeCode, 'caveat', rule.caveat);
   return (
-    <details className="rule">
+    <details className="rule" open>
       <summary><Icon id="chev" /><span>{t('f.rule')}: <b>{title}</b></span>{rule.kind && <> <span className={`kind ${rule.kind}`}>{has(`kind.${rule.kind}`) ? t(`kind.${rule.kind}`) : rule.kind}</span></>}</summary>
       <div className="rb">
         {refs.length ? refs.map((r, i) => (

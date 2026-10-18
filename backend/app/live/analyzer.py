@@ -44,10 +44,10 @@ class LiveSession:
 
 
 class MLLiveSession(LiveSession):
-    def __init__(self):
+    def __init__(self, busy: Any = None):
         from ml.live import LiveRules
         self.det = _get_detector()
-        self.rules = LiveRules()
+        self.rules = LiveRules(busy=busy)
 
     def process(self, img: np.ndarray) -> dict:
         with _detector_lock:
@@ -114,9 +114,10 @@ class MockLiveSession(LiveSession):
                     "norm": None, "severity": "info", "ts": time.time()}
 
 
-def new_session() -> LiveSession:
+def new_session(busy: Any = None) -> LiveSession:
+    """busy() -> True while the job queue is processing videos: the live VLM desk scan then pauses (jury first)."""
     if get_settings().analyzer == "ml":
-        return MLLiveSession()
+        return MLLiveSession(busy)
     return MockLiveSession()
 
 
