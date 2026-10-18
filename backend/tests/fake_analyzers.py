@@ -1,4 +1,3 @@
-"""Analyzers used only by the test-suite (ANALYZER=backend.tests.fake_analyzers:<name>)."""
 from __future__ import annotations
 
 import os
@@ -22,7 +21,6 @@ def quick(path: str, on_progress=None, deadline=None) -> dict:
 
 
 def slow_with_partial(path: str, on_progress=None, deadline=None) -> dict:
-    """Reports a partial result after 0.5 s, then hangs well past the deadline."""
     on_progress("frames", 0.1)
     time.sleep(0.5)
     on_progress.partial({"verdict": "violation",
@@ -34,13 +32,11 @@ def slow_with_partial(path: str, on_progress=None, deadline=None) -> dict:
 
 
 def hang(path: str, on_progress=None, deadline=None) -> dict:
-    """Never reports progress: the stall watchdog must kill it."""
     time.sleep(60)
     return {"verdict": "no_violation", "violations": []}
 
 
 def crash(path: str, on_progress=None, deadline=None) -> dict:
-    """Simulates a segfault in the worker process."""
     on_progress("detection", 0.2)
     os._exit(3)
 
@@ -58,7 +54,6 @@ def raise_error(path: str, on_progress=None, deadline=None) -> dict:
 
 
 def bad_result(path: str, on_progress=None, deadline=None) -> dict:
-    """Wrong verdict, 5 frames, missing type, garbage frame: the service must repair it."""
     f = _frame(path, 1.0)
     return {"verdict": "no_violation",
             "violations": [{"type": "", "timecode_sec": "1.25", "description": "",

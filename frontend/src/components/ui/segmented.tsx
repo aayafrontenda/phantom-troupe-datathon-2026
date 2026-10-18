@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils';
 
 export interface SegmentedOption<V extends string | number> { value: V; label: ReactNode; count?: ReactNode; lang?: string }
 
-/** Segmented control: a row of tabs in a muted trough, the selected one lifted onto the card tone. */
 export function Segmented<V extends string | number>({ value, onChange, options, className, size = 'default', ...rest }: {
   value: V; onChange: (v: V) => void; options: SegmentedOption<V>[]; className?: string; size?: 'default' | 'sm';
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>) {

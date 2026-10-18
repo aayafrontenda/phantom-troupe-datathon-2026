@@ -1,5 +1,3 @@
-/* Banknote-style engraved linework. GuillocheBand: woven strands whose amplitude swells around given points
-   (the video scrubber uses it to show where the AI looked closer). Rosette: concentric engraved rings for the login. */
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
 
@@ -27,7 +25,6 @@ function bandPaths(w: number, h: number, peaks: Peak[], strands: number) {
   return out;
 }
 
-/** progress: 0..1, peaks: x as 0..1 fraction of the width; hot peaks (still waiting for a person) are inked in raspberry. */
 export function GuillocheBand({ peaks, progress, height = 48, strands = 4 }: { peaks: { at: number; strength?: number; hot?: boolean }[]; progress: number; height?: number; strands?: number }) {
   const ref = useRef<SVGSVGElement>(null);
   const [w, setW] = useState(0);
@@ -54,7 +51,6 @@ export function GuillocheBand({ peaks, progress, height = 48, strands = 4 }: { p
   );
 }
 
-/** Concentric engraved rings (hypotrochoid-like), drawn once; the container rotates it slowly in CSS. */
 export function Rosette({ size = 640, rings = 30, className }: { size?: number; rings?: number; className?: string }) {
   const paths = useMemo(() => {
     const c = size / 2, out: string[] = [];
@@ -87,8 +83,6 @@ function lobedRing(c: number, r: number, amp: number, lobes: number, phase = 0) 
 }
 const MARK_RINGS = [lobedRing(16, 12.2, 1.9, 9), lobedRing(16, 12.2, 1.9, 9, Math.PI), lobedRing(16, 7.4, 1.2, 9, Math.PI / 2)];
 
-/** Small brand mark: a woven engraved rosette (two interlaced lobed rings) around a raspberry seal.
- *  The rings take the current text colour; the seal is raspberry unless `dotClassName` says otherwise. */
 export function Mark({ size = 26, className, dotClassName }: { size?: number; className?: string; dotClassName?: string }) {
   return (
     <svg className={cn('block shrink-0 text-foreground', className)} width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">

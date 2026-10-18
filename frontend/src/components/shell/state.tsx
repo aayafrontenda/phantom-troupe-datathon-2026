@@ -1,4 +1,3 @@
-/* Navigation model for the sidebar: the same sections, labels and role checks as the former top tabs. */
 import { BookOpenCheck, ChartColumn, Cctv, ListVideo, Settings, UserCheck, type LucideIcon } from 'lucide-react';
 
 export type Need = 'operator' | 'supervisor' | 'admin';

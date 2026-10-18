@@ -1,4 +1,3 @@
-/* App shell: 100vh, no window scroll. Rail | collapsible sidebar | (top bar + the only scrolling area). */
 import { useCallback, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useI18n } from '../../i18n';
@@ -18,7 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const setCollapsed = useCallback((c: boolean) => {
     setCollapsedState(c);
-    try { localStorage.setItem(KEY, c ? 'collapsed' : 'open'); } catch { /* ignore */ }
+    try { localStorage.setItem(KEY, c ? 'collapsed' : 'open'); } catch {}
   }, []);
 
   return (

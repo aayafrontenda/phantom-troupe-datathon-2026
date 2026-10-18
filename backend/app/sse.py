@@ -1,4 +1,3 @@
-"""Server-Sent Events helper over the event bus."""
 from __future__ import annotations
 
 import asyncio

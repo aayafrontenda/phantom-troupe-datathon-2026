@@ -1,4 +1,3 @@
-"""AI quality for supervisors: precision by type, weekly false positives, operators, thresholds, dataset export."""
 from __future__ import annotations
 
 import os

@@ -1,15 +1,3 @@
-"""Live-режим на камере ноутбука (или любом потоке) - без сервера, для проверки и демонстрации.
-
-    python -m ml.live_cam                 # вебкамера 0
-    python -m ml.live_cam --cam 1         # другая камера
-    python -m ml.live_cam --cam video.mp4 # файл как «камера» (в реальном времени)
-    python -m ml.live_cam --cam rtsp://…  # IP-камера
-
-Окно: кадр с рамками детектора и рамкой рабочего места; справа - что модель видит на рабочем месте
-(раз в LIVE_VLM_SEC секунд) и лента тревог: когда нарушение произошло и через сколько подтверждено.
-Клавиши: q / Esc - выход, s - снимок окна в storage/live_cam/.
-Логика та же, что в live-режиме сервиса (ml/live.py) и при анализе видео (ml/workplace.py).
-"""
 from __future__ import annotations
 
 import argparse
@@ -124,7 +112,6 @@ def main() -> int:
     if not cap.isOpened():
         print(f"Не удалось открыть камеру {a.cam!r}")
         return 1
-    # окно - через Tkinter (входит в Python): у opencv-python-headless, который нужен серверу, окон нет
     import tkinter as tk
     from PIL import ImageTk
 
@@ -161,7 +148,7 @@ def main() -> int:
             s["view"] = render(frame, dets, rules, log, s["fps"])
             photo = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(s["view"], cv2.COLOR_BGR2RGB)))
             label.configure(image=photo)
-            label.image = photo  # держим ссылку, иначе Tk покажет пустоту
+            label.image = photo
         root.after(int(1000 / src_fps) if is_file else 5, tick)
 
     def snapshot(_=None) -> None:

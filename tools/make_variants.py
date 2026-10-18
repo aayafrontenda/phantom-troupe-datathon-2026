@@ -1,21 +1,3 @@
-"""Изменённые копии обучающих видео - проверка устойчивости (FAQ 7 разрешает синтетику): то, что бывает с настоящей
-камерой, а не склейка разных роликов (камера не прыгает между ракурсами посреди записи).
-
-    mirror    зеркально по горизонтали - касса «с другой стороны», другой ракурс
-    rotate    поворот на ±8° с увеличением без чёрных углов - камера висит чуть иначе
-    blackgap  вставка 3 с чёрного экрана (обрыв сигнала); таймкоды после вставки сдвигаются
-    freeze    3 с застывшего кадра (зависание камеры) - вдали от размеченного нарушения
-    trim      без первых 3 с - ролик начинается посреди событий; таймкоды сдвигаются
-
-Для каждого варианта - папка с видео (имена как в датасете) и labels.csv с пересчитанными таймкодами:
-
-    python tools/make_variants.py --videos ~/videos --out ~/variants
-    python tools/eval_parallel.py --videos ~/variants/mirror --labels ~/variants/mirror/labels.csv \\
-        --out ~/variants/mirror/out --jobs 3
-
-Запускать там же, где eval (на сервере): видео получаются большими, гонять их по сети незачем.
-Видео жюри сюда не класть - только обучающие.
-"""
 from __future__ import annotations
 
 import argparse
@@ -32,14 +14,12 @@ sys.path.insert(0, str(REPO))
 
 from ml.eval.evaluate import HERE, load_labels, video_map  # noqa: E402
 
-# по 2–4 видео на ракурс: нарушения разных типов и нормальные пары к ним
 DEFAULT = [2, 3, 4, 16, 17, 11, 12, 15, 20, 23, 30, 31, 40, 43, 46, 34, 37, 38]
 KINDS = ("mirror", "rotate", "blackgap", "freeze", "trim")
-GAP = 3.0  # секунд чёрного экрана / застывшего кадра / обрезки
+GAP = 3.0
 
 
 def _event_safe_start(label: float | None, duration: float) -> float:
-    """Начало вставки/зависания: 40% длительности, но не ближе 5 с к размеченному нарушению."""
     t = 0.4 * duration
     if label is not None and abs(t - label) < 5:
         t = label + 6 if label + 6 + GAP < duration else max(0.0, label - 5 - GAP)
@@ -49,13 +29,12 @@ def _event_safe_start(label: float | None, duration: float) -> float:
 def _rotate(img: np.ndarray, angle: float) -> np.ndarray:
     h, w = img.shape[:2]
     a = math.radians(abs(angle))
-    scale = max(math.cos(a) + h / w * math.sin(a), math.cos(a) + w / h * math.sin(a))  # без чёрных углов
+    scale = max(math.cos(a) + h / w * math.sin(a), math.cos(a) + w / h * math.sin(a))
     m = cv2.getRotationMatrix2D((w / 2, h / 2), angle, scale)
     return cv2.warpAffine(img, m, (w, h), flags=cv2.INTER_LINEAR)
 
 
 def make(src: Path, dst: Path, kind: str, label: float | None, num: int) -> float | None:
-    """Пишет изменённое видео; возвращает новый таймкод нарушения (None - нет нарушения или оно вырезано)."""
     cap = cv2.VideoCapture(str(src))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)

@@ -1,9 +1,3 @@
-"""Запуск анализа одного видео из консоли.
-
-    python -m ml.cli data/open/videos/X-1.mov            # полный пайплайн
-    python -m ml.cli data/open/videos/X-1.mov --mock     # mock
-    python -m ml.cli video.mov --out result.json --no-images
-"""
 from __future__ import annotations
 
 import argparse

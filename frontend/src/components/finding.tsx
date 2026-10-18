@@ -1,4 +1,3 @@
-/* Building blocks of a finding: frames, description (AI vs operator wording), regulation, decision, verification. */
 import { Check, ChevronRight, Clapperboard, ExternalLink, Flag, Pencil, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../api';
@@ -49,7 +48,6 @@ export function FrameStrip({ frames, keyT, caption }: { frames: Frame[]; keyT?: 
   );
 }
 
-/** Keep “№ 231” and “п. 20” on one line in norm citations. */
 const nb = (s: string) => s.replace(/(№|п\.|пп\.) /g, '$1 ');
 const KIND_CLASS: Record<string, string> = { direct: 'text-success', indirect: 'text-warning', internal: 'text-muted-foreground' };
 
@@ -88,7 +86,6 @@ export function RuleBlock({ rule, typeCode, clipUrl, open = true }: { rule: Rule
   );
 }
 
-/* AI description, operator wording, and the editor (operators only). */
 export function DescriptionBlock({ f, onChange, editable }: { f: FindingBrief; onChange: (f: Finding) => void; editable: boolean }) {
   const { t, lang, typeField } = useI18n();
   const { toast } = useUi();
@@ -176,7 +173,7 @@ export function DecisionBar({ f, onChange, editable, names }: { f: FindingBrief;
   if (!editable) {
     return <div className={footClass}><Badge variant="warning">{t('fd.notDecided')}</Badge><span className="flex-1" /><Conf f={f} /></div>;
   }
-  // while a decision is being saved the buttons soften instead of snapping
+
   return (
     <div className={cn(footClass, busy && '[&_button]:opacity-60 [&_button]:blur-[.6px] [&_button]:transition-[filter,opacity]')} aria-busy={busy} onClick={e => e.stopPropagation()}>
       <span className="mr-1.5 text-[14.5px] font-semibold">{t('f.question')}</span>

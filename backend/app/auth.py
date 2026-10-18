@@ -1,8 +1,3 @@
-"""Who is calling: API keys (jury / admin / scripts) and user sessions (operator / supervisor / admin).
-
-Key roles: ui < jury < admin (X-API-Key). User roles: operator < supervisor < admin (cookie session).
-An admin key behaves like an admin user on the UI API, so scripts and tests can use it everywhere.
-"""
 from __future__ import annotations
 
 import hashlib
@@ -23,19 +18,18 @@ ROLE_RANK = {"ui": 0, "jury": 1, "admin": 2}
 
 @dataclass
 class Principal:
-    role: str                    # ui | jury | admin | operator | supervisor
+    role: str
     name: str
     key_prefix: str = ""
     user_id: int | None = None
     camera_ids: list[str] | None = None
-    kind: str = "key"            # key | user | anon
+    kind: str = "key"
     display_name: str = ""
     extra: dict = field(default_factory=dict)
 
     def allows(self, role: str) -> bool:
-        """API-key role check (ui / jury / admin)."""
         rank = ROLE_RANK.get(self.role)
-        if rank is None:  # user roles: only admins act as API admins
+        if rank is None:
             rank = 2 if self.role == "admin" else 0
         return rank >= ROLE_RANK[role]
 
@@ -102,8 +96,6 @@ class KeyStore:
 
 
 class RateLimiter:
-    """Token bucket per subject (API key or client IP)."""
-
     def __init__(self, per_minute: int, burst: int | None = None):
         self.rate = per_minute / 60.0
         self.burst = burst or max(1, per_minute)
@@ -124,8 +116,6 @@ class RateLimiter:
             return True
 
 
-# ----------------------------------------------------------------------------- resolution
-
 def _user_principal(u: dict) -> Principal:
     return Principal(u["role"], u["login"], user_id=u["id"], camera_ids=u.get("camera_ids"), kind="user",
                      display_name=u["name"])
@@ -140,8 +130,6 @@ def _extract(x_api_key: str | None, authorization: str | None, key_q: str | None
 
 
 def resolve_principal(st, cookies: dict, key: str | None, allow_open: bool = True) -> Principal | None:
-    """An explicit API key first (a script is a script even from a signed-in browser), then the session cookie,
-    then (UI only) the open-UI fallback for AUTH_REQUIRED=0."""
     p = st.keys.verify(key) if key else None
     if p is not None:
         if p.role == "admin":
@@ -156,7 +144,6 @@ def resolve_principal(st, cookies: dict, key: str | None, allow_open: bool = Tru
 
 
 def require_role(role: str):
-    """API-key gate (jury API, admin API)."""
     def dep(request: Request,
             x_api_key: str | None = Header(default=None, alias="X-API-Key"),
             authorization: str | None = Header(default=None),
@@ -176,7 +163,6 @@ def ui_access(request: Request,
               x_api_key: str | None = Header(default=None, alias="X-API-Key"),
               authorization: str | None = Header(default=None),
               key: str | None = Query(default=None)) -> Principal:
-    """UI API: a signed-in user, an API key, or (AUTH_REQUIRED=0) anyone as admin."""
     st = request.app.state.st
     p = resolve_principal(st, request.cookies, _extract(x_api_key, authorization, key))
     if p is None:
@@ -186,7 +172,6 @@ def ui_access(request: Request,
 
 
 def require_user(role: str):
-    """UI API gate by user role: operator < supervisor < admin. Keys with the admin role pass as admin."""
     def dep(request: Request, p: Principal = Depends(ui_access)) -> Principal:
         if not p.allows_user(role):
             raise HTTPException(status_code=403, detail="Недостаточно прав для этой операции")

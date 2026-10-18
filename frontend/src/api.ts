@@ -1,4 +1,3 @@
-/* Thin fetch wrapper over the UI API (/ui/api). Cookie session; 401 bubbles up so the app can show the login. */
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -28,7 +27,7 @@ export async function api<T = unknown>(path: string, opts: Opts = {}): Promise<T
   }
   const r = await fetch(path, { method: opts.method || 'GET', headers, body, credentials: 'same-origin' });
   let data: unknown = null;
-  try { data = await r.json(); } catch { /* empty body */ }
+  try { data = await r.json(); } catch {}
   if (!r.ok) {
     if (r.status === 401 && !opts.silent401 && onUnauthorized) onUnauthorized();
     const detail = (data && typeof data === 'object' && 'detail' in data) ? String((data as { detail: unknown }).detail) : `HTTP ${r.status}`;

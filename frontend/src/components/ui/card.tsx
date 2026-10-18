@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-/** Surface with a hairline border: tone steps, no heavy shadows. */
 export const cardClass = 'overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm';
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
   <div ref={ref} data-slot="card" className={cn(cardClass, className)} {...props} />

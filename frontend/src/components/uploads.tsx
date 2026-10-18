@@ -1,4 +1,3 @@
-/* Upload manager: XHR with progress, local preview URLs for freshly uploaded videos, drag-and-drop anywhere. */
 import { Upload } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -36,7 +35,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     xhr.onload = () => {
       setUploads(u => u.filter(x => x.key !== key));
       let body: { job_id?: string; detail?: string } = {};
-      try { body = JSON.parse(xhr.responseText); } catch { /* empty */ }
+      try { body = JSON.parse(xhr.responseText); } catch {}
       if (xhr.status !== 200 || !body.job_id) { toast(`${file.name}: ${body.detail || t('up.failed')}`, 'err'); setVersion(v => v + 1); return; }
       setLocal(l => ({ ...l, [body.job_id!]: URL.createObjectURL(file) }));
       setVersion(v => v + 1);

@@ -1,4 +1,3 @@
-"""База правил: типы нарушений и нормы из rules_kb.yaml."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -25,7 +24,6 @@ def rule_of(code: str) -> dict:
 
 
 def refs_struct(code: str) -> list[dict]:
-    """Ссылки на нормы в структурированном виде (для интерфейса)."""
     kb = load_kb()
     out = []
     for ref in rule_of(code).get("refs", []):
@@ -42,7 +40,6 @@ def refs_struct(code: str) -> list[dict]:
 
 
 def refs_text(code: str) -> str:
-    """Короткая строка-ссылка для конца description: «п. 20 - Правила … № 231»."""
     by_doc: dict[str, list[str]] = {}
     for r in refs_struct(code):
         by_doc.setdefault(r["document"], [])
@@ -53,7 +50,6 @@ def refs_text(code: str) -> str:
 
 
 def checklist_text() -> str:
-    """Список типов для промпта VLM."""
     lines = []
     for code, v in load_kb()["violations"].items():
         lines.append(f"{code} - {v['type_name']}. Признак на видео: {v['visual']}.")
@@ -71,7 +67,6 @@ def build_description(code: str, observed: str) -> str:
     if v.get("norm_kind") == "internal":
         text += " Прямой публичной нормы не установлено."
     elif v.get("norm_kind") == "indirect":
-        # жюри видит только description: косвенную норму нельзя выдавать за прямое основание
         caveat = (v.get("caveat") or "").strip().rstrip(".")
         text += f" Норма косвенная: {caveat[:1].lower()}{caveat[1:]}." if caveat else " Норма косвенная, прямой публичной нормы нет."
     return text

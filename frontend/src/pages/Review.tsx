@@ -66,7 +66,6 @@ export default function ReviewPage() {
     return p;
   }, [quick, source, type, op, text, period]);
 
-  // a refresh re-reads everything already on screen (offset 0, limit = rows loaded); "more" appends the next page
   const load = useCallback(async (append = false) => {
     const have = rowsRef.current.length;
     const p = append ? params(PAGE, have) : params(Math.max(PAGE, have), 0);
@@ -81,7 +80,6 @@ export default function ReviewPage() {
     finally { setBusy(false); }
   }, [params]);
 
-  // filters changed: start from the first page; live updates re-read what is on screen
   useEffect(() => { rowsRef.current = []; }, [params]);
   useEffect(() => { load(); }, [load, feed.items]);
 

@@ -1,17 +1,3 @@
-"""Параллельный прогон ml.eval.evaluate: видео делятся на N частей, каждая часть - свой процесс.
-
-GPU при последовательном прогоне загружен ~30% (видео идут по одному), поэтому 3–4 процесса на одной
-видеокарте дают прогон в 2–3 раза быстрее. В конце - общий отчёт из готовых результатов (без пересчёта).
-
-    python tools/eval_parallel.py --videos ~/videos --jobs 3
-    python tools/eval_parallel.py --videos ~/videos --jobs 3 --only 4,47,38,16   # только эти видео
-
-Ollama должна принимать столько же запросов одновременно: OLLAMA_NUM_PARALLEL >= jobs / gpus.
-
-Несколько GPU (--gpus G): на каждой своя Ollama на порту 11434 + номер GPU, например для второй:
-    CUDA_VISIBLE_DEVICES=1 OLLAMA_HOST=127.0.0.1:11435 ollama serve &
-Процесс i работает с GPU i % G: детектор и VLM на одной видеокарте.
-"""
 from __future__ import annotations
 
 import argparse
@@ -28,7 +14,6 @@ from ml.eval.evaluate import HERE, load_labels, video_map  # noqa: E402
 
 
 def shards(nums: list[int], vids: dict[int, Path], jobs: int) -> list[list[int]]:
-    """Делим по размеру файла (≈ длительности): самые длинные - первыми, каждое видео - в наименее загруженную часть."""
     parts: list[list[int]] = [[] for _ in range(jobs)]
     load = [0] * jobs
     for n in sorted(nums, key=lambda n: vids[n].stat().st_size, reverse=True):
@@ -84,7 +69,6 @@ def main() -> int:
         print(f"!! части {failed} завершились с ошибкой - см. {log_dir}")
     print(f"все части за {time.time() - started:.0f} с\n")
 
-    # общий отчёт: все результаты уже в кеше, ничего не пересчитывается
     cmd = [sys.executable, "-m", "ml.eval.evaluate", "--videos", a.videos, "--out", a.out, "--labels", a.labels]
     if a.only:
         cmd += ["--only", ",".join(map(str, nums))]

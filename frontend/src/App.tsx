@@ -15,7 +15,6 @@ import QualityPage from './pages/Quality';
 import ReviewPage from './pages/Review';
 import RulesPage from './pages/Rules';
 
-// video checks are the landing page for every role; monitoring stays one click away in the sidebar
 const HOME = '/checks';
 
 function Guard({ role, children }: { role: 'operator' | 'supervisor' | 'admin'; children: React.ReactNode }) {

@@ -1,8 +1,3 @@
-"""Findings: one record per possible violation, from an uploaded video or a live camera.
-
-Workflow: AI description -> operator may reword it and decides confirm / reject -> supervisor verifies the
-operator's decision (agree / disagree). Every step is kept in finding_history.
-"""
 from __future__ import annotations
 
 import base64
@@ -34,12 +29,10 @@ class FindingService:
         self.bus = bus
         self.alerts = alerts
         self.quality = quality
-        self.on_decided = None   # (finding, actor) -> None; the Telegram bot asks supervisors to verify rejections
+        self.on_decided = None
         self._lock = threading.Lock()
 
-    # ------------------------------------------------------------------ create
     def from_job(self, job: dict, result: dict) -> list[dict]:
-        """Create findings for a finished check (idempotent per job + violation index)."""
         out = []
         now = time.time()
         for i, v in enumerate(result.get("violations") or []):
@@ -57,7 +50,6 @@ class FindingService:
         return out
 
     def from_camera(self, alert: dict, camera: dict, frames: list[tuple[float, bytes]], alert_ts: float) -> dict | None:
-        """A camera alert with the frames around it: frames to disk, an mp4 if ffmpeg is present, one finding."""
         s = get_settings()
         now = time.time()
         code = alert.get("type_code") or "T99"
@@ -86,7 +78,6 @@ class FindingService:
                  ", clip" if clip else "")
         return f
 
-    # ------------------------------------------------------------------ read
     def get(self, fid: int, with_frames: bool = False) -> dict | None:
         r = self.db.one("SELECT * FROM findings WHERE id=?", (fid,))
         if r is None:
@@ -105,7 +96,6 @@ class FindingService:
                                       "t_sec", "confidence", "decision", "verified", "created_at")}
 
     def frames(self, f: dict) -> list[dict]:
-        """Up to three key frames as base64 JPEG (uploads: from the result file; cameras: from disk)."""
         if f["source"] == "upload":
             res = self._result(f["job_id"])
             viols = (res or {}).get("violations") or []
@@ -232,7 +222,6 @@ class FindingService:
         return {"findings": rows, "total": total}
 
     def operators(self, camera_ids: list[str] | None = None) -> list[str]:
-        """Logins that have decided at least one finding (for the supervisor's filter)."""
         scope, params = "WHERE decided_by IS NOT NULL", []
         if camera_ids is not None:
             marks = ",".join("?" for _ in camera_ids) or "''"
@@ -269,7 +258,6 @@ class FindingService:
             r["payload"] = loads(r.get("payload"), {})
         return rows
 
-    # ------------------------------------------------------------------ write
     def _log(self, fid: int, actor, action: str, payload: dict | None = None) -> None:
         self.db.insert("finding_history", {"finding_id": fid, "actor": actor.name, "actor_role": actor.role,
                                            "action": action, "payload": payload or {}, "created_at": time.time()})
@@ -302,7 +290,7 @@ class FindingService:
         else:
             fields.update(decision=decision, decided_by=actor.name, decided_at=now,
                           decision_comment=(comment or "").strip()[:1000] or None)
-            if f.get("decision") != decision:  # a changed decision needs a fresh verification
+            if f.get("decision") != decision:
                 fields.update(verified=0, verify_result=None, verified_by=None, verified_at=None, verify_comment=None)
             action = "decide"
         self.db.update("findings", "id", fid, fields)
@@ -389,8 +377,6 @@ class FindingService:
             r["filename"] = names.get(r["job_id"])
         return rows
 
-
-# ---------------------------------------------------------------------------- helpers
 
 def _camera_description(code: str, message: str | None) -> str:
     try:

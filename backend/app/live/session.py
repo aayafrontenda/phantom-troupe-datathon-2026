@@ -1,8 +1,3 @@
-"""WebSocket live sessions.
-
-/ui/api/live            browser sends JPEG frames (text JSON {"image": base64} or binary) -> detections + alerts
-/ui/api/cameras/{id}/ws server pushes frames of a managed camera (RTSP/file) -> {"frame", "detections", ...}
-"""
 from __future__ import annotations
 
 import asyncio
@@ -66,7 +61,6 @@ async def browser_session(ws: WebSocket, on_alert: Callable[[dict], None], busy:
                 continue
             if img is None:
                 continue
-            # when jury jobs are running, serve the browser at a reduced rate
             min_gap = (1.0 / s.live_fps_busy) if busy() else 0.0
             now = time.time()
             if now - last < min_gap:
@@ -123,7 +117,6 @@ async def camera_stream(ws: WebSocket, bus: EventBus, cam_id: str, snapshot: Cal
             except asyncio.TimeoutError:
                 await ws.send_text(json.dumps({"type": "keepalive", "ts": time.time()}))
                 continue
-            # drop backlog: only the newest frame matters
             while not q.empty():
                 msg = q.get_nowait()
             await ws.send_text(json.dumps(msg, ensure_ascii=False))

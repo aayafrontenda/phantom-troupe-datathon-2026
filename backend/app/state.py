@@ -1,4 +1,3 @@
-"""Application state: one object that owns every long-lived service (built once in main.create_app)."""
 from __future__ import annotations
 
 import base64
@@ -69,7 +68,6 @@ class AppState:
         state.cameras = CameraManager(db, bus, on_alert=state._on_live_alert, busy=pool.busy, on_clip=findings.from_camera)
         return state
 
-    # ------------------------------------------------------------------ lifecycle
     def start(self) -> None:
         self.pool.start()
         self.jobs.recover()
@@ -100,7 +98,6 @@ class AppState:
             except Exception:
                 pass
 
-    # ------------------------------------------------------------------ hooks
     def _on_finish(self, outcome) -> None:
         job = self.jobs.get(outcome.job_id) or {}
         self.jobs.on_finish(outcome)
@@ -114,7 +111,6 @@ class AppState:
             metrics.JOB_TOTAL_SECONDS.observe(done["finished_at"] - (done.get("request_started_at") or done["created_at"]))
 
     def _on_result(self, job: dict, result: dict) -> None:
-        """After a job is stored: findings for the review workflow, clips in the background, alerts."""
         try:
             self.findings.from_job(job, result)
         except Exception:
@@ -143,7 +139,6 @@ class AppState:
         return self.alerts.handle(self._apply_threshold(event), actor="live")
 
     def _apply_threshold(self, event: dict) -> dict:
-        """Adaptive per-type thresholds (learned from verified decisions): below it an alert is only ``low``."""
         try:
             if self.quality.below_threshold(event.get("type_code"), event.get("confidence")):
                 event["below_threshold"] = True

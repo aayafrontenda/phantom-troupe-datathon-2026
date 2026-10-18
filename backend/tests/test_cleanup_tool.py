@@ -1,4 +1,3 @@
-"""tools/cleanup_demo.py removes test checks through the UI API with an admin key."""
 from __future__ import annotations
 
 import sys

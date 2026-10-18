@@ -2,7 +2,6 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-/** Filter chip: a hairline pill that inverts to ink when selected. */
 const chipVariants = cva(
   'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-[13px] font-semibold whitespace-nowrap transition-[background-color,border-color,transform] duration-150 active:scale-[.97]',
   {

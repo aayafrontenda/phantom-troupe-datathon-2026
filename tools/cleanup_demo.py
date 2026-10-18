@@ -1,11 +1,3 @@
-"""Wipe test data before a demo: every uploaded check (video, result, findings, alerts) and every camera finding.
-
-    python tools/cleanup_demo.py --url https://<address> --key <ADMIN_KEY>            # dry run: lists what would go
-    python tools/cleanup_demo.py --url https://<address> --key <ADMIN_KEY> --yes      # delete
-    python tools/cleanup_demo.py --url ... --key ... --yes --keep-source jury          # keep jury uploads
-
-Users, cameras, API keys and settings are not touched.
-"""
 from __future__ import annotations
 
 import argparse

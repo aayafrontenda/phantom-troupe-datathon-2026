@@ -1,4 +1,3 @@
-"""Per-frame live analysis: detector + stateful rules (ANALYZER=ml) or a motion-based stand-in (mock)."""
 from __future__ import annotations
 
 import logging
@@ -34,8 +33,6 @@ def _get_detector() -> Any:
 
 
 class LiveSession:
-    """One stateful analysis stream (a browser tab or a camera)."""
-
     def process(self, img: np.ndarray) -> dict:
         raise NotImplementedError
 
@@ -47,8 +44,6 @@ class MLLiveSession(LiveSession):
     def __init__(self, busy=None):
         from ml.live import LiveRules
         self.det = _get_detector()
-        # busy() -> True while jury/UI videos are being analyzed: live keeps the detector but skips VLM questions,
-        # so camera sessions never queue in front of the jury at the single GPU
         self.rules = LiveRules(busy=busy)
 
     def process(self, img: np.ndarray) -> dict:
@@ -59,12 +54,6 @@ class MLLiveSession(LiveSession):
 
 
 class MockLiveSession(LiveSession):
-    """No model: background subtraction -> 'motion' boxes, so the UI has something to draw on a laptop.
-
-    Every motion episode raises one demo finding ([MOCK], rotating over a few violation types) so the
-    operator / supervisor workflow can be exercised without the model.
-    """
-
     ON, OFF = 3, 6
     DEMO_CODES = ("T13", "T15", "T14", "T01")
 

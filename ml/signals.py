@@ -1,8 +1,3 @@
-"""Сигналы состояния по кадрам и кандидаты событий для проверки VLM.
-
-Идея: дешёвый детектор смотрит каждый кадр (2 fps), а дорогая VLM - только окна вокруг кандидатов.
-Пороги здесь - стартовые; калибруйте их на ml/eval (docs/ml.md).
-"""
 from __future__ import annotations
 
 import os
@@ -14,7 +9,7 @@ import numpy as np
 from .detector import Det
 from .video import Frame
 
-SCREEN_ON_V = float(os.getenv("SCREEN_ON_V", 140))  # средняя яркость (HSV V) верхней половины ноутбука
+SCREEN_ON_V = float(os.getenv("SCREEN_ON_V", 140))
 
 
 @dataclass
@@ -23,7 +18,7 @@ class FrameSignals:
     people: int
     person_boxes: list[tuple[float, float, float, float]]
     groups: set[str]
-    screen_v: float | None          # яркость экрана, если ноутбук найден
+    screen_v: float | None
     person_near_laptop: bool
 
 
@@ -31,7 +26,7 @@ class FrameSignals:
 class Candidate:
     t: float
     reason: str
-    priority: int                   # 3 - сильный сигнал, 0 - равномерное покрытие
+    priority: int
     hints: list[str] = field(default_factory=list)
 
 
@@ -56,7 +51,7 @@ def screen_brightness(img: np.ndarray, box) -> float:
     x1, y1, x2, y2 = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
     if x2 - x1 < 4 or y2 - y1 < 4:
         return 0.0
-    crop = img[y1:y1 + max(2, (y2 - y1) // 2), x1:x2]  # верхняя половина - обычно экран
+    crop = img[y1:y1 + max(2, (y2 - y1) // 2), x1:x2]
     v = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)[:, :, 2]
     return float(np.percentile(v, 75))
 
@@ -89,13 +84,11 @@ def find_candidates(sig: list[FrameSignals], duration: float, frame_diag: float,
         return cands
     counts = _smooth_counts(sig)
 
-    # 1) изменение числа людей: вход/выход клиента, инкассатора, постороннего, уход кассира
     for i in range(1, len(sig)):
         if counts[i] != counts[i - 1]:
             kind = "вход" if counts[i] > counts[i - 1] else "выход"
             cands.append(Candidate(sig[i].t, f"число людей {counts[i-1]}→{counts[i]} ({kind})", 3))
 
-    # 2) крупное перемещение человека (встал из-за стола, пошёл к двери/сейфу)
     last_t = -99.0
     for i in range(2, len(sig)):
         a, b = sig[i - 2], sig[i]
@@ -110,7 +103,6 @@ def find_candidates(sig: list[FrameSignals], duration: float, frame_diag: float,
             cands.append(Candidate(a.t, "человек переместился", 2))
             last_t = b.t
 
-    # 3) появление предметов: телефон, напиток/еда, сумка
     labels = {"phone": "в кадре телефон", "drink": "в кадре напиток", "food": "в кадре еда", "bag": "в кадре сумка/рюкзак"}
     for g, text in labels.items():
         present = [g in s.groups for s in sig]
@@ -118,7 +110,6 @@ def find_candidates(sig: list[FrameSignals], duration: float, frame_diag: float,
             if present[i] and present[i + 1] and not present[i - 1]:
                 cands.append(Candidate(sig[i].t, text, 3, [text]))
 
-    # 4) экран включён, рядом с ноутбуком никого нет >= 2 с
     run_start = None
     for s in sig:
         unattended = s.screen_v is not None and s.screen_v >= SCREEN_ON_V and not s.person_near_laptop
@@ -129,16 +120,14 @@ def find_candidates(sig: list[FrameSignals], duration: float, frame_diag: float,
         if run_start is not None and s.t - run_start >= 2.0:
             cands.append(Candidate(max(0.0, run_start - 1.0), "экран включён, у ноутбука никого", 3,
                                    ["экран ноутбука включён, рядом никого"]))
-            run_start = 1e9  # один кандидат на эпизод
+            run_start = 1e9
 
-    # 5) несколько людей у стола: периодически проверяем передачи денег/документов
     last_t = -99.0
     for s, c in zip(sig, counts):
         if c >= 2 and s.t - last_t >= window_sec:
             cands.append(Candidate(s.t, f"в кадре {c} человек", 1))
             last_t = s.t
 
-    # 6) равномерное покрытие - ловит то, что детектор не видит (деньги, сейф, дверь)
     t = window_sec / 2
     while t < duration:
         cands.append(Candidate(t, "покрытие", 0))
@@ -160,7 +149,6 @@ def select(cands: list[Candidate], max_calls: int, min_gap: float) -> list[Candi
 
 
 def timeline(sig: list[FrameSignals]) -> dict:
-    """Дорожки состояний для интерфейса (по одному значению на кадр выборки)."""
     return {
         "t": [round(s.t, 2) for s in sig],
         "people": [s.people for s in sig],
@@ -172,7 +160,6 @@ def timeline(sig: list[FrameSignals]) -> dict:
 
 
 def cv_findings(sig: list[FrameSignals]) -> list[dict]:
-    """Нарушения только по детектору - когда VLM недоступна (и для live-режима)."""
     found = []
     def first_run(pred, min_len=2):
         run = 0

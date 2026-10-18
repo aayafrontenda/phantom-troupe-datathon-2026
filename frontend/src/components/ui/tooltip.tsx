@@ -18,7 +18,6 @@ const TooltipContent = React.forwardRef<
 ));
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
-/** Shorthand: <Tip label="…"><button/></Tip> */
 function Tip({ label, side, children }: { label: React.ReactNode; side?: 'top' | 'right' | 'bottom' | 'left'; children: React.ReactElement }) {
   if (!label) return children;
   return (

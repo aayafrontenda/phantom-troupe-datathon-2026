@@ -1,4 +1,3 @@
-/* Page-level building blocks shared by every section: wrapper, header, breadcrumb, empty / loading states, notes, ledger stats. */
 import { AlertTriangle, ChevronLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -38,7 +37,6 @@ export function EmptyState({ title, children, className }: { title?: ReactNode; 
   );
 }
 
-/** A thin raspberry line that sweeps while data loads. */
 export function Loading({ className }: { className?: string }) {
   const { t } = useI18n();
   return (
@@ -58,7 +56,6 @@ export function Note({ children, icon, className }: { children: ReactNode; icon?
   );
 }
 
-/* stats: a ledger strip, not tiles */
 export function StatStrip({ cols = 4, className, children }: { cols?: 4 | 5; className?: string; children: ReactNode }) {
   return (
     <div className={cn('grid grid-cols-2 border-t border-border', cols === 5 ? 'md:grid-cols-3 xl:grid-cols-5' : 'md:grid-cols-4', className)}>

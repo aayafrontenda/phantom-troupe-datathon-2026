@@ -1,4 +1,3 @@
-/* Queue and history of checks: one card with filter tabs, search and the table (stacked rows on phones). */
 import { AlertTriangle, CheckCircle2, FileText, FileVideo, Search, ShieldCheck, Trash2, Upload, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';

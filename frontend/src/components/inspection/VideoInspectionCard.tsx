@@ -1,4 +1,3 @@
-/* The check being analyzed: title and hint, then the full-width pipeline runner with the cancel action. */
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useI18n } from '../../i18n';

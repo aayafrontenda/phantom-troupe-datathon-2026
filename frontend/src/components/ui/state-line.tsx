@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils';
 
 export type LineState = 'pending' | 'confirm' | 'dismiss';
 
-/** State carried by line form: dashed = still waiting for a person, solid = decided. */
 export function StateLine({ state, children, className }: { state: LineState; children: ReactNode; className?: string }) {
   return (
     <span className={cn('inline-flex items-center gap-2 text-xs font-semibold whitespace-nowrap',
@@ -14,7 +13,6 @@ export function StateLine({ state, children, className }: { state: LineState; ch
   );
 }
 
-/** A row of marks, one per finding: dashed while waiting, solid once decided (ink for dismissed, red for confirmed). */
 export function Ticks({ states, className }: { states: ('' | 'd' | 'c')[]; className?: string }) {
   return (
     <span aria-hidden="true" className={cn('flex max-w-[260px] flex-wrap justify-end gap-[5px]', className)}>

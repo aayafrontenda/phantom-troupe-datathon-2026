@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Camera } from '../types';
 
-/** Camera list, polled every 10 s. `error` is set when the last fetch failed; the previous list is kept. */
 export function useCameras() {
   const [cams, setCams] = useState<Camera[]>([]);
   const [error, setError] = useState<string | null>(null);

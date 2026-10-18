@@ -1,4 +1,3 @@
-/* Small shared UI: toasts, modals, lightbox, formatting helpers, theme. */
 import { AlertTriangle, Check } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from './components/ui/button';
@@ -6,20 +5,19 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } f
 import { useI18n } from './i18n';
 import { cn } from './lib/utils';
 
-/* ---------- formatting ---------- */
 export const tc = (t: number | null | undefined) => {
   const v = Math.max(0, Number(t) || 0);
   const m = Math.floor(v / 60);
   return `${String(m).padStart(2, '0')}:${(v - m * 60).toFixed(1).padStart(4, '0')}`;
 };
 export const esc = (s: unknown) => String(s ?? '');
-/** The evidence frame closest to the moment, as a data URL for the scrubber preview. */
+
 export function keyFrame(frames: { timestamp_sec: number; image_base64: string }[] | undefined, t: number | null | undefined) {
   if (!frames?.length) return undefined;
   const f = frames.reduce((a, b) => (Math.abs(b.timestamp_sec - (t ?? 0)) < Math.abs(a.timestamp_sec - (t ?? 0)) ? b : a));
   return `data:image/jpeg;base64,${f.image_base64}`;
 }
-/** Banknote-style serial for finding numbers: 4 → "0004". */
+
 export const serial = (id: number | string | null | undefined) => String(id ?? '').padStart(4, '0');
 export const shortDesc = (d?: string | null) => String(d || '').split(/\s*Основание:/)[0].replace(/\s*Прямой публичной нормы не установлено\.?$/, '').replace(/\s*Норма косвенная[\s\S]*$/, '').trim();
 export const observedPart = (d?: string | null) => {
@@ -45,7 +43,6 @@ export function fmtDate(ts: number | null | undefined, locale: string) {
   return `${d.toLocaleDateString(locale)} ${d.toTimeString().slice(0, 5)}`;
 }
 
-/* ---------- toasts / modal / lightbox ---------- */
 interface Toast { id: number; msg: string; kind: '' | 'err' }
 interface ModalItem { id: number; wide: boolean; render: (close: (v: unknown) => void) => ReactNode; resolve: (v: unknown) => void }
 interface UiCtx {
@@ -124,8 +121,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
     </Ui.Provider>
   );
 }
-/* A toast that reads like Sonner: the timer pauses while hovered or while the tab is hidden, a click dismisses it,
-   and it leaves faster than it arrived. */
+
 function ToastItem({ toast, onDone }: { toast: Toast; onDone: (id: number) => void }) {
   const [leaving, setLeaving] = useState(false);
   const left = useRef(toast.kind === 'err' ? 6500 : 4200);
@@ -170,17 +166,16 @@ export function useUi(): UiCtx {
   return v;
 }
 
-/* ---------- theme ---------- */
 export function useTheme() {
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
   const toggle = useCallback(() => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     const apply = () => {
       document.documentElement.dataset.theme = next;
-      try { localStorage.setItem('cg_theme', next); } catch { /* ignore */ }
+      try { localStorage.setItem('cg_theme', next); } catch {}
       setDark(next === 'dark');
     };
-    // a rare action: a short crossfade instead of a hard flash, skipped for reduced motion
+
     const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
     if (doc.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) doc.startViewTransition(apply);
     else apply();

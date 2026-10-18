@@ -1,12 +1,3 @@
-"""Главная точка входа ML: analyze(path) -> dict в формате раздела 10 ТЗ (+ доп. поля для интерфейса).
-
-Этапы:
-  1. кадры 2 fps (OpenCV)
-  2. детектор COCO по каждому кадру -> сигналы состояния
-  3. кандидаты событий (вход/выход, движение, предметы, экран без присмотра, покрытие)
-  4. VLM проверяет окно вокруг каждого кандидата по чек-листу T01–T15
-  5. слияние, выбор таймкода и кадров-доказательств, нормы из rules_kb.yaml
-"""
 from __future__ import annotations
 
 import logging
@@ -23,8 +14,8 @@ from .workplace import (bag_drop_findings, client_findings, company_times, desk_
                         left_items_findings, phone_times, safe_without_count_findings, scan, stranger_findings)
 
 log = logging.getLogger("ml.pipeline")
-DESK_CALL_TIMEOUT = 15.0  # per workplace question: ~1 s normally, a few seconds while the model loads
-DEADLINE_MARGIN = 6.0     # stop asking the VLM this long before the deadline (one call + report)
+DESK_CALL_TIMEOUT = 15.0
+DEADLINE_MARGIN = 6.0
 Progress = Callable[[str, float], None]
 
 
@@ -46,7 +37,6 @@ def _window_frames(frames: list[Frame], t: float, width: float, n: int) -> list[
 
 
 def _merge(findings: list[dict], merge_sec: float) -> list[dict]:
-    """Один тип в пределах merge_sec - одно событие: берём самое раннее время и максимальную уверенность."""
     out: list[dict] = []
     for f in sorted(findings, key=lambda x: x["t"]):
         same = next((o for o in out if o["code"] == f["code"] and abs(o["t"] - f["t"]) <= merge_sec), None)
@@ -60,8 +50,6 @@ def _merge(findings: list[dict], merge_sec: float) -> list[dict]:
     return out
 
 
-# кадры-доказательства относительно таймкода: у «ухода» сам факт (пустое место, экран, деньги на столе) виден
-# через несколько секунд после того, как кассир встал; у двери - что она так и осталась открытой
 EVIDENCE_OFFSETS = {"T01": (0.0, 2.0, 5.0), "T02": (0.0, 2.0, 5.0), "T03": (0.0, 2.0, 5.0), "T16": (0.0, 2.0, 5.0),
                     "T04": (0.0, 3.0, 6.0)}
 
@@ -85,7 +73,6 @@ def to_violation(f: dict, frames: list[Frame], s) -> dict:
         "timecode_sec": round(float(f["t"]), 1),
         "description": kb.build_description(code, f.get("observed", "")),
         "evidence_frames": _evidence(frames, f["t"], s, code),
-        # --- дополнительные поля (жюри их игнорирует, интерфейс использует) ---
         "type_code": code,
         "confidence": round(float(f["confidence"]), 2),
         "rule": {"kind": rule.get("norm_kind", "direct"), "refs": kb.refs_struct(code),
@@ -95,8 +82,6 @@ def to_violation(f: dict, frames: list[Frame], s) -> dict:
 
 
 def _emit_partial(progress, findings: list[dict], frames: list[Frame], s) -> None:
-    """Промежуточный результат для backend (on_progress.partial): если задачу оборвёт срок или сторож,
-    жюри получит уже найденное, а не «нарушений нет»."""
     send = getattr(progress, "partial", None)
     if not send:
         return
@@ -104,7 +89,7 @@ def _emit_partial(progress, findings: list[dict], frames: list[Frame], s) -> Non
         kept = [f for f in _merge(findings, s.merge_sec) if f["confidence"] >= s.min_confidence]
         vs = [to_violation(f, frames, s) for f in kept]
         send({"verdict": "violation" if vs else "no_violation", "violations": vs})
-    except Exception as e:  # промежуточный результат не должен ронять анализ
+    except Exception as e:
         log.warning("partial: %s", e)
 
 
@@ -112,8 +97,6 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     s = get_settings()
     progress = on_progress or _noop
     started = time.time()
-    # backend всегда передаёт срок «загрузка + 270 с»; свой бюджет на видео (TIME_BUDGET_SEC) действует всё равно -
-    # иначе одно видео может съесть время, нужное следующим в очереди жюри
     deadline = min(deadline or float("inf"), started + s.time_budget_sec)
 
     info = probe(path)
@@ -124,7 +107,6 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
         raise ValueError("В видео не удалось прочитать ни одного кадра")
     duration = max(info.duration, frames[-1].t)
 
-    # --- детектор ---
     progress("detection", 0.15)
     sig, dets = [], []
     try:
@@ -132,7 +114,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
         det = get_detector()
         dets = det([f.image for f in frames])
         sig = compute_signals(frames, dets)
-    except Exception as e:  # нет torch/весов - работаем без детектора
+    except Exception as e:
         log.warning("Детектор недоступен (%s): только равномерное покрытие", e)
 
     diag = math.hypot(info.width or 464, info.height or 848)
@@ -142,23 +124,19 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
         n = max(1, min(s.max_vlm_calls, int(duration // s.vlm_window_sec) + 1))
         cands = [Candidate(t=(i + 0.5) * duration / n, reason="покрытие", priority=0) for i in range(n)]
 
-    # --- VLM ---
     findings: list[dict] = []
     vlm_calls, vlm_errors, scenes = 0, 0, []
-    desk_trace: list[dict] = []  # ответы VLM по каждому замеру рабочего места - для разбора ошибок
-    desk_objects: list[dict] = []  # предметы на столе при смене клиентов и что о них сказала VLM
+    desk_trace: list[dict] = []
+    desk_objects: list[dict] = []
     if dets:
-        findings += door_findings(frames, dets)  # T04: дверь после входа в пустую кассу, без VLM
+        findings += door_findings(frames, dets)
         _emit_partial(progress, findings, frames, s)
     from .vlm import VLMClient
-    # вызов скана - около 1 с; длинный таймаут нужен только на загрузку модели в память
     vlm = VLMClient(timeout=min(s.vlm_timeout, DESK_CALL_TIMEOUT))
     roi = find_roi(dets, info.width or frames[0].image.shape[1], info.height or frames[0].image.shape[0]) if dets else None
     if roi:
-        # T05: посторонний рядом с кассиром на служебной стороне стола - по рамкам детектора, без VLM
         findings += stranger_findings(frames, dets, roi)
     if vlm.enabled and roi:
-        # рабочее место: дорожка состояний по увеличенному фрагменту → T01–T03 по правилам
         progress("vlm", 0.25)
         stats: dict = {}
         desk_states = scan(vlm, frames, roi, s.desk_step_sec, s.desk_max_calls,
@@ -180,11 +158,9 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
                                       [f.t for f, ds in zip(frames, dets) if any(d.group == "bag" for d in ds)])):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
         _emit_partial(progress, findings, frames, s)
-        # после каждого ухода - узкий вопрос «что оставлено на столе» (2 вызова на уход, ~0.4 с каждый)
         if stats.get("errors", 0) < 2 and time.time() < deadline - DEADLINE_MARGIN:
             for f in left_items_findings(vlm, frames, roi, desk_states):
                 findings.append({**f, "source": "vlm", "candidate": "уход кассира"})
-            # предметы на столе при смене клиентов: пятно, появившееся с уходом клиента, - тесный кроп - VLM (T07)
             from .objects import changeover_findings
             for f in changeover_findings(vlm, frames, dets, roi, desk_states, desk_objects):
                 findings.append({**f, "source": "vlm", "candidate": "предмет на столе"})
@@ -210,7 +186,6 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
                 findings.append({"code": f["code"], "t": win[f["frame"] - 1].t, "confidence": f["confidence"],
                                  "observed": f["observed"], "source": "vlm", "candidate": c.reason})
 
-    # без VLM - правила только по детектору (с VLM они давали ложные: счётная машина = «чемодан» → T13)
     if sig and not vlm.enabled:
         for f in cv_findings(sig):
             findings.append({**f, "source": "detector"})
@@ -221,7 +196,6 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
 
     tl = timeline(sig) if sig else None
     if tl and dets:
-        # рамки для плеера: [группа, score, x1, y1, x2, y2] в долях кадра - не зависят от размера плеера
         tl["detections"] = [
             [[d.group, round(d.score, 2), *(round(v / dim, 4) for v, dim in zip(d.box, (w, h, w, h)))] for d in ds]
             for f, ds in zip(frames, dets) for h, w in [f.image.shape[:2]]
@@ -230,13 +204,12 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     return {
         "verdict": "violation" if violations else "no_violation",
         "violations": violations,
-        # --- дополнительные поля ---
         "timeline": tl,
         "meta": {
             "duration_sec": round(duration, 2),
             "processing_sec": round(time.time() - started, 1),
             "frames": len(frames),
-            "blank_frames": blank,  # кадры без изображения или застывшие (обрыв, зависание): выброшены до анализа
+            "blank_frames": blank,
             "candidates": [{"t": round(c.t, 1), "reason": c.reason, "priority": c.priority} for c in cands],
             "vlm_calls": vlm_calls,
             "vlm_errors": vlm_errors,

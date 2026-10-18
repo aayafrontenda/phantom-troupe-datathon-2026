@@ -1,12 +1,3 @@
-"""Оценка на обучающих видео: вердикт, пропуски, ложные срабатывания, ошибка таймкода, тип, время.
-
-    python -m ml.eval.evaluate --videos data/open/videos               # полный пайплайн
-    python -m ml.eval.evaluate --videos data/open/videos --mock        # проверить сам скрипт
-    python -m ml.eval.evaluate --videos data/open/videos --only 1,2,17 --force
-
-Результаты анализа кешируются в ml/eval/out/<номер>.json (флаг --force пересчитывает).
-Разметка: ml/eval/labels_typed.csv (тип нарушения T01–T15 проставлен вручную по просмотру видео).
-"""
 from __future__ import annotations
 
 import argparse
@@ -25,7 +16,6 @@ NUM_RE = re.compile(r"(\d+)\.mov$", re.I)
 
 
 def video_map(folder: Path) -> dict[int, Path]:
-    """Номер видео -> путь. Имена в архиве бывают «#U0425-4.mov», «Х-4.mov» (кириллица) или «X-4.mov»."""
     out = {}
     for p in folder.iterdir():
         m = NUM_RE.search(p.name)

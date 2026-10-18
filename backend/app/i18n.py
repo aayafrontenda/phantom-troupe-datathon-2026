@@ -1,5 +1,3 @@
-"""Translations for server-rendered pages (the printable report). UI strings live in frontend/src/i18n/strings.ts;
-violation types and regulations in backend/i18n-kb.json (shared with the UI via /ui/api/i18n/kb)."""
 from __future__ import annotations
 
 import json
@@ -102,7 +100,6 @@ def kb() -> dict:
 
 
 def short_desc(d) -> str:
-    """Description without the trailing norm reference (the regulation is shown separately)."""
     d = re.split(r"\s*Основание:", str(d or ""))[0]
     d = re.sub(r"\s*Прямой публичной нормы не установлено\.?$", "", d)
     return re.sub(r"\s*Норма косвенная.*$", "", d, flags=re.S).strip()
@@ -128,7 +125,6 @@ class Translator:
         return (self.lang != "ru" and self._type(v.get("type_code")).get("caveat")) or rule.get("caveat")
 
     def description(self, v: dict) -> dict:
-        """{'why': str|None, 'observed': str|None, 'full': str} - in ru only 'full' is used."""
         full = short_desc(v.get("description"))
         why = self._type(v.get("type_code")).get("why") if self.lang != "ru" else None
         parts = _OBS_SPLIT.split(full)

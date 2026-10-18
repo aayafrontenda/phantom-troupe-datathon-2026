@@ -1,8 +1,3 @@
-"""Детектор объектов COCO (RT-DETR, Apache-2.0) через transformers.
-
-Первый запуск скачивает веса с Hugging Face - сделайте это заранее, потом работайте с HF_HUB_OFFLINE=1.
-Ultralytics YOLO не используем: AGPL-3.0.
-"""
 from __future__ import annotations
 
 import threading
@@ -13,14 +8,13 @@ import numpy as np
 from .config import get_settings
 from .video import resize_max_side
 
-# COCO-классы, которые нам интересны, сгруппированы по смыслу
 GROUPS = {
     "person": {"person"},
     "phone": {"cell phone"},
     "drink": {"cup", "bottle", "wine glass"},
     "food": {"sandwich", "banana", "apple", "donut", "cake", "pizza", "hot dog", "orange"},
     "bag": {"handbag", "backpack", "suitcase"},
-    "laptop": {"laptop"},  # "tvmonitor" не берём: ловит стеклянную дверь
+    "laptop": {"laptop"},
     "book": {"book"},
 }
 LABEL2GROUP = {lbl: g for g, lbls in GROUPS.items() for lbl in lbls}
@@ -31,7 +25,7 @@ class Det:
     group: str
     label: str
     score: float
-    box: tuple[float, float, float, float]  # x1, y1, x2, y2 в пикселях исходного кадра
+    box: tuple[float, float, float, float]
 
     @property
     def center(self) -> tuple[float, float]:
@@ -65,7 +59,7 @@ class Detector:
         self.id2label = self.model.config.id2label
         self.score = s.det_score
         self.max_side = s.det_max_side
-        self.lock = threading.Lock()  # один GPU на анализ видео и live-режим
+        self.lock = threading.Lock()
 
     def __call__(self, images_bgr: list[np.ndarray], batch_size: int = 8) -> list[list[Det]]:
         out: list[list[Det]] = []
@@ -104,7 +98,6 @@ _INIT_LOCK = threading.Lock()
 
 
 def get_detector() -> Detector:
-    """Ленивая загрузка одного экземпляра на процесс."""
     global _DETECTOR
     with _INIT_LOCK:
         if _DETECTOR is None:

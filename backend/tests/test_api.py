@@ -1,4 +1,3 @@
-"""Jury API contract, auth, upload validation, UI routes. Run from the repo root: pytest -q"""
 from __future__ import annotations
 
 import json
@@ -12,7 +11,6 @@ def test_requires_key(app_factory, video):
         assert upload(c, video, key="wrong").status_code == 401
         assert c.get("/api/v1/jobs/whatever", headers={"X-API-Key": "wrong"}).status_code == 401
         assert c.get("/api/v1/jobs/whatever", headers={"X-API-Key": "test-key"}).status_code == 404
-        # bearer form is accepted too
         assert c.get("/api/v1/jobs/whatever", headers={"Authorization": "Bearer test-key"}).status_code == 404
 
 
@@ -31,12 +29,10 @@ def test_upload_validation(app_factory, video, tmp_path):
         r = c.post("/api/v1/analyze", headers=h, data={"x": "1"})
         assert r.status_code == 400
         assert "file" in r.json()["detail"]
-        # nothing leaked into the upload dir
         assert not list(st.settings.upload_dir.glob("*"))
 
 
 def test_upload_accepted_by_content_not_by_name(app_factory, video):
-    """The jury's client may send the file without an extension or with an unusual one: decode decides."""
     with app_factory() as (c, st):
         h = {"X-API-Key": "test-key"}
         body = video.read_bytes()
@@ -59,7 +55,6 @@ def test_full_flow_schema_and_order(app_factory, video):
         assert validate_job(j) == []
         assert list(j)[:4] == ["job_id", "status", "verdict", "violations"]
         assert j["processing_sec"] >= 0
-        # result file on disk, upload still present (TTL not reached)
         row = st.jobs.get(job_id)
         assert row["result_path"] and row["upload_path"]
         assert json.loads(open(row["result_path"], encoding="utf-8").read())["verdict"] == j["verdict"]
@@ -75,7 +70,6 @@ def test_dedup_identical_file(app_factory, video):
         assert j2["dedup_of"] == j1["job_id"]
         assert j2["verdict"] == j1["verdict"]
         assert len(j2["violations"]) == len(j1["violations"])
-    # dedup can be disabled
     with app_factory(DEDUP="0") as (c, st):
         wait_ready(c)
         wait_done(c, upload(c, video).json()["job_id"])
@@ -101,14 +95,12 @@ def test_ui_routes(app_factory, video):
         assert c.get("/ui/api/jobs").json()["jobs"][0]["job_id"] == job_id
         stats = c.get("/ui/api/stats").json()
         assert stats["jobs"]["done"] >= 1 and "pool" in stats
-        # findings -> decision -> csv
         f = c.get(f"/ui/api/jobs/{job_id}").json()["findings"][0]
         r = c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "reject", "comment": "x"})
         assert r.status_code == 200 and r.json()["decision"] == "reject"
         csv = c.get("/ui/api/findings.csv").text
         assert job_id in csv and "reject" in csv
         assert c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "bogus"}).status_code == 422
-        # report
         for lang, title in (("en", "Cash-desk video check"), ("ru", "Проверка видео с кассы"), ("kk", "Касса бейнежазбасын тексеру")):
             r = c.get(f"/ui/api/jobs/{job_id}/report.html?lang={lang}")
             assert r.status_code == 200 and title in r.text and f'<html lang="{lang}">' in r.text
@@ -130,11 +122,10 @@ def test_ui_requires_login_when_configured(app_factory, video):
         me = c.get("/ui/api/auth/me").json()
         assert me["user"]["login"] == "operator" and me["user"]["role"] == "operator"
         assert c.get("/ui/api/info").status_code == 200
-        assert c.get("/ui/api/users").status_code == 403           # operators cannot manage users
+        assert c.get("/ui/api/users").status_code == 403
         assert c.post("/ui/api/cameras", json={"name": "x", "url": "0"}).status_code == 403
         assert c.post("/ui/api/auth/logout").status_code == 200
         assert c.get("/ui/api/info").status_code == 401
-        # admin: user management
         login(c, "admin", "admin123")
         users = c.get("/ui/api/users").json()["users"]
         assert {u["login"] for u in users} == {"admin", "operator", "supervisor"}
@@ -193,8 +184,8 @@ def test_retention_deletes_video_but_keeps_result(app_factory, video):
     from pathlib import Path
     with app_factory(JURY_VIDEO_TTL_SEC="1", DEDUP="0") as (c, st):
         wait_ready(c)
-        job_id = upload(c, video).json()["job_id"]                 # jury upload: deleted after the TTL
-        ui_job = upload(c, video, key=None, ui=True).json()["job_id"]  # operator upload: kept
+        job_id = upload(c, video).json()["job_id"]
+        ui_job = upload(c, video, key=None, ui=True).json()["job_id"]
         wait_done(c, job_id)
         wait_done(c, ui_job, ui=True)
         row = st.jobs.get(job_id)
@@ -238,7 +229,6 @@ def test_job_video_and_finding_history(app_factory, video):
         f = c.get(f"/ui/api/findings/{fid}").json()
         assert f["decision"] == "confirm" and f["history"][-1]["action"] == "decide" and f["frames"]
         assert f["video_url"] and f["siblings"]
-        # jury videos go after the TTL; the UI then gets a clean 404
         st.db.update("jobs", "job_id", job_id, {"finished_at": 0})
         st.retention.run_once()
         assert c.get(f"/ui/api/jobs/{job_id}/video").status_code == 404
@@ -357,13 +347,11 @@ def test_findings_review_workflow(app_factory, video):
         assert job["created_by"] == "operator"
         f = job["findings"][0]
         ai = c.get(f"/ui/api/findings/{f['id']}").json()["description_ai"]
-        # operator rewords the description, then rejects the finding
         r = c.patch(f"/ui/api/findings/{f['id']}/description", json={"text": "Кассир просто поправил стул, денег на столе нет"})
         assert r.status_code == 200 and r.json()["edited"] and r.json()["description_ai"] == ai
         r = c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "reject", "comment": "ложное"})
         assert r.json()["decision"] == "reject" and r.json()["decided_by"] == "operator"
         assert c.post(f"/ui/api/findings/{f['id']}/verify", json={"result": "agree"}).status_code == 403
-        # supervisor sees the disagreement queue and verifies
         c.post("/ui/api/auth/logout")
         login(c, "supervisor", "sv123")
         lst = c.get("/ui/api/findings?decision=reject&verified=false").json()
@@ -373,7 +361,6 @@ def test_findings_review_workflow(app_factory, video):
         full = c.get(f"/ui/api/findings/{f['id']}").json()
         assert full["verified_by_name"] == "Super Visor" and [h["action"] for h in full["history"]] == ["edit", "decide", "verify"]
         assert c.get("/ui/api/findings?verified=true").json()["total"] == 1
-        # a changed operator decision resets verification
         c.post("/ui/api/auth/logout")
         login(c, "operator", "op123")
         r = c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "confirm"})
@@ -420,11 +407,9 @@ def test_quality_stats_thresholds_and_dataset(app_factory, video):
         f = wait_done(c, jid, ui=True)["findings"][0]
         assert c.get("/ui/api/quality").status_code == 403
         c.post(f"/ui/api/findings/{f['id']}/decision", json={"decision": "reject"})
-        # a jury upload also gets a finding, but it never reaches the dataset
         rj = upload(c, video, key="test-key"); assert rj.status_code == 200, rj.text
         jury = rj.json()["job_id"]
         assert jury == jid or wait_done(c, jury)["status"] == "done"
-        # synthetic history: T13 is rejected whenever the model was unsure, T02 is solid
         now = time.time()
         for i in range(8):
             conf = 0.52 + 0.05 * i
@@ -441,7 +426,7 @@ def test_quality_stats_thresholds_and_dataset(app_factory, video):
         q = c.get("/ui/api/quality?days=30").json()
         s = q["summary"]
         assert s["decided"] == 9 and s["verified"] == 9 and s["flagged"] == 1 and s["basis"] == "verified"
-        assert s["accuracy"] == round(5 / 9, 3)  # 4 T13 confirmed + the overruled rejection
+        assert s["accuracy"] == round(5 / 9, 3)
         t13 = next(x for x in q["by_type"] if x["type_code"] == "T13")
         assert t13["decided"] == 8 and t13["confirm_rate"] == 0.5
         assert t13["threshold"]["status"] == "raised" and t13["threshold"]["applied"] == 0.65
@@ -449,14 +434,12 @@ def test_quality_stats_thresholds_and_dataset(app_factory, video):
         op = next(x for x in q["operators"] if x["login"] == "operator")
         assert op["decided"] == 9 and op["rejected"] == 5 and op["disagreed"] == 1 and op["name"] == "Operator One"
         assert len(q["weekly"]) == 8 and q["weekly"][-1]["decided"] >= 7
-        # the raised threshold marks weak findings and downgrades their alerts
         assert st.quality.below_threshold("T13", 0.55) and not st.quality.below_threshold("T13", 0.67)
         assert not st.quality.below_threshold("T02", 0.55)
         ev = st._apply_threshold({"type_code": "T13", "confidence": 0.55, "source": "live"})
         assert ev["severity"] == "low" and ev["below_threshold"]
         lst = c.get("/ui/api/findings?type_code=T13").json()["findings"]
         assert sum(1 for x in lst if x["below_threshold"]) == 3
-        # dataset: labels + frames, jury finding excluded
         r = c.get("/ui/api/quality/dataset.zip")
         assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
         z = zipfile.ZipFile(io.BytesIO(r.content))

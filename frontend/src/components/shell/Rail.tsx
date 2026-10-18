@@ -1,4 +1,3 @@
-/* Slack-style rail: logo, workspace switch, profile at the bottom. */
 import { LogOut, Moon, Send, Sun } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';

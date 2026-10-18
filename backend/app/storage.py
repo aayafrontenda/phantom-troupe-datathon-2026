@@ -1,4 +1,3 @@
-"""Uploads, video probing and retention (TTL) of uploaded videos, clips and old results."""
 from __future__ import annotations
 
 import hashlib
@@ -31,11 +30,6 @@ class Upload:
 
 
 def probe_video(path: Path) -> dict:
-    """Read container metadata with OpenCV (shared with the ML package).
-
-    Some .mov/.mp4 files report no frame count in the header; the file is still accepted if at least one frame
-    decodes (the pipeline reads frames sequentially and measures the duration itself).
-    """
     import cv2
     from ml.video import ascii_path, probe
     info = probe(path)
@@ -51,14 +45,11 @@ def probe_video(path: Path) -> dict:
 
 
 def _safe_ext(filename: str) -> str:
-    """Extension for the stored copy: the client's if it looks like one, otherwise .mov (the case format).
-    Whether the body is a video is decided by decoding it, not by the name."""
     ext = Path(filename).suffix.lower()
     return ext if 2 <= len(ext) <= 6 and ext[1:].isalnum() else ".mov"
 
 
 async def save_upload(file: UploadFile) -> Upload:
-    """Stream the multipart body to disk in 1 MB chunks, enforce the size limit, hash on the fly."""
     s = get_settings()
     name = file.filename or "video.mov"
     ext = _safe_ext(name)
@@ -97,13 +88,6 @@ def place_upload(up: Upload, job_id: str) -> Path:
 
 
 class Retention:
-    """Background cleaner.
-
-    Jury uploads (POST /api/v1/analyze) are deleted JURY_VIDEO_TTL_SEC after the check - the brief forbids keeping
-    them. Operator uploads and camera clips are kept for VIDEO_RETENTION_DAYS (0 = forever). Old results go after
-    RESULT_TTL_SEC (0 = keep).
-    """
-
     def __init__(self, db: Database, interval_sec: float = 60.0):
         self.db = db
         self.interval = interval_sec
@@ -168,7 +152,6 @@ class Retention:
                     Path(r["result_path"]).unlink(missing_ok=True)
                 self.db.execute("DELETE FROM jobs WHERE job_id=?", (r["job_id"],))
                 removed += 1
-        # orphan temp uploads older than an hour (aborted requests)
         for p in s.upload_dir.glob("upload-*"):
             try:
                 if now - p.stat().st_mtime > 3600:

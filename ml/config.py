@@ -1,4 +1,3 @@
-"""Настройки ML-пайплайна. Всё задаётся переменными окружения (см. .env.example)."""
 from __future__ import annotations
 
 import os
@@ -10,7 +9,6 @@ REPO_DIR = ML_DIR.parent
 
 
 def load_dotenv(path: Path = REPO_DIR / ".env") -> None:
-    """Минимальный загрузчик .env: переменные окружения процесса имеют приоритет."""
     if not path.exists():
         return
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -36,17 +34,14 @@ def _i(name: str, default: int) -> int:
 
 @dataclass
 class Settings:
-    # --- кадры ---
     sample_fps: float = field(default_factory=lambda: _f("SAMPLE_FPS", 2.0))
     det_max_side: int = field(default_factory=lambda: _i("DET_MAX_SIDE", 640))
 
-    # --- детектор (COCO, Apache-2.0) ---
     detector_model: str = field(default_factory=lambda: os.getenv("DETECTOR_MODEL", "PekingU/rtdetr_r18vd"))
-    detector_device: str = field(default_factory=lambda: os.getenv("DETECTOR_DEVICE", "auto"))  # auto|cuda|mps|cpu
+    detector_device: str = field(default_factory=lambda: os.getenv("DETECTOR_DEVICE", "auto"))
     det_score: float = field(default_factory=lambda: _f("DET_SCORE", 0.45))
 
-    # --- VLM (локально: Ollama или OpenAI-совместимый сервер, например vLLM) ---
-    vlm_backend: str = field(default_factory=lambda: os.getenv("VLM_BACKEND", "ollama"))  # ollama|openai|none
+    vlm_backend: str = field(default_factory=lambda: os.getenv("VLM_BACKEND", "ollama"))
     vlm_url: str = field(default_factory=lambda: os.getenv("VLM_URL", "http://127.0.0.1:11434"))
     vlm_model: str = field(default_factory=lambda: os.getenv("VLM_MODEL", "qwen3.5:4b"))
     vlm_timeout: float = field(default_factory=lambda: _f("VLM_TIMEOUT", 60))
@@ -54,20 +49,15 @@ class Settings:
     vlm_frames_per_call: int = field(default_factory=lambda: _i("VLM_FRAMES_PER_CALL", 5))
     vlm_window_sec: float = field(default_factory=lambda: _f("VLM_WINDOW_SEC", 6.0))
     max_vlm_calls: int = field(default_factory=lambda: _i("MAX_VLM_CALLS", 12))
-    # старый проход «найди любое нарушение по чек-листу» - давал ложные на 19 из 20 нормальных видео
     vlm_generic: bool = field(default_factory=lambda: os.getenv("VLM_GENERIC", "0") == "1")
-    # скан рабочего места (увеличенный фрагмент вокруг ноутбука): шаг уточнения и предел вызовов VLM на видео
     desk_step_sec: float = field(default_factory=lambda: _f("DESK_STEP_SEC", 2.0))
     desk_max_calls: int = field(default_factory=lambda: _i("DESK_MAX_CALLS", 26))
 
-    # --- решение ---
     min_confidence: float = field(default_factory=lambda: _f("MIN_CONFIDENCE", 0.5))
     merge_sec: float = field(default_factory=lambda: _f("MERGE_SEC", 5.0))
 
-    # --- бюджет времени на одно видео (жюри ждёт максимум 300 с, с учётом очереди) ---
     time_budget_sec: float = field(default_factory=lambda: _f("TIME_BUDGET_SEC", 90))
 
-    # --- выход ---
     evidence_max_side: int = field(default_factory=lambda: _i("EVIDENCE_MAX_SIDE", 640))
     evidence_jpeg_quality: int = field(default_factory=lambda: _i("EVIDENCE_JPEG_QUALITY", 85))
 

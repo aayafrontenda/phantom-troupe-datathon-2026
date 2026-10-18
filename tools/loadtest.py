@@ -1,16 +1,3 @@
-"""Load test for the service, no external tools needed.
-
-Scenarios (combine freely):
-  --uploads N        N concurrent jury uploads (round-robin over the given videos), waits for every job,
-                     reports POST latency, time-to-result, failures, schema validity.
-  --ws N --fps F --seconds S
-                     N browser-like live sessions pushing JPEG frames over /ui/api/live at F fps for S seconds,
-                     reports server-side ms and delivered frame rate (the "1000 cabinets" control-plane test).
-
-Examples:
-  python tools/loadtest.py --url http://127.0.0.1:8000 --key $API_KEY --dir data/open/videos --uploads 5
-  python tools/loadtest.py --url http://127.0.0.1:8000 --ws 200 --fps 2 --seconds 60 --dir data/open/videos
-"""
 from __future__ import annotations
 
 import argparse
@@ -37,12 +24,9 @@ def pct(xs: list[float], p: float) -> float:
     return xs[k]
 
 
-# ----------------------------------------------------------------------------- uploads
-
 def _payload(path: Path, unique: bool) -> bytes:
     data = path.read_bytes()
     if unique:
-        # append a valid top-level `free` box with random bytes: decodes identically, defeats SHA-256 dedup
         data += struct.pack(">I4s", 16, b"free") + os.urandom(8)
     return data
 
@@ -77,8 +61,6 @@ async def run_uploads(url: str, key: str, videos: list[Path], n: int, parallel: 
         tasks = [one_upload(client, url, key, videos[i % len(videos)], limit, sem, unique) for i in range(n)]
         return await asyncio.gather(*tasks)
 
-
-# ----------------------------------------------------------------------------- websocket storm
 
 def _frames_from(path: Path, max_side: int = 640, count: int = 40) -> list[bytes]:
     import cv2
@@ -144,8 +126,6 @@ async def run_ws(url: str, videos: list[Path], n: int, fps: float, seconds: floa
     stats["elapsed"] = time.time() - t0
     return stats
 
-
-# ----------------------------------------------------------------------------- main
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

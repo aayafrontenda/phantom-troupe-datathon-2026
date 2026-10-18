@@ -3,7 +3,6 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { fieldClass } from './input';
 
-/** Native select with the field look and a lucide chevron. */
 const Select = React.forwardRef<HTMLSelectElement, Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> & { size?: 'default' | 'sm'; wrapperClassName?: string }>(
   ({ className, wrapperClassName, size = 'default', children, ...props }, ref) => (
     <span className={cn('relative inline-block w-full', wrapperClassName)}>

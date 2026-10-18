@@ -1,4 +1,3 @@
-"""Чтение видео и работа с кадрами (OpenCV)."""
 from __future__ import annotations
 
 import base64
@@ -26,13 +25,12 @@ class VideoInfo:
 
 @dataclass
 class Frame:
-    t: float          # секунды от начала видео
-    index: int        # номер кадра в исходном видео
-    image: np.ndarray  # BGR
+    t: float
+    index: int
+    image: np.ndarray
 
 
 def ascii_path(path: str | Path) -> str:
-    """OpenCV на Windows не открывает пути с кириллицей (например «Х-4.mov») - делаем ASCII-копию/ссылку."""
     p = str(path)
     if os.name != "nt" or p.isascii():
         return p
@@ -61,10 +59,6 @@ def probe(path: str | Path) -> VideoInfo:
 
 
 def iter_frames(path: str | Path, sample_fps: float) -> Iterator[Frame]:
-    """Последовательно декодирует видео и отдаёт кадры с частотой sample_fps.
-
-    Последовательное чтение быстрее и надёжнее, чем seek по каждому кадру в .mov.
-    """
     cap = cv2.VideoCapture(ascii_path(path))
     if not cap.isOpened():
         raise ValueError(f"Не удалось открыть видео: {path}")
@@ -116,18 +110,11 @@ def nearest(frames: list[Frame], t: float) -> Frame:
     return min(frames, key=lambda f: abs(f.t - t))
 
 
-# кадр без изображения (обрыв сигнала): почти однотонный - чёрный экран или заливка «нет сигнала»
 BLANK_STD, BLANK_DARK = 6.0, 12.0
-# застывший кадр (зависание камеры): средняя разница с прошлым кадром по яркости на полном разрешении. На 42 обучающих
-# видео даже самая спокойная пара кадров (пустая касса, 0.5 с) - не меньше 0.70 (шум матрицы и сжатия), у заморозки
-# после пережатия - 0.00–0.07. Порог посередине с запасом ~3 раза в обе стороны
 FROZEN_DIFF = 0.25
 
 
 def drop_blank(frames: list[Frame]) -> tuple[list[Frame], int]:
-    """Выкидывает кадры без изображения и застывшие кадры. Для правил это разрыв во времени, а не «все ушли» и не
-    «предмет лежит 3 с»: иначе 3 с чёрного экрана дают «касса опустела → вход» и ложную «дверь не закрыта» на каждом
-    видео, а заморозка растягивает взмах руки в «лежащий предмет». Время кадров остаётся исходным."""
     keep, prev = [], None
     for f in frames:
         small = cv2.cvtColor(cv2.resize(f.image, (64, 64), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)

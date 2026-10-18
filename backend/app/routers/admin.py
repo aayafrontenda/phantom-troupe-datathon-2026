@@ -1,4 +1,3 @@
-"""Admin API: keys, configuration view, audit log, maintenance. Requires an admin key."""
 from __future__ import annotations
 
 import time
@@ -57,7 +56,6 @@ def retention_run(request: Request):
 
 @router.post("/jobs/{job_id}/requeue")
 def requeue(job_id: str, request: Request, p: Principal = Depends(require_role("admin"))):
-    """Re-run a finished job (e.g. after a model update) with replay priority."""
     st = request.app.state.st
     job = st.jobs.get(job_id)
     if job is None:

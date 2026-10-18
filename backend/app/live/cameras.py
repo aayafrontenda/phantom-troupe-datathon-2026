@@ -1,9 +1,3 @@
-"""Camera manager: one reader thread per enabled camera (RTSP / HTTP / webcam index / video file loop).
-
-Each sampled frame goes through a LiveSession; frames + detections are published on the event bus
-(`camera:{id}`), alerts go to the AlertEngine. While the job queue is busy, live sampling drops to
-LIVE_FPS_BUSY so jury videos keep the GPU.
-"""
 from __future__ import annotations
 
 import base64
@@ -29,7 +23,7 @@ log = logging.getLogger("backend.live.cameras")
 @dataclass
 class CameraState:
     id: str
-    status: str = "starting"             # starting | online | offline | stopped
+    status: str = "starting"
     fps_actual: float = 0.0
     frames: int = 0
     last_frame_at: float = 0.0
@@ -39,7 +33,7 @@ class CameraState:
     active: list[str] = field(default_factory=list)
     size: tuple[int, int] = (0, 0)
     ms: int = 0
-    buffer: deque = field(default_factory=lambda: deque(maxlen=600))   # (ts, jpeg) ring buffer for clips
+    buffer: deque = field(default_factory=lambda: deque(maxlen=600))
 
 
 class CameraManager:
@@ -49,14 +43,13 @@ class CameraManager:
         self.db = db
         self.bus = bus
         self.on_alert = on_alert or (lambda a: None)
-        self.on_clip = on_clip          # (alert, camera, [(ts, jpeg)...], alert_ts) -> finding
+        self.on_clip = on_clip
         self.busy = busy or (lambda: False)
         self._threads: dict[str, threading.Thread] = {}
         self._stops: dict[str, threading.Event] = {}
         self.states: dict[str, CameraState] = {}
         self._lock = threading.Lock()
 
-    # ------------------------------------------------------------------ crud
     def list(self) -> list[dict]:
         rows = self.db.all("SELECT * FROM cameras ORDER BY created_at")
         for r in rows:
@@ -107,7 +100,6 @@ class CameraManager:
             self.states.pop(cam_id, None)
         return bool(n)
 
-    # ------------------------------------------------------------------ lifecycle
     def start_all(self) -> None:
         for r in self.db.all("SELECT id FROM cameras WHERE enabled=1"):
             self.start_camera(r["id"])
@@ -161,7 +153,6 @@ class CameraManager:
     def _refresh_gauge(self) -> None:
         metrics.CAMERAS_ONLINE.set(sum(1 for s in self.states.values() if s.status == "online"))
 
-    # ------------------------------------------------------------------ reader
     def _run(self, cam_id: str, stop: threading.Event) -> None:
         s = get_settings()
         st = self.states[cam_id]
@@ -201,7 +192,7 @@ class CameraManager:
                     st.last_error = "stream ended"
                     break
                 if is_file:
-                    time.sleep(max(0.0, 1.0 / src_fps - 0.002))  # play files in real time
+                    time.sleep(max(0.0, 1.0 / src_fps - 0.002))
                 now = time.time()
                 target_fps = s.live_fps_busy if self.busy() else float(cam["fps"] or s.live_fps)
                 if now < next_t:
@@ -239,7 +230,6 @@ class CameraManager:
                                                "evidence_b64": base64.b64encode(la.encode_jpeg(la.draw(small, out["detections"]))).decode("ascii"),
                                                "link": f"/live?camera={cam_id}"})
                         if alert and alert.get("new") and self.on_clip and alert.get("severity") != "info" and s.live_findings:
-                            # клип вокруг момента нарушения (event_ts), а не прихода тревоги: VLM подтверждает с задержкой 4–8 с
                             self._schedule_clip(cam, st, alert, float(a.get("event_ts") or now))
                     except Exception:
                         log.exception("camera %s: alert dispatch failed", cam_id)
@@ -258,7 +248,6 @@ class CameraManager:
 
 
     def _schedule_clip(self, cam: dict, st: CameraState, alert: dict, alert_ts: float) -> None:
-        """Wait for the post-roll, then hand the frames around the alert to the findings service."""
         s = get_settings()
 
         def run() -> None:
@@ -281,7 +270,6 @@ def _redact(url: str) -> str:
 
 
 def _open(src: Any):
-    """Network streams get open/read timeouts: a dead RTSP camera turns offline in seconds, not after FFmpeg's 30 s."""
     if isinstance(src, str) and "://" in src:
         ms = int(get_settings().camera_reconnect_sec * 1000) or 5000
         try:

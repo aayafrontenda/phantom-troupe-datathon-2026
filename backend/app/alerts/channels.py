@@ -1,4 +1,3 @@
-"""Delivery channels: web (event bus), Telegram, webhook (HMAC-signed), e-mail. All optional except web."""
 from __future__ import annotations
 
 import base64
@@ -21,7 +20,7 @@ log = logging.getLogger("backend.alerts.channels")
 class Channel:
     name = "base"
 
-    def target(self, role: str) -> str | None:  # None = channel not configured for this role
+    def target(self, role: str) -> str | None:
         return None
 
     def send(self, alert: dict, role: str, level: int) -> None:
@@ -63,7 +62,6 @@ class WebChannel(Channel):
 
 
 class TelegramChannel(Channel):
-    """Alert delivery through the PhantomGuard bot (backend/app/telegram.py): linked users by role + optional group chats."""
     name = "telegram"
 
     def __init__(self, bot):
@@ -82,7 +80,7 @@ class WebhookChannel(Channel):
     def __init__(self, settings: Settings):
         self.url = settings.alert_webhook_url
         self.secret = settings.alert_webhook_secret.encode("utf-8")
-        self.post = None  # test hook
+        self.post = None
 
     def target(self, role: str) -> str | None:
         return self.url or None
@@ -138,7 +136,6 @@ class EmailChannel(Channel):
 
 
 class LogChannel(Channel):
-    """Always-on fallback used in tests and when nothing else is configured."""
     name = "log"
 
     def target(self, role: str) -> str | None:

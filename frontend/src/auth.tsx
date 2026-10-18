@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    try { await api('/ui/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+    try { await api('/ui/api/auth/logout', { method: 'POST' }); } catch {}
     setMe(null);
   }, []);
 

@@ -1,4 +1,3 @@
-"""Alert engine (dedup, escalation, delivery, ack) and live mode (browser WS, file-backed camera)."""
 from __future__ import annotations
 
 import base64
@@ -23,23 +22,19 @@ def test_engine_dedup_cooldown_and_escalation(tmp_path):
         eng = st.alerts
         a1 = eng.handle(_event())
         assert a1 and a1["severity"] == "critical" and a1["state"] == "open" and a1["escalate_at"]
-        assert eng.handle(_event()) is None                       # inside cooldown -> counted, not re-sent
+        assert eng.handle(_event()) is None
         assert eng.get(a1["id"])["count"] == 2
         other = eng.handle(_event(type_code="T14", type_name="Еда"))
         assert other["severity"] == "low" and other["escalate_at"] is None
-        # critical goes to operator and supervisor immediately
         roles = {d["target"] for d in eng.get(a1["id"])["deliveries"]}
         assert "ui" in roles or "log" in roles
-        # escalation: pretend the timer expired
         n = eng.escalate_due(now=time.time() + 10_000)
         assert n == 1
         esc = eng.get(a1["id"])
         assert esc["escalation_level"] == 1
-        # ack stops further escalation
         acked = eng.ack(a1["id"], by="tester", decision="acknowledged")
         assert acked["state"] == "acknowledged" and acked["escalate_at"] is None
         assert eng.escalate_due(now=time.time() + 100_000) == 0
-        # a new alert after the window is a new row
         time.sleep(0.05)
         st.db.update("alerts", "id", a1["id"], {"created_at": time.time() - 10_000})
         a3 = eng.handle(_event())
@@ -146,7 +141,6 @@ def test_file_camera_streams_frames(tmp_path, video):
         assert c.get("/ui/api/cameras/cam1").json()["state"]["status"] == "stopped"
         assert c.delete("/ui/api/cameras/cam1", headers=admin).status_code == 200
         assert c.get("/ui/api/cameras/cam1").status_code == 404
-        # unreachable source -> offline, not crash
         r = c.post("/ui/api/cameras", headers=admin, json={"name": "bad", "url": "rtsp://127.0.0.1:1/none", "id": "bad"})
         assert r.status_code == 201
         for _ in range(100):
@@ -194,12 +188,10 @@ def test_telegram_bot_notifies_without_decisions(tmp_path, video):
                   PUBLIC_URL="https://cg.example.kz", ANALYZER="backend.tests.fake_analyzers:quick") as (c, st):
         bot = st.alerts.telegram
         bot.transport = httpx.MockTransport(handler)
-        # supervisor links first
         login(c, "supervisor", "sv123")
         link(c, 777, "boss", "en")
         assert "Super Visor" in sent(777)[-1]["text"] and "rejected" in sent(777)[-1]["text"]
         c.post("/ui/api/auth/logout")
-        # operator: a bad code is refused, a fresh one links the account
         login(c, "operator", "op123")
         assert c.get("/ui/api/auth/telegram").json() == {"enabled": True, "bot": "phantomguard_test_bot", "linked": False,
                                                         "telegram": None, "photos": True}
@@ -209,7 +201,6 @@ def test_telegram_bot_notifies_without_decisions(tmp_path, video):
         link(c, 501, "aigerim")
         assert "Operator One" in sent(501)[-1]["text"]
         assert c.get("/ui/api/auth/telegram").json()["telegram"]["username"] == "aigerim"
-        # the operator's video check -> "possible violation found" with a frame and only an "Open" link button
         jid = upload(c, video, key=None, ui=True).json()["job_id"]
         fid = wait_done(c, jid, ui=True)["findings"][0]["id"]
         assert wait(lambda: any(m == "sendPhoto" and str(b["chat_id"]) == "501" for m, b in calls)), calls
@@ -218,29 +209,24 @@ def test_telegram_bot_notifies_without_decisions(tmp_path, video):
         kb = _json.loads(photo["reply_markup"])["inline_keyboard"]
         assert kb == [[{"text": "Открыть в PhantomGuard", "url": f"https://cg.example.kz/findings/{fid}"}]]
         assert not sent(777) or all("T02" not in (b.get("caption") or "") for b in sent(777)[1:])
-        # buttons can no longer decide anything from Telegram
         bot.handle_update({"update_id": 2, "callback_query": {"id": "q", "data": f"a:{st.alerts.list()[0]['id']}:c",
                                                               "from": {"id": 501}, "message": {"chat": {"id": 501}, "message_id": 3}}})
         assert st.findings.get(fid)["decision"] is None
-        # the operator rejects on the site -> the supervisor is told, again with a link only
         c.post(f"/ui/api/findings/{fid}/decision", json={"decision": "reject", "comment": "only forms on the desk"})
         assert wait(lambda: any("rejected an AI finding" in (b.get("caption") or b.get("text") or "") for b in sent(777))), calls
         notice = next(b for b in sent(777) if "rejected an AI finding" in (b.get("caption") or b.get("text") or ""))
         assert "only forms on the desk" in (notice.get("caption") or notice.get("text"))
         assert "url" in str(notice["reply_markup"]) and "callback_data" not in str(notice["reply_markup"])
-        # /pending lists what waits on the site; /status answers
         bot.handle_update({"update_id": 3, "message": {"chat": {"id": 777, "type": "private"}, "text": "/pending", "from": {"id": 777}}})
         assert "Rejected by operators, not verified: 1" in sent(777)[-2]["text"]
         bot.handle_update({"update_id": 4, "message": {"chat": {"id": 501, "type": "private"}, "text": "/status", "from": {"id": 501}}})
         assert "Ждут вашего решения: 0" in sent(501)[-1]["text"]
-        # jury videos never reach Telegram
         before = len([1 for m, _ in calls if m in ("sendPhoto", "sendMessage")])
         wait_done(c, upload(c, video, key="test-key").json()["job_id"])
         time.sleep(0.3)
         jury = [a for a in st.alerts.list() if (a.get("payload") or {}).get("jury")]
         assert jury and all(d["channel"] != "telegram" for a in jury for d in a["deliveries"])
         assert len([1 for m, _ in calls if m in ("sendPhoto", "sendMessage")]) == before
-        # /stop unlinks
         bot.handle_update({"update_id": 5, "message": {"chat": {"id": 501, "type": "private"}, "text": "/stop", "from": {"id": 501}}})
         assert st.users.get(st.users.by_login("operator")["id"])["telegram"] is None
 

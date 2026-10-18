@@ -1,4 +1,3 @@
-"""Логика без нейросетей: кандидаты, правила детектора, слияние, сборка ответа. Запуск: pytest -q"""
 from __future__ import annotations
 
 import sys

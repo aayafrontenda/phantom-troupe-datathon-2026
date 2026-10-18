@@ -16,7 +16,6 @@ import type { Finding, HistoryItem } from '../types';
 import { fmtDate, keyFrame, serial, tc, useAgo } from '../ui';
 import { Verdict } from './Check';
 
-/* side sections are type-led and unboxed: a hairline above, the heading carries the structure */
 function SideSection({ title, children }: { title: ReactNode; children: ReactNode }) {
   return <section className="border-t border-border pt-4 pb-1"><h3 className="mb-3 text-[15px] font-semibold">{title}</h3>{children}</section>;
 }

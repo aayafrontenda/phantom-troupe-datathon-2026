@@ -1,19 +1,3 @@
-"""AI quality: what the model finds, what operators confirm, what supervisors verify.
-
-Every decided finding becomes a labelled example. The final label of a finding is the operator's decision,
-overridden by the supervisor when they disagree:
-
-    confirm + agree    -> violation        reject + agree    -> not a violation
-    confirm + disagree -> not a violation  reject + disagree -> violation
-
-From those labels the service computes per-type precision, a weekly false-positive trend, per-operator stats,
-and per-type confidence thresholds: when a type is confirmed less often than ``QUALITY_TARGET_PRECISION`` the
-threshold is raised to the lowest confidence at which the confirmed examples reach the target. The thresholds
-do not hide anything - alerts below the threshold are downgraded to ``low`` severity and findings get a
-``below_threshold`` flag - and the jury API is never affected.
-
-Dataset export: frames + labels of decided findings as a zip. Jury uploads are excluded (brief, section 7).
-"""
 from __future__ import annotations
 
 import base64
@@ -33,13 +17,12 @@ from .db import Database, loads
 
 FINAL_SQL = ("CASE WHEN decision IS NULL THEN NULL "
              "WHEN verify_result='disagree' THEN (decision='reject') ELSE (decision='confirm') END")
-THRESHOLD_STEPS = [round(0.5 + 0.05 * i, 2) for i in range(1, 9)]  # 0.55 … 0.90
+THRESHOLD_STEPS = [round(0.5 + 0.05 * i, 2) for i in range(1, 9)]
 WEEKS = 8
 CACHE_SEC = 30
 
 
 def final_label(row: dict) -> bool | None:
-    """True = violation, False = not a violation, None = not decided yet."""
     if not row.get("decision"):
         return None
     is_violation = row["decision"] == "confirm"
@@ -56,13 +39,11 @@ class QualityService:
         self._thresholds: dict[str, dict] | None = None
         self._thresholds_at = 0.0
 
-    # ------------------------------------------------------------------ thresholds
     def invalidate(self) -> None:
         with self._lock:
             self._thresholds = None
 
     def thresholds(self) -> dict[str, dict]:
-        """Per type: {base, applied, status, samples, precision_at_base} from all decided findings with a confidence."""
         with self._lock:
             if self._thresholds is not None and time.time() - self._thresholds_at < CACHE_SEC:
                 return self._thresholds
@@ -106,7 +87,6 @@ class QualityService:
         info = self.thresholds().get(type_code or "T99")
         return bool(info and info["status"] == "raised" and float(confidence) < float(info["applied"]))
 
-    # ------------------------------------------------------------------ stats
     def stats(self, days: int = 30, camera_ids: list[str] | None = None, camera_id: str | None = None) -> dict:
         now = time.time()
         since = now - days * 86400 if days > 0 else 0.0
@@ -234,7 +214,6 @@ class QualityService:
             "(SELECT job_id FROM jobs WHERE source='jury'))", params) or {}
         return {k: int(v or 0) for k, v in r.items()}
 
-    # ------------------------------------------------------------------ dataset export
     def dataset_rows(self, days: int = 0, camera_ids: list[str] | None = None) -> list[dict]:
         since = time.time() - days * 86400 if days > 0 else 0.0
         scope, params = self._scope(camera_ids, None)
@@ -246,7 +225,6 @@ class QualityService:
         return [r for r in rows if r.get("job_source") != "jury"]
 
     def dataset_zip(self, rows: Iterable[dict], out) -> dict:
-        """Write labels + frames to a zip stream. Returns counts."""
         names = {u["login"]: u["name"] for u in self.db.all("SELECT login, name FROM users")}
         labels: list[dict] = []
         n_frames = 0

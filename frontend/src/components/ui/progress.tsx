@@ -2,7 +2,6 @@ import * as ProgressPrimitive from '@radix-ui/react-progress';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-/** shadcn Progress. `indeterminate` adds a travelling scan highlight on top of the filled part. */
 const Progress = React.forwardRef<
   React.ElementRef<typeof ProgressPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> & { indicatorClassName?: string; indeterminate?: boolean }

@@ -1,4 +1,3 @@
-"""Health, readiness, metrics, version."""
 from __future__ import annotations
 
 import time
@@ -25,7 +24,6 @@ def health(request: Request):
 
 @router.get("/ready")
 def ready(request: Request):
-    """200 only when at least one worker is warm and the database answers; used by compose/k8s probes."""
     st = request.app.state.st
     ok_db = True
     try:

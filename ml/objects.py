@@ -1,13 +1,3 @@
-"""Предметы, появившиеся на рабочем месте: где на столе что-то изменилось - без нейросети, что это - VLM на тесном кропе.
-
-Общий скан рабочего места смотрит на весь стол сразу: пачка купюр там - 0.2% картинки, и маленькая VLM её не замечает
-(Х-38: деньги прошлого клиента лежат на столе 10 с, во всех 20 замерах cash=нет). Поэтому:
-  1) эталон - стол в первые секунды видео (медиана кадров, люди закрашены по рамкам детектора);
-  2) каждый кадр сравниваем с эталоном по цвету (Lab: голубые купюры на бежевом столе по яркости почти не отличаются);
-  3) пятно, которое лежит на одном месте несколько кадров подряд, - предмет; люди и их тени закрыты рамками;
-  4) тесный кроп вокруг предмета, увеличенный, - VLM отвечает, что это (деньги, документ, карта, телефон, сумка, другое).
-Ракурс и тип предмета заранее не заданы: всё от эталона того же видео и рабочего места, найденного по ноутбуку/кассиру.
-"""
 from __future__ import annotations
 
 import logging
@@ -23,22 +13,22 @@ from .video import Frame, to_jpeg_b64
 
 log = logging.getLogger("ml.objects")
 
-REF_SEC = 5.0          # эталон - медиана кадров первых секунд (люди закрашены)
-COLOR_DIFF = 14.0      # порог отличия от эталона в Lab (яркость с весом 0.3 - тени и блики меньше влияют)
-AREA = (2e-4, 0.05)    # площадь пятна в долях рабочего места: меньше - шум, больше - сдвинули ноутбук/стул
-MIN_RUN = 3            # кадров подряд на одном месте (1.5 с при 2 кадр/с) - предмет, а не тень от руки
-SAME_IOU = 0.3         # рамки в соседних кадрах с таким пересечением - тот же предмет
-PERSON_PAD = 0.08      # рамку человека расширяем на эту долю - руки и тень у края рамки
-CROP_SIDE = 256        # тесный кроп для VLM
+REF_SEC = 5.0
+COLOR_DIFF = 14.0
+AREA = (2e-4, 0.05)
+MIN_RUN = 3
+SAME_IOU = 0.3
+PERSON_PAD = 0.08
+CROP_SIDE = 256
 
 
 @dataclass
 class DeskObject:
-    box: tuple[int, int, int, int]       # x1, y1, x2, y2 в пикселях кадра (по первому появлению)
-    t0: float                            # появился
-    t1: float                            # последний кадр, где виден
+    box: tuple[int, int, int, int]
+    t0: float
+    t1: float
     seen: list[float] = field(default_factory=list)
-    kind: str = "?"                      # cash | document | card | phone | bag | other | ?
+    kind: str = "?"
 
 
 def _iou(a, b) -> float:
@@ -65,7 +55,6 @@ def _lab(img: np.ndarray, roi) -> np.ndarray:
 
 
 def find_objects(frames: list[Frame], dets: list[list[Det]], roi) -> list[DeskObject]:
-    """Предметы, которых не было на столе в первые секунды и которые потом лежат на одном месте."""
     if not frames or roi is None:
         return []
     x1, y1, x2, y2 = roi
@@ -74,16 +63,16 @@ def find_objects(frames: list[Frame], dets: list[list[Det]], roi) -> list[DeskOb
     stack = np.stack([_lab(frames[i].image, roi) for i in idx])
     hidden = np.stack([_person_mask(dets[i], roi, shape) for i in idx])
     stack[hidden] = np.nan
-    with warnings.catch_warnings():  # пиксели, всё время закрытые людьми, - NaN; их ниже не сравниваем
+    with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         ref = np.nanmedian(stack, axis=0)
-    valid = ~np.isnan(ref).any(axis=2)  # пиксели, которые в эталоне всё время закрыты людьми, не сравниваем
+    valid = ~np.isnan(ref).any(axis=2)
     ref = np.nan_to_num(ref)
     roi_area = (x2 - x1) * (y2 - y1)
     w = np.array([0.3, 1.0, 1.0], np.float32)
 
     tracks: list[DeskObject] = []
-    open_: list[tuple[DeskObject, tuple, int]] = []  # (предмет, последняя рамка, номер последнего кадра)
+    open_: list[tuple[DeskObject, tuple, int]] = []
     for i, f in enumerate(frames):
         diff = np.sqrt(((_lab(f.image, roi) - ref) ** 2) @ w)
         m = (diff > COLOR_DIFF) & valid & ~_person_mask(dets[i], roi, shape)
@@ -101,7 +90,6 @@ def find_objects(frames: list[Frame], dets: list[list[Det]], roi) -> list[DeskOb
                 o.t1 = f.t
                 o.seen.append(f.t)
                 still.append((o, b, i))
-        # предмет, который не виден в этом кадре, держим ещё 2 кадра: его могла заслонить рука
         still += [(o, last, j) for o, last, j in open_ if i - j <= 2]
         for o, _, j in open_:
             if i - j > 2 and len(o.seen) >= MIN_RUN:
@@ -112,7 +100,6 @@ def find_objects(frames: list[Frame], dets: list[list[Det]], roi) -> list[DeskOb
 
 
 def object_crop(img: np.ndarray, box) -> np.ndarray:
-    """Квадратный кроп с запасом вокруг предмета, увеличенный до CROP_SIDE: предмет занимает треть-половину кадра."""
     x1, y1, x2, y2 = box
     side = int(max(x2 - x1, y2 - y1) * 3 + 24)
     cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
@@ -128,8 +115,6 @@ KINDS = {"деньги": "cash", "документ": "document", "карта": "
 
 
 def _before(frames: list[Frame], dets: list[list[Det]], o: DeskObject) -> Frame:
-    """Снимок «до»: самый ранний кадр, где место предмета не закрыто человеком, - стол, как в эталоне. Последний кадр
-    перед появлением не годится: там предмет часто уже в руке у клиента (Х-38: пачка в руке на 25 с)."""
     x1, y1, x2, y2 = o.box
     for f, ds in zip(frames, dets):
         if f.t >= o.t0 - 0.5:
@@ -141,10 +126,6 @@ def _before(frames: list[Frame], dets: list[list[Det]], o: DeskObject) -> Frame:
 
 
 def classify_objects(vlm, frames: list[Frame], dets: list[list[Det]], objects: list[DeskObject]) -> None:
-    """VLM сравнивает место предмета «до» и «после» и называет, что появилось (change captioning): по одному кропу
-    маленькая модель охотно называет деньгами что угодно (Х-4: кресло → «деньги»). Тип - большинство ответов по
-    кадрам «после»: два кадра; если ответы разошлись - третий (Х-38 в зеркальном варианте: «деньги» / «документ»).
-    Без большинства - «?», правила по такому предмету не срабатывают."""
     from .vlm import _extract_json
 
     def ask(o: DeskObject, before: str, t: float) -> str | None:
@@ -152,7 +133,7 @@ def classify_objects(vlm, frames: list[Frame], dets: list[list[Det]], objects: l
         try:
             raw = vlm.ask(OBJECT_PROMPT, [before, to_jpeg_b64(object_crop(f.image, o.box), CROP_SIDE, 92)])
             return KINDS.get(str(_extract_json(raw).get("appeared", "")).strip().lower(), "none")
-        except Exception as e:  # нет ответа - не голос
+        except Exception as e:
             log.warning("VLM ошибка (предмет на столе, t=%.1f): %s", t, e)
             return None
 
@@ -166,25 +147,19 @@ def classify_objects(vlm, frames: list[Frame], dets: list[list[Det]], objects: l
         o.kind = top if top and answers.count(top) >= 2 else "?"
 
 
-# кандидат для T07: держится от MIN_LIVE кадров, площадь от доли рабочего места, лежит на столе - по высоте между
-# верхним краем ноутбука и нижним + DESK_BELOW его высоты (выше - стекло и люди за ним, ниже - кресло кассира);
-# лежит без присмотра не меньше UNATTENDED_SEC до подхода следующего клиента (иначе его принёс новый клиент, Х-5)
 MIN_LIVE, MIN_AREA_FRAC, DESK_BELOW, MAX_CANDIDATES, UNATTENDED_SEC = 6, 6e-4, 1.0, 4, 4.0
 
 
 def _desk_band(dets: list[list[Det]], roi) -> tuple[float, float]:
     laps = [d.box for ds in dets for d in ds if d.group == "laptop"]
     if not laps:
-        return float(roi[1]), float(roi[3])  # ноутбука нет (рабочее место по кассиру) - весь фрагмент
+        return float(roi[1]), float(roi[3])
     y1, y2 = float(np.median([b[1] for b in laps])), float(np.median([b[3] for b in laps]))
     return y1, y2 + DESK_BELOW * (y2 - y1)
 
 
 def changeover_findings(vlm, frames: list[Frame], dets: list[list[Det]], roi, states,
                         trace: list | None = None) -> list[dict]:
-    """T07: при смене клиентов на столе лежит предмет, который появился, когда уходил клиент №1, и лежит до подхода
-    клиента №2, - и VLM на тесном кропе дважды называет его деньгами (Х-38: пачка купюр 27–57 с, общий скан её
-    не видел). Карточка/удостоверение, кресло, стекло - не деньги (Х-1, Х-4, Х-39)."""
     from .workplace import _visits
     visits = _visits(states)
     if len(visits) < 2 or roi is None:

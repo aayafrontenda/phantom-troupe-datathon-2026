@@ -1,7 +1,3 @@
-"""Генерирует docs/norms.md из ml/rules_kb.yaml (для пакета сдачи, раздел 8 ТЗ).
-
-    python tools/gen_norms_md.py
-"""
 from __future__ import annotations
 
 import sys

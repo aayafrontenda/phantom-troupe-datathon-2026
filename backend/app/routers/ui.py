@@ -1,4 +1,3 @@
-"""Web UI API (same payloads as the jury API plus progress streams, reports, alerts, cameras)."""
 from __future__ import annotations
 
 import json
@@ -32,11 +31,8 @@ def _job_or_404(st, job_id: str) -> dict:
 
 
 def _clip_owner(job: dict) -> str:
-    """Deduplicated jobs reuse the clips of the job they were copied from."""
     return job.get("dedup_of") or job["job_id"]
 
-
-# ----------------------------------------------------------------------------- jobs
 
 @router.post("/analyze")
 async def ui_analyze(request: Request, file: UploadFile = File(...), p: Principal = Depends(ui_access)):
@@ -73,7 +69,6 @@ def ui_job(job_id: str, request: Request, p: Principal = Depends(ui_access)):
 
 @router.delete("/jobs/{job_id}")
 def ui_job_delete(job_id: str, request: Request, p: Principal = Depends(require_user("operator"))):
-    """Cancel a queued/running check or remove a finished one (video, result, clips, alerts)."""
     if not _st(request).jobs.delete(job_id, actor=p.name):
         raise HTTPException(status_code=404, detail="Задача не найдена")
     return {"ok": True}
@@ -81,7 +76,6 @@ def ui_job_delete(job_id: str, request: Request, p: Principal = Depends(require_
 
 @router.get("/jobs/{job_id}/events")
 async def ui_job_events(job_id: str, request: Request, p: Principal = Depends(ui_access)):
-    """SSE: progress / done / failed for one job. Closes after the terminal event."""
     st = _st(request)
     job = _job_or_404(st, job_id)
     initial = [{"topic": f"job:{job_id}", "type": "snapshot", "job_id": job_id, "status": job["status"],
@@ -93,7 +87,6 @@ async def ui_job_events(job_id: str, request: Request, p: Principal = Depends(ui
 
 @router.get("/jobs/{job_id}/video")
 def ui_job_video(job_id: str, request: Request, p: Principal = Depends(ui_access)):
-    """The uploaded recording (operator uploads are kept VIDEO_RETENTION_DAYS; jury uploads JURY_VIDEO_TTL_SEC)."""
     st = _st(request)
     job = _job_or_404(st, job_id)
     path = job.get("upload_path")
@@ -104,8 +97,6 @@ def ui_job_video(job_id: str, request: Request, p: Principal = Depends(ui_access
     return FileResponse(path, media_type=media, filename=job.get("filename") or f"{job_id}{ext}",
                         content_disposition_type="inline")
 
-
-# ----------------------------------------------------------------------------- reports & clips
 
 @router.get("/jobs/{job_id}/report.html", response_class=HTMLResponse)
 def ui_report(job_id: str, request: Request, lang: str | None = None, p: Principal = Depends(ui_access)):
@@ -132,8 +123,6 @@ def ui_clip(job_id: str, index: int, request: Request, p: Principal = Depends(ui
     return FileResponse(str(path), media_type="video/mp4", filename=f"{job_id}_v{index}.mp4")
 
 
-# ----------------------------------------------------------------------------- info / rules / stats
-
 @router.get("/info")
 def ui_info(request: Request, p: Principal = Depends(ui_access)):
     st = _st(request)
@@ -155,7 +144,6 @@ def ui_info(request: Request, p: Principal = Depends(ui_access)):
 
 @router.get("/i18n/kb")
 def ui_i18n_kb(request: Request):
-    """English / Kazakh texts for violation types and regulations (ml/rules_kb.yaml is Russian)."""
     from ..i18n import kb as kb_i18n
     return Response(json.dumps(kb_i18n(), ensure_ascii=False), media_type="application/json",
                     headers={"Cache-Control": "public, max-age=3600"})
@@ -179,8 +167,6 @@ def ui_stats(request: Request, p: Principal = Depends(ui_access)):
             "uptime_sec": round(time.time() - st.started_at, 1)}
 
 
-# ----------------------------------------------------------------------------- alerts
-
 class Ack(BaseModel):
     decision: str = Field(default="acknowledged", pattern="^(acknowledged|resolved|false_positive)$")
     comment: str | None = None
@@ -199,7 +185,6 @@ def ui_alerts_summary(request: Request, p: Principal = Depends(ui_access)):
 
 @router.get("/alerts/stream")
 async def ui_alerts_stream(request: Request, max: int = Query(0, ge=0), p: Principal = Depends(ui_access)):
-    """SSE feed of alert events (new / updated / escalated); `max` closes the stream after N events (debug)."""
     st = _st(request)
     count = {"n": 0}
 
@@ -217,8 +202,6 @@ def ui_alert_ack(alert_id: int, body: Ack, request: Request, p: Principal = Depe
         raise HTTPException(status_code=404, detail="Алерт не найден")
     return a
 
-
-# ----------------------------------------------------------------------------- live
 
 @router.websocket("/live")
 async def ui_live(ws: WebSocket):
@@ -308,7 +291,6 @@ async def ui_camera_ws(ws: WebSocket, cam_id: str):
 
 @router.get("/cameras/{cam_id}/mjpeg")
 async def ui_camera_mjpeg(cam_id: str, request: Request, p: Principal = Depends(ui_access)):
-    """Plain <img src> stream for dashboards that cannot use WebSocket."""
     st = _st(request)
     if st.cameras.get(cam_id) is None:
         raise HTTPException(status_code=404, detail="Камера не найдена")

@@ -16,7 +16,7 @@ function initialLang(): Lang {
   try {
     const l = localStorage.getItem(LANG_KEY);
     if (l && l in STRINGS) return l as Lang;
-  } catch { /* storage unavailable */ }
+  } catch {}
   const nav = (navigator.language || '').slice(0, 2);
   return nav === 'en' ? 'en' : nav === 'kk' ? 'kk' : 'ru';
 }
@@ -53,7 +53,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback((l: Lang) => {
     if (!(l in STRINGS)) return;
     setLangState(l);
-    try { localStorage.setItem(LANG_KEY, l); } catch { /* ignore */ }
+    try { localStorage.setItem(LANG_KEY, l); } catch {}
   }, []);
 
   const value = useMemo<I18n>(() => {

@@ -1,10 +1,3 @@
-"""Клиент локальной визуально-языковой модели.
-
-Поддерживаются два локальных сервера (облачные AI-API запрещены ТЗ):
-  - Ollama:   VLM_BACKEND=ollama  VLM_URL=http://127.0.0.1:11434  VLM_MODEL=qwen3.5:4b
-  - OpenAI-совместимый (vLLM, LM Studio, mlx_vlm.server):
-              VLM_BACKEND=openai  VLM_URL=http://127.0.0.1:8001   VLM_MODEL=<имя модели на сервере>
-"""
 from __future__ import annotations
 
 import json
@@ -74,10 +67,10 @@ class VLMClient:
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt, "images": images_b64}],
                 "stream": False,
-                "think": False,  # Qwen3.5 по умолчанию «размышляет» - в разы медленнее
+                "think": False,
                 "format": "json",
-                "keep_alive": -1,  # держать модель в памяти всегда: первое видео жюри после простоя не ждёт загрузки
-                "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 600},  # без лимита может зациклиться
+                "keep_alive": -1,
+                "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 600},
             })
             r.raise_for_status()
             return r.json()["message"]["content"]
@@ -96,7 +89,6 @@ class VLMClient:
         raise VLMError(f"VLM_BACKEND={self.backend} не поддерживается")
 
     def check_window(self, frame_times: list[float], images_b64: list[str], hints: list[str]) -> dict:
-        """Возвращает {"scene": str, "findings": [{"code","frame","confidence","observed"}]} с валидными кодами."""
         raw = self.ask(build_prompt(frame_times, hints), images_b64)
         data = _extract_json(raw)
         valid = set(type_codes())

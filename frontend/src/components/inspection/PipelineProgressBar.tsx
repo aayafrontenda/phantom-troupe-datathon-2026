@@ -1,5 +1,3 @@
-/* Full-width progress runner: one bar with a scan shimmer, then a single line with the pipeline steps
-   (current one with its percent), the ETA and the action. Same data as the former step tiles. */
 import { Fragment, type ReactNode } from 'react';
 import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';

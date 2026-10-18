@@ -24,7 +24,6 @@ interface Det { group?: string; label?: string; score?: number; box: number[] }
 const WARN_GROUPS = ['phone', 'bag', 'drink', 'food'];
 const STATE_CODES = ['MOTION', 'EMPTY'];
 
-/* overlay inks come from the design tokens, so the canvas follows the theme like the rest of the page */
 interface Ink { warn: string; person: string; object: string; text: string; font: string }
 let inkCache: { theme: string; ink: Ink } | null = null;
 function inks(): Ink {
@@ -82,7 +81,7 @@ function CameraTile({ cam, onRemove }: { cam: Camera; onRemove?: () => void }) {
   return (
     <div className={cn('relative h-full w-full overflow-hidden rounded-xl bg-video outline-2 outline-offset-2 transition-[outline-color] duration-300', alarmed ? 'outline-primary' : 'outline-transparent')}>
       <canvas ref={canvas} className="block h-full w-full object-contain" />
-      {/* neutral scrim over live video */}
+
       <div className="absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/80 to-transparent px-3.5 pt-3 pb-5 text-[13.5px] font-semibold text-white">
         <span aria-hidden="true" className={cn('size-[7px] rounded-full', st === 'online' ? 'animate-blink bg-salmon' : 'bg-white/40')} />
         <span className="truncate">{cam.name}</span><span className="flex-1" />
@@ -134,7 +133,7 @@ export default function LivePage() {
   const { cams, refresh, error: camsError } = useCameras();
   const [tab, setTab] = useState<'open' | 'all'>('open');
   const feed = useFeed();
-  // ids present when the page opened; anything newer is "fresh" and gets the arrival animation
+
   const seen = useRef<Set<number> | null>(null);
   if (seen.current === null && feed.loaded) seen.current = new Set(feed.items.map(f => f.id));
 
@@ -153,7 +152,6 @@ export default function LivePage() {
   const items = (tab === 'open' ? feed.items.filter(f => !f.decision) : feed.items).slice(0, 80);
   const where = (f: FindingBrief) => f.source === 'camera' ? (f.camera_name || f.camera_id) : f.filename || f.job_id;
 
-  // chat order: oldest at the top, newest at the bottom next to the reader's eye
   const chat = [...items].reverse();
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [chat.length, tab]);
@@ -169,7 +167,7 @@ export default function LivePage() {
       </div>
       {camsError && <ErrorBanner message={camsError} onRetry={refresh} />}
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-        {/* the stage: like a shared screen in a call, it takes the main part of the window */}
+
         <section aria-label={t('live.title')} className="relative flex min-h-[420px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-video p-3 shadow-sm sm:p-4">
           {cams.length ? (
             <CameraGallery>
@@ -185,7 +183,6 @@ export default function LivePage() {
           )}
         </section>
 
-        {/* events as a chat panel */}
         <aside className="flex h-[70vh] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm lg:h-auto lg:w-[380px]">
           <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-4">
             <h2 className="text-[15px] font-semibold text-heading">{t('live.events')}</h2>

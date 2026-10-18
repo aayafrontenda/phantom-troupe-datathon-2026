@@ -1,4 +1,3 @@
-"""SQLite storage (zero external services). One connection per thread, WAL mode, simple migrations."""
 from __future__ import annotations
 
 import json
@@ -10,7 +9,6 @@ from pathlib import Path
 from typing import Any, Iterator
 
 MIGRATIONS: list[str] = [
-    # 1
     """
     CREATE TABLE IF NOT EXISTS jobs (
         job_id        TEXT PRIMARY KEY,
@@ -137,7 +135,6 @@ MIGRATIONS: list[str] = [
         detail   TEXT
     );
     """,
-    # 2 - users, sessions, findings (review workflow), job ownership
     """
     CREATE TABLE IF NOT EXISTS users (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -208,7 +205,6 @@ MIGRATIONS: list[str] = [
 
     ALTER TABLE jobs ADD COLUMN created_by TEXT;
     """,
-    # 3 - Telegram: personal bot linked to a user
     """
     ALTER TABLE users ADD COLUMN tg_user_id INTEGER;
     ALTER TABLE users ADD COLUMN tg_chat_id INTEGER;
@@ -230,7 +226,6 @@ class Database:
         self._all_lock = threading.Lock()
         self.migrate()
 
-    # ------------------------------------------------------------------ connections
     def conn(self) -> sqlite3.Connection:
         c = getattr(self._local, "conn", None)
         if c is None:
@@ -247,7 +242,6 @@ class Database:
 
     @contextmanager
     def tx(self) -> Iterator[sqlite3.Connection]:
-        """Serialized write transaction (SQLite allows one writer at a time anyway)."""
         with self._write_lock:
             c = self.conn()
             c.execute("BEGIN IMMEDIATE")
@@ -259,11 +253,6 @@ class Database:
                 raise
 
     def close(self) -> None:
-        """Service shutdown: close connections owned by finished threads and by this thread.
-
-        A sqlite3 connection must never be closed from another thread while it may be in use (segfault),
-        so connections of threads that are still alive are left to the garbage collector.
-        """
         me = threading.current_thread()
         with self._all_lock:
             items = list(self._all.items())
@@ -276,7 +265,6 @@ class Database:
                     pass
         self._local = threading.local()
 
-    # ------------------------------------------------------------------ migrations
     def migrate(self) -> None:
         c = self.conn()
         c.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
@@ -292,7 +280,6 @@ class Database:
                 else:
                     t.execute("UPDATE schema_version SET version=?", (i,))
 
-    # ------------------------------------------------------------------ helpers
     def one(self, sql: str, params: tuple | list = ()) -> dict | None:
         r = self.conn().execute(sql, params).fetchone()
         return dict(r) if r else None

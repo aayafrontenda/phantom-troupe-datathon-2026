@@ -1,12 +1,3 @@
-"""Worker pool: runs the analyzer in isolated processes (or threads), with a priority queue and a watchdog.
-
-Guarantees the service relies on:
-  * jury jobs (priority 0) always start before UI/replay jobs;
-  * a job that hits the hard deadline or stops reporting progress is killed and finalized with whatever
-    partial result the pipeline handed over (never silently lost);
-  * a crashed worker process is replaced and the job retried once if there is still time;
-  * the GPU is never shared by two copies of the model (WORKERS=1 by default).
-"""
 from __future__ import annotations
 
 import heapq
@@ -32,7 +23,7 @@ PRIORITY_JURY, PRIORITY_UI, PRIORITY_REPLAY = 0, 1, 2
 @dataclass
 class Outcome:
     job_id: str
-    kind: str                       # done | failed | deadline | stall | crash
+    kind: str
     result: dict | None = None
     error: str | None = None
     partial: dict | None = None
@@ -55,8 +46,8 @@ class _Pending:
 class _Running:
     job_id: str
     path: str
-    deadline: float                 # hard deadline (upload + JOB_HARD_LIMIT_SEC)
-    budget_deadline: float          # what the pipeline is told: shares the time with jobs waiting behind it
+    deadline: float
+    budget_deadline: float
     kill_at: float
     started_at: float
     last_msg_at: float
@@ -67,12 +58,9 @@ class _Running:
     progress: float = 0.0
 
 
-# ----------------------------------------------------------------------------- worker process entry
-
 def _worker_main(idx: int, analyzer_name: str, warmup: bool, in_q: Any, out_q: Any, log_file: str | None) -> None:
     handlers: list[logging.Handler] = [logging.StreamHandler()]
     if log_file:
-        # own file per worker: the parent rotates server.log and Windows forbids renaming a file another process holds
         p = Path(log_file)
         try:
             handlers.append(logging.handlers.RotatingFileHandler(p.with_name(f"{p.stem}-worker{idx}{p.suffix}"),
@@ -118,16 +106,12 @@ def _worker_main(idx: int, analyzer_name: str, warmup: bool, in_q: Any, out_q: A
     out_q.put({"type": "bye"})
 
 
-# ----------------------------------------------------------------------------- worker handles
-
 class _Worker:
-    """One analyzer slot: a child process (mode=process) or a thread (mode=thread)."""
-
     def __init__(self, pool: "WorkerPool", idx: int):
         self.pool = pool
         self.idx = idx
         self.name = f"w{idx}"
-        self.state = "starting"          # starting | idle | busy | dead
+        self.state = "starting"
         self.version: str = ""
         self.warmup_info: Any = None
         self.current: _Running | None = None
@@ -143,7 +127,6 @@ class _Worker:
         self._stop = threading.Event()
         self._thread_analyzer: tuple[Callable, Callable | None, str] | None = None
 
-    # -- lifecycle ---------------------------------------------------------
     def start(self) -> None:
         self.generation += 1
         self._stop = threading.Event()
@@ -209,7 +192,6 @@ class _Worker:
         self._in_q = self._out_q = None
         self.state = "dead"
 
-    # -- job dispatch --------------------------------------------------------
     def run(self, job: _Pending, budget_deadline: float | None = None) -> None:
         now = time.time()
         budget = min(job.deadline, budget_deadline) if budget_deadline else job.deadline
@@ -222,7 +204,6 @@ class _Worker:
         else:
             threading.Thread(target=self._thread_run, args=(self.current,), name=f"job-{job.job_id}", daemon=True).start()
 
-    # -- process mode ---------------------------------------------------------
     def _read_loop(self) -> None:
         gen = self.generation
         while not self._stop.is_set():
@@ -236,7 +217,6 @@ class _Worker:
                 break
             self.pool._on_message(self, msg)
 
-    # -- thread mode ----------------------------------------------------------
     def _thread_warmup(self) -> None:
         try:
             analyze, warm, version = resolve(self.pool.analyzer_name)
@@ -256,7 +236,6 @@ class _Worker:
         job_id, token = running.job_id, running.token
 
         def send(msg: dict) -> None:
-            # ignore results of a run that the watchdog already abandoned
             if self.current is not None and self.current.token == token:
                 self.pool._on_message(self, msg)
 
@@ -275,8 +254,6 @@ class _Worker:
             send({"type": "failed", "job_id": job_id, "error": f"{type(e).__name__}: {e}"[:500],
                   "trace": traceback.format_exc()[-4000:], "sec": time.time() - t0})
 
-
-# ----------------------------------------------------------------------------- pool
 
 class WorkerPool:
     def __init__(self, analyzer_name: str, mode: str = "process", workers: int = 1, warmup: bool = True,
@@ -309,7 +286,6 @@ class WorkerPool:
         self._sched = threading.Thread(target=self._loop, name="scheduler", daemon=True)
         self.fatal: str | None = None
 
-    # -- public --------------------------------------------------------------
     def start(self) -> None:
         for w in self._workers:
             w.start()
@@ -342,7 +318,6 @@ class WorkerPool:
             return True
 
     def abort(self, job_id: str) -> bool:
-        """Drop a job wherever it is: dequeue it, or kill the worker running it (no outcome is reported)."""
         if self.cancel(job_id):
             return True
         with self._lock:
@@ -360,7 +335,6 @@ class WorkerPool:
             return len(self._pending)
 
     def position(self, job_id: str) -> int | None:
-        """0 = next to start; None if not queued."""
         with self._lock:
             order = sorted(self._pending)
             for i, p in enumerate(order):
@@ -395,7 +369,6 @@ class WorkerPool:
                 } for w in self._workers],
             }
 
-    # -- internals -------------------------------------------------------------
     def _loop(self) -> None:
         while not self._stop.is_set():
             self._wake.wait(0.25)
@@ -409,7 +382,6 @@ class WorkerPool:
         now = time.time()
         with self._lock:
             for w in self._workers:
-                # dead process -> crash handling + respawn
                 if w.state != "dead" and self.mode == "process" and not w.alive():
                     was_starting = w.state == "starting"
                     log.error("worker %s died unexpectedly (pid=%s, state=%s)", w.name, w.pid(), w.state)
@@ -438,7 +410,6 @@ class WorkerPool:
                     log.warning("job %s: no progress for %.0f s on %s -> killing", r.job_id, now - r.last_msg_at, w.name)
                     self._handle_exit(w, "stall", f"no progress for {int(self.stall_sec)} s")
                     self._replace(w)
-            # dispatch
             for w in self._workers:
                 if w.state == "idle" and self._pending:
                     job = heapq.heappop(self._pending)
@@ -455,9 +426,6 @@ class WorkerPool:
                     self.on_progress(job.job_id, "started", 0.0)
 
     def _budget_deadline(self, job: _Pending, now: float) -> float:
-        """Deadline handed to the pipeline: the job's own hard deadline, shortened so that jobs waiting behind it
-        (same or higher priority) still get their share before *their* deadlines - the jury may upload 5+ videos
-        at once and one GPU serves them one by one. Never shorter than min_budget_sec."""
         behind = [p for p in self._pending if p.priority <= job.priority]
         if not behind:
             return job.deadline
@@ -516,7 +484,7 @@ class WorkerPool:
                 return
             r = w.current
             if r is None or r.job_id != msg.get("job_id"):
-                return  # stale message from an abandoned run
+                return
             r.last_msg_at = time.time()
             if t == "progress":
                 r.stage, r.progress = msg.get("stage", r.stage), float(msg.get("progress", r.progress))

@@ -1,4 +1,3 @@
-/* Collapsible main sidebar: the sections (former top tabs) with the open-findings badge. */
 import { PanelLeftClose } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth';

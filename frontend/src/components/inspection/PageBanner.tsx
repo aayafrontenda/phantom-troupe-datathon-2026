@@ -1,4 +1,3 @@
-/* Page head of the checks page as a friendly banner: title, lead, the upload action, an illustration. */
 import { Upload } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { Button } from '../ui/button';

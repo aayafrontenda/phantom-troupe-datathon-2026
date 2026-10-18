@@ -10,7 +10,6 @@ import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 
 interface TgStatus { enabled: boolean; bot: string | null; linked: boolean; telegram: { username: string | null; linked_at: number } | null; photos: boolean }
 
-/** Rendered by the modal host, which sits outside AuthProvider: the role comes in as a prop. */
 export function TelegramDialog({ close, role }: { close: () => void; role: string }) {
   const { t, locale } = useI18n();
   const { toast } = useUi();
@@ -19,7 +18,7 @@ export function TelegramDialog({ close, role }: { close: () => void; role: strin
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    try { setSt(await api<TgStatus>('/ui/api/auth/telegram')); } catch { /* keep */ }
+    try { setSt(await api<TgStatus>('/ui/api/auth/telegram')); } catch {}
   }, []);
   useEffect(() => { load(); }, [load]);
 

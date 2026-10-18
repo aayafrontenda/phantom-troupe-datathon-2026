@@ -1,4 +1,3 @@
-"""Worker pool guarantees: priority, deadline/stall watchdog, crash isolation, retries, restart recovery."""
 from __future__ import annotations
 
 import time
@@ -14,10 +13,10 @@ FAKE = "backend.tests.fake_analyzers"
 def test_jury_jobs_go_first(tmp_path, video, video2, mode):
     with make_app(tmp_path, ANALYZER=f"{FAKE}:slow", FAKE_SLOW_SEC="0.8", WORKER_MODE=mode, DEDUP="0") as (c, st):
         wait_ready(c)
-        first = upload(c, video).json()["job_id"]            # occupies the worker
+        first = upload(c, video).json()["job_id"]
         ui_job = upload(c, video2, key=None, ui=True).json()["job_id"]
         ui_job2 = upload(c, video, key=None, ui=True).json()["job_id"]
-        jury_job = upload(c, video2).json()["job_id"]        # must jump the queue
+        jury_job = upload(c, video2).json()["job_id"]
         assert st.pool.position(jury_job) == 0
         assert st.pool.position(ui_job) == 1
         j = c.get(f"/ui/api/jobs/{ui_job2}").json()
@@ -45,7 +44,6 @@ def test_deadline_returns_partial_result(tmp_path, video, mode):
         assert j["partial"] is True and "deadline" in j["warning"]
         from ml.schema import validate_job
         assert validate_job(j) == []
-        # the pool is healthy again and accepts the next job
         wait_ready(c)
         assert st.pool.stats()["running"] == []
 
@@ -110,7 +108,7 @@ def test_bad_result_is_repaired(tmp_path, video):
         assert j["status"] == "done"
         assert validate_job(j) == []
         assert j["verdict"] == "violation"
-        assert len(j["violations"]) == 2                   # "garbage" dropped, frameless one re-extracted
+        assert len(j["violations"]) == 2
         assert j["violations"][0]["timecode_sec"] == 1.2
         assert 1 <= len(j["violations"][0]["evidence_frames"]) <= 3
         assert j["violations"][0]["type"]
@@ -125,13 +123,11 @@ def test_restart_recovers_queued_jobs(tmp_path, video, video2):
         time.sleep(0.5)
         assert st.jobs.get(running)["status"] == "running"
         assert st.jobs.get(queued)["status"] == "queued"
-    # "restart": same storage, fast analyzer
     with make_app(tmp_path, ANALYZER=f"{FAKE}:quick", WORKER_MODE="thread", DEDUP="0") as (c, st):
         wait_ready(c)
         for jid in (running, queued):
             j = wait_done(c, jid, timeout=30)
             assert j["status"] == "done", j
-    # a job whose video vanished is failed, not stuck
     with make_app(tmp_path, ANALYZER=f"{FAKE}:slow", FAKE_SLOW_SEC="30", WORKER_MODE="thread", DEDUP="0") as (c, st):
         wait_ready(c)
         gone = upload(c, video).json()["job_id"]
@@ -155,19 +151,18 @@ def test_requeue_with_replay_priority(tmp_path, video):
 
 
 def test_budget_is_shared_with_queued_jobs():
-    """With N jury videos waiting, the running job is told a deadline that leaves time for the others."""
     from backend.app.worker import WorkerPool, _Pending
 
     pool = WorkerPool("mock", mode="thread", workers=1, warmup=False, min_budget_sec=35)
     now = 1000.0
     head = _Pending(0, 1, "a", "a.mov", deadline=now + 270)
-    assert pool._budget_deadline(head, now) == now + 270          # alone: full hard deadline
-    for i in range(4):                                            # four more jury uploads in the same second
+    assert pool._budget_deadline(head, now) == now + 270
+    for i in range(4):
         pool.submit(f"j{i}", f"{i}.mov", 0, now + 270 + i)
     assert pool._budget_deadline(head, now) == pytest.approx(now + 270 / 5)
-    pool.submit("ui", "ui.mov", 1, now + 270)                     # lower priority does not take the jury's share
+    pool.submit("ui", "ui.mov", 1, now + 270)
     assert pool._budget_deadline(head, now) == pytest.approx(now + 270 / 5)
-    late = _Pending(0, 9, "z", "z.mov", deadline=now + 40)        # deep queue: never below the minimum...
+    late = _Pending(0, 9, "z", "z.mov", deadline=now + 40)
     assert pool._budget_deadline(late, now) == now + 35
-    tight = _Pending(0, 9, "z", "z.mov", deadline=now + 20)       # ...but never past the job's own hard deadline
+    tight = _Pending(0, 9, "z", "z.mov", deadline=now + 20)
     assert pool._budget_deadline(tight, now) == now + 20

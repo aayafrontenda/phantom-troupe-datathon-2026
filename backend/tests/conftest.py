@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import pytest
 
-try:  # macOS ships with a 256 soft limit; tests spawn processes, queues and SQLite connections
+try:
     import resource
     _soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     if _soft < 4096:
@@ -33,7 +33,6 @@ BASE_ENV = {
 
 @contextmanager
 def make_app(tmp_path: Path, **env: str):
-    """Build a fresh service bound to a temporary storage dir with the given env overrides."""
     saved = dict(os.environ)
     os.environ.update(BASE_ENV)
     os.environ["STORAGE_DIR"] = str(tmp_path / "storage")
@@ -59,7 +58,6 @@ def app_factory(tmp_path):
 
 @pytest.fixture(scope="session")
 def video(tmp_path_factory) -> Path:
-    """Synthetic 3-second clip (so the suite does not depend on the dataset)."""
     p = tmp_path_factory.mktemp("v") / "sample.mov"
     w = cv2.VideoWriter(str(p), cv2.VideoWriter_fourcc(*"mp4v"), 30, (320, 240))
     for i in range(90):
@@ -72,7 +70,6 @@ def video(tmp_path_factory) -> Path:
 
 
 def _violation_sized(p: Path) -> None:
-    """The mock analyzer reports violations only when size % 3 != 0; encoders differ by OS, so pad if needed."""
     if p.stat().st_size % 3 == 0:
         with open(p, "ab") as f:
             f.write(b"\0")

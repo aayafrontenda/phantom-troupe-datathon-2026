@@ -1,4 +1,3 @@
-"""Sign-in for the web UI: cookie sessions for operators, supervisors and admins; user management for admins."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -52,8 +51,6 @@ def me(request: Request, p: Principal = Depends(ui_access)):
                          "retention_days": st.settings.video_retention_days}}
 
 
-# ----------------------------------------------------------------------------- Telegram (own account)
-
 def _me_user(request: Request, p: Principal) -> dict:
     if p.user_id is None:
         raise HTTPException(status_code=400, detail="Telegram is linked to a user account: sign in first")
@@ -91,8 +88,6 @@ def telegram_unlink(request: Request, p: Principal = Depends(ui_access)):
     _st(request).alerts.telegram.unlink(u["id"], p.name)
     return {"ok": True}
 
-
-# ----------------------------------------------------------------------------- users (admin)
 
 class UserIn(BaseModel):
     login: str = Field(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9_.@-]+$")

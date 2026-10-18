@@ -1,4 +1,3 @@
-"""In-process event bus: worker threads publish, SSE/WebSocket handlers (asyncio) and threads subscribe."""
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +12,7 @@ from typing import Any
 @dataclass
 class _Sub:
     pattern: str
-    sink: Any                                   # asyncio.Queue or queue.Queue
+    sink: Any
     loop: asyncio.AbstractEventLoop | None
     created_at: float = field(default_factory=time.time)
 

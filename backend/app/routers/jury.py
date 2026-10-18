@@ -1,4 +1,3 @@
-"""Jury API (section 10 of the brief). Paths and the mandatory fields never change."""
 from __future__ import annotations
 
 import time
@@ -21,7 +20,6 @@ def api_index(st) -> dict:
 
 @router.get("")
 def index(request: Request):
-    """What the jury sees when opening the API address in a browser: where to send videos and how."""
     return api_index(request.app.state.st)
 
 

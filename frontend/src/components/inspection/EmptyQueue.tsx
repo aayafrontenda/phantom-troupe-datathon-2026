@@ -1,4 +1,3 @@
-/* Empty queue: the illustration and a drop target. */
 import { Lock, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../../i18n';

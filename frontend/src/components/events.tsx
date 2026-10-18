@@ -1,4 +1,3 @@
-/* Shared live feed of findings (one SSE connection for the whole app): the header badge and the monitoring page use it. */
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { FindingBrief } from '../types';
@@ -20,7 +19,7 @@ async function reload() {
     state = { items: d.findings, counts: d.counts, loaded: true, error: null };
     emit();
   } catch (e) {
-    // keep the previous list, but let the pages say the server is unreachable
+
     state = { ...state, error: (e as Error).message || 'error' };
     emit();
   }
@@ -36,7 +35,7 @@ function connect() {
   try {
     es = new EventSource('/ui/api/findings/stream');
     ['finding', 'finding_update', 'finding_deleted'].forEach(ev => es!.addEventListener(ev, scheduleReload));
-    es.onerror = () => { /* the browser reconnects; a poll covers the gap */ };
+    es.onerror = () => {};
   } catch { es = null; }
 }
 

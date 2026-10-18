@@ -1,4 +1,3 @@
-/* Video player with violation markers on the scrub bar, plus a frame-sequence player for camera findings. */
 import { Film, Pause, Play } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
@@ -25,7 +24,6 @@ interface Props {
   hint?: ReactNode;
 }
 
-/* the stage: portrait like the cash-desk camera, or 4:3 for clips */
 const stageClass = (wide?: boolean) => cn('relative mx-auto overflow-hidden rounded-lg bg-video',
   wide ? 'aspect-[4/3] max-h-[60vh]' : 'aspect-[464/848] max-h-[60vh] xl:max-h-[calc(100dvh-240px)]');
 
@@ -37,7 +35,6 @@ function NoVideo({ title, hint }: { title: ReactNode; hint?: ReactNode }) {
   );
 }
 
-/* the signature: an engraved security line that swells where the AI looked closer */
 function Scrub({ duration, t, markers, selected, onSeek, onSelect }: { duration: number; t: number; markers: Marker[]; selected?: number; onSeek: (t: number) => void; onSelect?: (i: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const D = Math.max(0.1, duration);
@@ -59,10 +56,10 @@ function Scrub({ duration, t, markers, selected, onSeek, onSelect }: { duration:
                 m.state === 'done' ? 'bg-muted text-muted-foreground' : m.state === 'confirm' ? 'bg-destructive text-white' : 'bg-primary text-white',
                 on && 'ring-[1.5px] ring-foreground ring-offset-2 ring-offset-card')}>
               {m.label}
-              {/* the flag pole: dashed while waiting, solid once decided */}
+
               <span aria-hidden="true" className={cn('absolute top-5 left-1/2 h-[18px] border-l',
                 m.state === 'done' ? 'border-solid border-faint' : m.state === 'confirm' ? 'border-solid border-destructive' : 'border-dashed border-primary opacity-70')} />
-              {/* hover a flag to preview its key frame: grows from the marker, short delay in, instant out */}
+
               {m.thumb && (
                 <span aria-hidden="true" className="pointer-events-none absolute bottom-7 left-1/2 z-[2] hidden w-[92px] origin-bottom -translate-x-1/2 scale-[.94] rounded-lg border border-border bg-card p-1 opacity-0 shadow-lg transition-[opacity,transform] duration-150 group-hover:scale-100 group-hover:opacity-100 group-hover:delay-150 group-focus-visible:scale-100 group-focus-visible:opacity-100 pointer-fine:block">
                   <img src={m.thumb} alt="" className="block aspect-[464/848] w-full rounded-[5px] bg-video object-cover" />
@@ -113,7 +110,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(p, ref) {
   useImperativeHandle(ref, () => ({ seek, toggle }), [seek, toggle]);
 
   useEffect(() => { setBroken(false); }, [p.src]);
-  // timeupdate fires ~4x a second; follow the video every frame while it plays so the playhead glides
+
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
@@ -148,7 +145,6 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(p, ref) {
   );
 });
 
-/* Frames captured around a camera alert, played back at their original pace. */
 export const SequencePlayer = forwardRef<PlayerHandle, { frames: { t: number; url: string }[]; markers?: Marker[]; onTime?: (t: number) => void; initialT?: number; wide?: boolean }>(
   function SequencePlayer(p, ref) {
     const { t } = useI18n();

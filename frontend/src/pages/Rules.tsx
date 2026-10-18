@@ -8,7 +8,6 @@ import { useI18n } from '../i18n';
 import { useRules } from '../lib/rules';
 import type { RuleType } from '../types';
 
-// codes the live mode can raise: ml/live.py (desk_findings: T01/T02/T03/T16, detector conditions: T05/T13/T14/T15)
 const LIVE_CODES = new Set(['T01', 'T02', 'T03', 'T05', 'T13', 'T14', 'T15', 'T16']);
 
 const th = 'px-4 py-3 text-left text-xs font-semibold text-muted-foreground';
@@ -41,7 +40,7 @@ export default function RulesPage() {
       <Card>
         {error ? <EmptyState title={t('rules.loadErr')}>{error}</EmptyState> : !data ? <Loading /> : (
           <>
-            {/* wide screens: a table */}
+
             <table className="hidden w-full text-sm lg:table">
               <thead className="border-b border-border">
                 <tr><th className={th}>{t('th.code')}</th><th className={th}>{t('th.violation')}</th><th className={th}>{t('th.looks')}</th><th className={th}>{t('th.regulation')}</th><th className={th}>{t('th.live')}</th></tr>
@@ -58,7 +57,7 @@ export default function RulesPage() {
                 ))}
               </tbody>
             </table>
-            {/* narrow screens: stacked cards, one per type */}
+
             <ul className="divide-y divide-border lg:hidden">
               {data.types.map(ty => (
                 <li key={ty.code} className="flex flex-col gap-3 px-4 py-4 text-sm">

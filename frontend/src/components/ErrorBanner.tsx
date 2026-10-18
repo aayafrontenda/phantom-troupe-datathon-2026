@@ -1,4 +1,3 @@
-/* Shown when the last fetch failed: the page keeps whatever it had and offers a retry. */
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/utils';

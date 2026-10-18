@@ -68,7 +68,6 @@ export default function CheckPage() {
 
   useEffect(() => { prevStatus.current = null; setSel(0); load(); }, [load]);
 
-  // follow progress while processing (SSE + poll)
   useEffect(() => {
     if (!job || job.status !== 'processing') return;
     const poll = setInterval(load, 2000);
@@ -77,7 +76,7 @@ export default function CheckPage() {
       es = new EventSource(`/ui/api/jobs/${id}/events`);
       es.addEventListener('progress', e => { const d = JSON.parse((e as MessageEvent).data); setJob(j => j ? { ...j, stage: d.stage, progress: d.progress } : j); });
       ['done', 'failed'].forEach(ev => es!.addEventListener(ev, () => load()));
-    } catch { /* poll only */ }
+    } catch {}
     return () => { clearInterval(poll); es?.close(); };
   }, [job?.status, id, load, job]);
 
@@ -90,7 +89,6 @@ export default function CheckPage() {
     prevStatus.current = job.status;
   }, [job, t, toast]);
 
-  // finding updates from other pages / users
   useEffect(() => {
     if (!job || job.status !== 'done') return;
     const es = new EventSource(`/ui/api/jobs/${id}/events`);
@@ -111,7 +109,6 @@ export default function CheckPage() {
     else if (nf.decision) { const next = all.findIndex((f, k) => k > (nf.violation_index ?? -1) && !f.decision); if (next >= 0) select(next, true); }
   };
 
-  // keyboard-driven selection jumps instantly; only pointer selection scrolls smoothly
   const select = useCallback((i: number, jump: boolean, smooth = true) => {
     setSel(i);
     document.querySelector(`[data-finding="${i}"]`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest' });
@@ -124,7 +121,7 @@ export default function CheckPage() {
       if (!job || job.status !== 'done') return;
       const n = viols.length;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // e.code, not e.key: shortcuts must work on the Russian and Kazakh layouts too
+
       if (e.code === 'Space') { e.preventDefault(); player.current?.toggle(); }
       else if (e.code === 'ArrowLeft') { e.preventDefault(); player.current?.seek(time - 1); }
       else if (e.code === 'ArrowRight') { e.preventDefault(); player.current?.seek(time + 1); }

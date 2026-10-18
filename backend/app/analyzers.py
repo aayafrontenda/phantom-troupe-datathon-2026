@@ -1,15 +1,3 @@
-"""Analyzer contract between the service and the ML package.
-
-The service only needs one callable:
-
-    analyze(path: str, on_progress: Progress | None = None, deadline: float | None = None) -> dict
-
-`on_progress(stage, progress)` reports status; the same object also offers `on_progress.partial(result)`
-so the pipeline can hand over interim findings. If the hard deadline hits, the service returns the last
-partial result instead of nothing. `warmup()` in the analyzer module is called once per worker if present.
-
-ANALYZER values: `mock` (ml.mock.analyze_mock), `ml` (ml.pipeline.analyze), or `package.module:function`.
-"""
 from __future__ import annotations
 
 import importlib
@@ -27,8 +15,6 @@ class Progress(Protocol):
 
 
 class CallbackProgress:
-    """Progress object backed by two callbacks (used by the worker)."""
-
     def __init__(self, on_progress: Callable[[str, float], None], on_partial: Callable[[dict], None]):
         self._p = on_progress
         self._partial = on_partial
@@ -47,7 +33,6 @@ class CallbackProgress:
 
 
 def resolve(name: str) -> tuple[Analyzer, Callable[[], Any] | None, str]:
-    """Return (analyze, warmup_or_None, version)."""
     if name == "mock":
         from ml import mock
         return mock.analyze_mock, None, "mock"
@@ -73,7 +58,6 @@ def _ml_version() -> str:
 
 
 def _default_ml_warmup() -> dict:
-    """Load the detector and ping the VLM so the first jury job does not pay for it."""
     out: dict[str, Any] = {}
     try:
         from ml.detector import get_detector

@@ -1,13 +1,3 @@
-"""Register N simulated cameras that loop videos from a folder (file-backed sources, no RTSP server needed).
-
-The service reads each file in real time, runs the live analyzer and publishes frames/alerts exactly as it
-would for an RTSP camera. Use it for the live dashboard demo and for the camera stress test.
-
-  python tools/simulate_cameras.py --url http://127.0.0.1:8000 --key $ADMIN_KEY --dir data/open/videos --count 20
-  python tools/simulate_cameras.py --url http://127.0.0.1:8000 --key $ADMIN_KEY --remove   # delete sim-* cameras
-
-Paths must be readable by the server process (same machine or a shared mount).
-"""
 from __future__ import annotations
 
 import argparse

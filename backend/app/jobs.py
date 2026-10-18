@@ -1,4 +1,3 @@
-"""Job lifecycle: create -> queue -> run -> finalize. Results are validated against the jury schema."""
 from __future__ import annotations
 
 import base64
@@ -28,13 +27,12 @@ class JobService:
         self.db = db
         self.pool = pool
         self.bus = bus
-        self.on_result = on_result            # (job_row, result) -> alerts / clips
+        self.on_result = on_result
         self.findings = findings
         self._progress_ts: dict[str, float] = {}
         self._lock = threading.Lock()
         self.analyzer_version = get_settings().analyzer
 
-    # ------------------------------------------------------------------ create
     def create(self, up: Upload, source: str, request_started_at: float | None = None,
                principal: str | None = None) -> dict:
         s = get_settings()
@@ -77,7 +75,6 @@ class JobService:
                            "AND result_path IS NOT NULL AND analyzer=? AND partial=0 ORDER BY finished_at DESC LIMIT 1",
                            (sha256, self.analyzer_version))
 
-    # ------------------------------------------------------------------ read
     def get(self, job_id: str) -> dict | None:
         return self.db.one("SELECT * FROM jobs WHERE job_id=?", (job_id,))
 
@@ -99,12 +96,10 @@ class JobService:
         return rows
 
     def decisions(self, job_id: str) -> dict[int, str]:
-        """Operator decision per violation index (from the findings table)."""
         return {int(r["violation_index"]): r["decision"] for r in self.db.all(
             "SELECT violation_index, decision FROM findings WHERE job_id=? AND decision IS NOT NULL", (job_id,))}
 
     def delete(self, job_id: str, actor: str | None = None) -> bool:
-        """Cancel (if active) and remove a job with its video, result, clips, findings, alerts and events."""
         job = self.get(job_id)
         if job is None:
             return False
@@ -132,7 +127,6 @@ class JobService:
         return True
 
     def _shared_result(self, job: dict) -> bool:
-        """A dedup copy and its original share one result file: keep it while someone else points to it."""
         rp = job.get("result_path")
         if not rp:
             return False
@@ -153,7 +147,6 @@ class JobService:
             return None
 
     def public_view(self, job: dict, extras: bool = True) -> dict:
-        """GET /jobs/{id}: mandatory fields first (job_id, status, verdict, violations), then extras."""
         status = PUBLIC_STATUS.get(job["status"], job["status"])
         out: dict[str, Any] = {"job_id": job["job_id"], "status": status}
         result = self.load_result(job["job_id"]) if job["status"] == "done" else None
@@ -199,7 +192,6 @@ class JobService:
             return int(max(1.0, remaining))
         return int(per_job * ((pos or 0) + 1))
 
-    # ------------------------------------------------------------------ worker callbacks
     def on_progress(self, job_id: str, stage: str, progress: float) -> None:
         now = time.time()
         with self._lock:
@@ -276,9 +268,7 @@ class JobService:
             except Exception:
                 log.exception("job %s: post-processing failed", o.job_id)
 
-    # ------------------------------------------------------------------ recovery
     def recover(self) -> int:
-        """Re-queue jobs interrupted by a restart; fail those whose video is gone."""
         n = 0
         now = time.time()
         for job in self.db.all("SELECT * FROM jobs WHERE status IN ('queued','running')"):
@@ -309,10 +299,7 @@ class JobService:
         return {k: (round(v, 1) if isinstance(v, float) else (v or 0)) for k, v in row.items()}
 
 
-# ---------------------------------------------------------------------------- result hygiene
-
 def sanitize_result(result: dict, job: dict) -> tuple[dict, list[str]]:
-    """Never ship an invalid jury response: fix what can be fixed, report what was fixed."""
     problems: list[str] = []
     res = dict(result) if isinstance(result, dict) else {}
     viols_in = res.get("violations")

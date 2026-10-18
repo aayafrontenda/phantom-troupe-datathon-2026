@@ -19,7 +19,6 @@ type PasswordInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'siz
   hideLabel: string;
 };
 
-/** Password field with a show/hide toggle; the toggle keeps focus in the field and is skipped by Tab order of forms. */
 const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
   ({ className, showLabel, hideLabel, size = 'default', ...props }, ref) => {
     const [visible, setVisible] = React.useState(false);

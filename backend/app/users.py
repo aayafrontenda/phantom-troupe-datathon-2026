@@ -1,4 +1,3 @@
-"""Users (operator / supervisor / admin), password hashing and cookie sessions."""
 from __future__ import annotations
 
 import hashlib
@@ -45,9 +44,7 @@ class UserStore:
         self.session_ttl = get_settings().session_ttl_sec
         self.seed()
 
-    # ------------------------------------------------------------------ seed
     def seed(self) -> None:
-        """First start: create the users listed in SEED_USERS (login:password:role:name;...)."""
         if self.db.one("SELECT 1 AS x FROM users LIMIT 1"):
             return
         spec = get_settings().seed_users
@@ -66,7 +63,6 @@ class UserStore:
         if n:
             log.info("seeded %d user(s) from SEED_USERS", n)
 
-    # ------------------------------------------------------------------ crud
     def create(self, login: str, password: str, role: str, name: str, actor: str | None = None,
                camera_ids: list[str] | None = None) -> dict:
         if role not in USER_ROLES:
@@ -113,7 +109,6 @@ class UserStore:
         r = self.db.one("SELECT COUNT(*) AS n FROM users WHERE role='admin' AND active=1")
         return int((r or {}).get("n") or 0)
 
-    # ------------------------------------------------------------------ sessions
     @staticmethod
     def _h(token: str) -> str:
         return hashlib.sha256(token.encode("ascii")).hexdigest()
@@ -144,7 +139,7 @@ class UserStore:
         row = self.db.one("SELECT * FROM users WHERE id=? AND active=1", (s["user_id"],))
         if row is None:
             return None
-        if s["expires_at"] - now < self.session_ttl / 2:  # sliding expiry
+        if s["expires_at"] - now < self.session_ttl / 2:
             self.db.update("sessions", "token_hash", s["token_hash"], {"expires_at": now + self.session_ttl})
         return _public(row)
 

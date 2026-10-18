@@ -1,10 +1,3 @@
-"""Проверка сервиса так, как это сделает жюри: загрузить N видео сразу и дождаться результатов.
-
-    python tools/smoke_test.py --url https://<ваш-адрес> --key <API_KEY> data/open/videos/X-1.mov data/open/videos/X-2.mov
-    python tools/smoke_test.py --url http://127.0.0.1:8000 --key $API_KEY --dir data/open/videos --limit 5
-
-Каждое видео должно вернуть status=done меньше чем за 300 с от загрузки, ответ - пройти схему ТЗ.
-"""
 from __future__ import annotations
 
 import argparse

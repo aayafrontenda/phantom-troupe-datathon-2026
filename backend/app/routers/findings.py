@@ -1,4 +1,3 @@
-"""Findings API: the review workflow (operator decides, supervisor verifies) over uploads and camera alerts."""
 from __future__ import annotations
 
 import csv

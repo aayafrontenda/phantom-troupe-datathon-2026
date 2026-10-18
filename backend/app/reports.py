@@ -1,4 +1,3 @@
-"""HTML report (print-ready) and 10-second evidence clips cut with ffmpeg."""
 from __future__ import annotations
 
 import hashlib
@@ -67,7 +66,6 @@ def clip_path(job_id: str, index: int) -> Path:
 
 
 def make_clips(job: dict, result: dict) -> dict[int, Path]:
-    """Cut a CLIP_SEC window around each violation (stream copy, keyframe aligned, no re-encode)."""
     s = get_settings()
     out: dict[int, Path] = {}
     src = job.get("upload_path")

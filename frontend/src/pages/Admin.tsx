@@ -32,7 +32,7 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try { setUsers((await api<{ users: AdminUser[] }>('/ui/api/users')).users); } catch (e) { toast((e as Error).message, 'err'); }
-    try { setStats(await api<Stats>('/ui/api/stats')); } catch { /* ignore */ }
+    try { setStats(await api<Stats>('/ui/api/stats')); } catch {}
   }, [toast]);
   useEffect(() => { load(); }, [load]);
 

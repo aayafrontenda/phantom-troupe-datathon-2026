@@ -1,4 +1,3 @@
-/* 52px top bar: sidebar toggle and breadcrumbs. */
 import { ChevronRight, Menu, PanelLeftOpen } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useI18n } from '../../i18n';

@@ -1,15 +1,3 @@
-"""Telegram bot: notifications only. Every decision is made on the site, where the clip, timecode and regulation are.
-
-Who gets what (scoped to the user's cameras):
-  operator    "possible violation found" - type, place, time, frame and an "Open in PhantomGuard" button;
-              for video checks only the user who uploaded the video
-  supervisor  "an operator rejected an AI finding" - the AI's description, the operator's wording and comment, a link
-  admin       nothing
-
-Linking: the UI issues a one-time code -> https://t.me/<bot>?start=<code> -> the bot stores the Telegram user id.
-Jury videos never reach Telegram (brief, section 10: test videos must not be passed to third parties).
-Only one server per token may poll (TELEGRAM_POLL); any server can send.
-"""
 from __future__ import annotations
 
 import base64
@@ -122,16 +110,15 @@ class TelegramBot:
         self.token = settings.telegram_bot_token
         self.api = f"https://api.telegram.org/bot{self.token}"
         self.groups = {"operator": settings.telegram_chat_operator, "supervisor": settings.telegram_chat_supervisor}
-        self.st = None                      # AppState, attached after build
+        self.st = None
         self.username: str | None = None
         self._getme_failed_at = 0.0
-        self.transport: httpx.BaseTransport | None = None   # test hook
+        self.transport: httpx.BaseTransport | None = None
         self._codes: dict[str, tuple[int, float]] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    # ------------------------------------------------------------------ lifecycle
     @property
     def enabled(self) -> bool:
         return bool(self.token)
@@ -140,7 +127,7 @@ class TelegramBot:
         self.st = state
 
     def start(self) -> None:
-        if not self.enabled or not self.s.telegram_poll:   # sending works anyway; linking and /commands need the poller
+        if not self.enabled or not self.s.telegram_poll:
             return
         self._thread = threading.Thread(target=self._poll, name="telegram-poller", daemon=True)
         self._thread.start()
@@ -174,7 +161,6 @@ class TelegramBot:
                 log.warning("telegram getMe failed: %s", e)
         return self.username
 
-    # ------------------------------------------------------------------ linking
     def link_code(self, user_id: int) -> str:
         code = secrets.token_urlsafe(12).replace("-", "a").replace("_", "b")
         now = time.time()
@@ -198,7 +184,6 @@ class TelegramBot:
             return None
         return self.st.db.one("SELECT * FROM users WHERE tg_user_id=? AND active=1", (tg_user_id,))
 
-    # ------------------------------------------------------------------ recipients
     def _linked(self) -> list[dict]:
         from .db import loads
         rows = self.st.db.all("SELECT * FROM users WHERE active=1 AND tg_chat_id IS NOT NULL")
@@ -207,7 +192,7 @@ class TelegramBot:
         return rows
 
     def has_targets(self, role: str) -> bool:
-        if not self.enabled or self.st is None or role != "operator":   # alerts go to operators only
+        if not self.enabled or self.st is None or role != "operator":
             return False
         return bool(self.groups.get(role)) or any(u["role"] == role for u in self._linked())
 
@@ -217,7 +202,7 @@ class TelegramBot:
             if u["role"] != role:
                 continue
             if camera_id is None and owner is not None:
-                ok = u["login"] == owner           # a video check goes to whoever uploaded it
+                ok = u["login"] == owner
             else:
                 ok = camera_id is None or u["camera_ids"] is None or camera_id in u["camera_ids"]
             if ok:
@@ -226,10 +211,9 @@ class TelegramBot:
             out.setdefault(str(self.groups[role]), (self.groups[role], "ru"))
         return list(out.values())
 
-    # ------------------------------------------------------------------ outgoing
     def _open(self, lang: str, link: str | None) -> list[list[dict]]:
         base = (self.s.public_url or "").rstrip("/")
-        if base.startswith("https://") and link:      # Telegram accepts only public URLs in buttons
+        if base.startswith("https://") and link:
             return [[{"text": tr(lang, "btn.open"), "url": base + link}]]
         return []
 
@@ -267,7 +251,6 @@ class TelegramBot:
         return "\n".join(x for x in lines if x)
 
     def send_alert(self, alert: dict, role: str, level: int) -> int:
-        """Called by the alert engine (TelegramChannel) for operator routing. Returns how many chats got it."""
         if self.st is None or role != "operator":
             return 0
         owner = None
@@ -289,7 +272,6 @@ class TelegramBot:
         return sent
 
     def on_finding_decided(self, f: dict, actor) -> None:
-        """An operator rejected an AI finding -> supervisors are told; they verify on the site."""
         if not self.enabled or self.st is None or f.get("decision") != "reject" or actor.role != "operator":
             return
         if f.get("job_id"):
@@ -326,7 +308,6 @@ class TelegramBot:
         lines.append(f"<i>{_e(tr(lang, 'reject.q'))}</i>")
         return "\n".join(lines)
 
-    # ------------------------------------------------------------------ incoming
     def _poll(self) -> None:
         self.bot_username()
         self._register_commands()
@@ -418,7 +399,6 @@ class TelegramBot:
         return self._reply(chat_id, self._welcome(user))
 
     def _on_callback(self, cq: dict) -> None:
-        """Only the /lang picker has buttons; decisions are never taken from Telegram."""
         user = self._user_by_tg((cq.get("from") or {}).get("id"))
         _, _, lang = (cq.get("data") or "").partition("l:")
         if user is not None and lang in LANGS:

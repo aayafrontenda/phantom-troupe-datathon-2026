@@ -1,8 +1,3 @@
-"""Проверка ответа на соответствие схеме из раздела 10 ТЗ.
-
-Жюри оценивает автоматически, поэтому любые отклонения в обязательных полях = потерянные баллы.
-Дополнительные поля (rule, confidence, type_code, timeline …) допускаются.
-"""
 from __future__ import annotations
 
 import base64
@@ -12,7 +7,6 @@ STATUSES = {"processing", "done", "failed"}
 
 
 def validate_job(resp: dict) -> list[str]:
-    """Возвращает список проблем (пустой список = всё в порядке)."""
     errs: list[str] = []
     if not isinstance(resp.get("job_id"), str):
         errs.append("job_id должен быть строкой")

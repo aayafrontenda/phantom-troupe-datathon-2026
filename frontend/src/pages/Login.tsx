@@ -27,7 +27,7 @@ export default function LoginPage() {
 
   return (
     <div className="grid h-dvh overflow-y-auto bg-background xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,1fr)]">
-      {/* the art: an engraved rosette turning slowly on intaglio ink */}
+
       <section className="relative flex min-h-[220px] flex-col justify-between overflow-hidden bg-foreground px-6 py-7 text-background md:min-h-[280px] xl:px-12 xl:py-10">
         <Rosette className="absolute top-[60%] left-[72%] aspect-square w-[620px] -translate-x-1/2 -translate-y-1/2 animate-turn text-background will-change-[rotate] xl:top-[38%] xl:left-[64%] xl:w-[min(82vh,760px)]" />
         <div className="relative flex items-center gap-2.5"><Mark size={30} className="text-background" dotClassName="fill-salmon" /><b className="text-xl font-semibold tracking-tight">PhantomGuard</b></div>

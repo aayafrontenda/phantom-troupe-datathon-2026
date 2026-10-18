@@ -1,4 +1,3 @@
-/* UI strings: ru (default) / kk / en. Plural entries are arrays ordered by Intl.PluralRules categories. */
 export type Lang = 'ru' | 'kk' | 'en';
 export const LANGS: Record<Lang, { label: string; name: string; locale: string }> = {
   ru: { label: 'РУС', name: 'Русский', locale: 'ru-RU' },

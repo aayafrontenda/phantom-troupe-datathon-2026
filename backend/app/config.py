@@ -1,8 +1,3 @@
-"""Service settings. Everything comes from environment variables (a repo-level .env is loaded first).
-
-Precedence: process environment > .env file > defaults. Call `get_settings()` anywhere; tests call
-`reset_settings()` after changing os.environ.
-"""
 from __future__ import annotations
 
 import os
@@ -16,7 +11,6 @@ REPO_DIR = Path(__file__).resolve().parents[2]
 
 
 def load_dotenv(path: Path | None = None) -> None:
-    """Minimal .env loader: existing process variables win, empty values are ignored."""
     p = path or (REPO_DIR / ".env")
     if not p.exists():
         return
@@ -65,68 +59,59 @@ def _git_sha() -> str:
 
 @dataclass
 class Settings:
-    # --- paths ---
     storage_dir: Path = field(default_factory=lambda: Path(_env("STORAGE_DIR", str(REPO_DIR / "storage"))).resolve())
 
-    # --- analyzer / workers ---
-    analyzer: str = field(default_factory=lambda: _env("ANALYZER", "mock"))          # mock | ml | module:callable
-    worker_mode: str = field(default_factory=lambda: _env("WORKER_MODE", "process"))  # process | thread
-    workers: int = field(default_factory=lambda: _int("WORKERS", 1))                  # one GPU -> one worker
+    analyzer: str = field(default_factory=lambda: _env("ANALYZER", "mock"))
+    worker_mode: str = field(default_factory=lambda: _env("WORKER_MODE", "process"))
+    workers: int = field(default_factory=lambda: _int("WORKERS", 1))
     warmup: bool = field(default_factory=lambda: _bool("WARMUP", True))
 
-    # --- deadlines (jury waits 300 s from the start of the upload) ---
     job_hard_limit_sec: float = field(default_factory=lambda: _float("JOB_HARD_LIMIT_SEC", 270))
     watchdog_grace_sec: float = field(default_factory=lambda: _float("WATCHDOG_GRACE_SEC", 8))
     worker_stall_sec: float = field(default_factory=lambda: _float("WORKER_STALL_SEC", 150))
-    # a job never gets less than this to analyze, however deep the queue is (detector + a few VLM calls)
     min_job_budget_sec: float = field(default_factory=lambda: _float("MIN_JOB_BUDGET_SEC", 35))
-    on_deadline: str = field(default_factory=lambda: _env("ON_DEADLINE", "partial"))  # partial | failed
-    on_failure: str = field(default_factory=lambda: _env("ON_FAILURE", "partial"))    # partial | failed
+    on_deadline: str = field(default_factory=lambda: _env("ON_DEADLINE", "partial"))
+    on_failure: str = field(default_factory=lambda: _env("ON_FAILURE", "partial"))
     max_attempts: int = field(default_factory=lambda: _int("MAX_ATTEMPTS", 2))
     retry_on_error: bool = field(default_factory=lambda: _bool("RETRY_ON_ERROR", True))
 
-    # --- uploads ---
     max_upload_mb: int = field(default_factory=lambda: _int("MAX_UPLOAD_MB", 200))
     allowed_ext: set[str] = field(default_factory=lambda: set(_list("ALLOWED_EXT", ".mov,.mp4,.m4v")))
-    jury_video_ttl_sec: int = field(default_factory=lambda: _int("JURY_VIDEO_TTL_SEC", 3600))  # brief: jury videos are not kept
-    video_retention_days: int = field(default_factory=lambda: _int("VIDEO_RETENTION_DAYS", 0))  # operator uploads + camera clips; 0 = keep
-    result_ttl_sec: int = field(default_factory=lambda: _int("RESULT_TTL_SEC", 0))  # 0 = keep results
+    jury_video_ttl_sec: int = field(default_factory=lambda: _int("JURY_VIDEO_TTL_SEC", 3600))
+    video_retention_days: int = field(default_factory=lambda: _int("VIDEO_RETENTION_DAYS", 0))
+    result_ttl_sec: int = field(default_factory=lambda: _int("RESULT_TTL_SEC", 0))
     dedup: bool = field(default_factory=lambda: _bool("DEDUP", True))
     make_clips: bool = field(default_factory=lambda: _bool("MAKE_CLIPS", True))
     clip_sec: float = field(default_factory=lambda: _float("CLIP_SEC", 10))
 
-    # --- auth ---
     api_key: str = field(default_factory=lambda: _env("API_KEY", ""))
     admin_key: str = field(default_factory=lambda: _env("ADMIN_KEY", ""))
-    auth_required: bool = field(default_factory=lambda: _bool("AUTH_REQUIRED", True))   # 0 = open UI as admin (dev only)
+    auth_required: bool = field(default_factory=lambda: _bool("AUTH_REQUIRED", True))
     session_ttl_sec: int = field(default_factory=lambda: _int("SESSION_TTL_SEC", 7 * 86400))
     seed_users: str = field(default_factory=lambda: _env("SEED_USERS", "admin:admin:admin:Administrator"))
     secure_cookies: bool = field(default_factory=lambda: _bool("SECURE_COOKIES", False))
     rate_limit_per_min: int = field(default_factory=lambda: _int("RATE_LIMIT_PER_MIN", 60))
     cors_origins: list[str] = field(default_factory=lambda: _list("CORS_ORIGINS", "*"))
-    api_hosts: list[str] = field(default_factory=lambda: [h.lower() for h in _list("API_HOSTS", "")])  # hostnames that serve only the API, no UI
+    api_hosts: list[str] = field(default_factory=lambda: [h.lower() for h in _list("API_HOSTS", "")])
 
-    # --- live ---
     live_fps: float = field(default_factory=lambda: _float("LIVE_FPS", 4))
     live_fps_busy: float = field(default_factory=lambda: _float("LIVE_FPS_BUSY", 1))
     camera_reconnect_sec: float = field(default_factory=lambda: _float("CAMERA_RECONNECT_SEC", 5))
     live_max_side: int = field(default_factory=lambda: _int("LIVE_MAX_SIDE", 640))
-    live_findings: bool = field(default_factory=lambda: _bool("LIVE_FINDINGS", True))       # camera alerts -> findings with a clip
+    live_findings: bool = field(default_factory=lambda: _bool("LIVE_FINDINGS", True))
     camera_clip_pre_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_PRE_SEC", 8))
     camera_clip_post_sec: float = field(default_factory=lambda: _float("CAMERA_CLIP_POST_SEC", 4))
 
-    # --- AI quality (verified decisions -> per-type confidence thresholds, training dataset) ---
-    quality_base_confidence: float = field(default_factory=lambda: _float("MIN_CONFIDENCE", 0.5))   # same env as the pipeline
-    quality_min_samples: int = field(default_factory=lambda: _int("QUALITY_MIN_SAMPLES", 10))       # decisions per type before a threshold moves
+    quality_base_confidence: float = field(default_factory=lambda: _float("MIN_CONFIDENCE", 0.5))
+    quality_min_samples: int = field(default_factory=lambda: _int("QUALITY_MIN_SAMPLES", 10))
     quality_target_precision: float = field(default_factory=lambda: _float("QUALITY_TARGET_PRECISION", 0.75))
 
-    # --- alerts ---
     alerts_config: Path = field(default_factory=lambda: Path(_env("ALERTS_CONFIG", str(REPO_DIR / "backend" / "alerts.yaml"))))
     telegram_bot_token: str = field(default_factory=lambda: _env("TELEGRAM_BOT_TOKEN", ""))
     telegram_chat_operator: str = field(default_factory=lambda: _env("TELEGRAM_CHAT_OPERATOR", ""))
     telegram_chat_supervisor: str = field(default_factory=lambda: _env("TELEGRAM_CHAT_SUPERVISOR", ""))
-    telegram_poll: bool = field(default_factory=lambda: _bool("TELEGRAM_POLL", True))           # only one server per token may poll
-    telegram_photos: bool = field(default_factory=lambda: _bool("TELEGRAM_PHOTOS", True))        # 0 = text only, no frames leave the server
+    telegram_poll: bool = field(default_factory=lambda: _bool("TELEGRAM_POLL", True))
+    telegram_photos: bool = field(default_factory=lambda: _bool("TELEGRAM_PHOTOS", True))
     alert_webhook_url: str = field(default_factory=lambda: _env("ALERT_WEBHOOK_URL", ""))
     alert_webhook_secret: str = field(default_factory=lambda: _env("ALERT_WEBHOOK_SECRET", ""))
     smtp_host: str = field(default_factory=lambda: _env("SMTP_HOST", ""))
@@ -136,15 +121,13 @@ class Settings:
     smtp_from: str = field(default_factory=lambda: _env("SMTP_FROM", ""))
     alert_email_operator: str = field(default_factory=lambda: _env("ALERT_EMAIL_OPERATOR", ""))
     alert_email_supervisor: str = field(default_factory=lambda: _env("ALERT_EMAIL_SUPERVISOR", ""))
-    public_url: str = field(default_factory=lambda: _env("PUBLIC_URL", ""))  # used in alert links
+    public_url: str = field(default_factory=lambda: _env("PUBLIC_URL", ""))
 
-    # --- logging / misc ---
     log_level: str = field(default_factory=lambda: _env("LOG_LEVEL", "INFO"))
     log_json: bool = field(default_factory=lambda: _bool("LOG_JSON", False))
     mock_delay: float = field(default_factory=lambda: _float("MOCK_DELAY", 3))
     version: str = field(default_factory=lambda: _env("APP_VERSION", "") or _git_sha())
 
-    # ------------------------------------------------------------------
     @property
     def upload_dir(self) -> Path:
         return self.storage_dir / "uploads"
@@ -160,7 +143,7 @@ class Settings:
     @property
     def db_path(self) -> Path:
         path = self.storage_dir / "phantomguard.sqlite3"
-        legacy = self.storage_dir / "cashguard.sqlite3"   # name before the rename: keep existing users and decisions
+        legacy = self.storage_dir / "cashguard.sqlite3"
         return legacy if legacy.exists() and not path.exists() else path
 
     @property
@@ -172,7 +155,6 @@ class Settings:
             d.mkdir(parents=True, exist_ok=True)
 
     def resolve_api_key(self) -> str:
-        """Jury key: API_KEY from env, otherwise generated once and kept in storage/api_key.txt."""
         if self.api_key.strip():
             return self.api_key.strip()
         f = self.storage_dir / "api_key.txt"
@@ -189,7 +171,6 @@ class Settings:
         return self.admin_key.strip() or self.resolve_api_key()
 
     def safe_dict(self) -> dict:
-        """Settings without secrets, for /admin/api/config."""
         hidden = {"api_key", "admin_key", "telegram_bot_token", "alert_webhook_secret", "smtp_password", "seed_users"}
         out = {}
         for k, v in self.__dict__.items():
@@ -207,8 +188,6 @@ _settings_lock = threading.Lock()
 
 
 def get_settings() -> Settings:
-    """Cached settings. Built and stored under a lock, so a reset can never be overwritten by a build that
-    started before it (a background thread reading the old environment)."""
     s = _settings
     if s is not None:
         return s

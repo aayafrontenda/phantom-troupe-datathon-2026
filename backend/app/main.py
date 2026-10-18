@@ -1,15 +1,3 @@
-"""PhantomGuard service (FastAPI).
-
-Jury API (section 10 of the brief), header X-API-Key:
-    POST /api/v1/analyze            multipart, field `file` (.mov) -> {"job_id": ...}
-    GET  /api/v1/jobs/{job_id}      -> {"job_id", "status", "verdict", "violations", ...extras}
-
-UI API (cookie session, roles operator/supervisor/admin): /ui/api/*  - see docs/api_contract.md
-Admin API (admin key): /admin/api/*
-System: /health /ready /metrics /version
-
-Run:  uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
-"""
 from __future__ import annotations
 
 import logging
@@ -33,7 +21,6 @@ log = logging.getLogger("backend")
 
 
 def _raise_fd_limit() -> None:
-    """macOS defaults to 256 open files; a busy server (thread pool x SQLite, sockets, queues) needs more."""
     try:
         import resource
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -121,7 +108,6 @@ def create_app() -> FastAPI:
 
 
 def _mount_frontend(app: FastAPI) -> None:
-    """Serve the built React app (frontend/dist) with an SPA fallback for client-side routes."""
     dist = REPO_DIR / "frontend" / "dist"
     index = dist / "index.html"
     if not index.exists():

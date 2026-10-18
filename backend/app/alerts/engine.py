@@ -1,4 +1,3 @@
-"""Alert policy engine: severity, dedup/cooldown, routing by role, timed escalation, acknowledgement."""
 from __future__ import annotations
 
 import concurrent.futures as cf
@@ -61,7 +60,6 @@ class AlertEngine:
         self._esc = threading.Thread(target=self._escalation_loop, name="alert-escalation", daemon=True)
         self._lock = threading.Lock()
 
-    # ------------------------------------------------------------------ lifecycle
     def start(self) -> None:
         self._esc.start()
         self.telegram.start()
@@ -73,7 +71,6 @@ class AlertEngine:
         if self._esc.is_alive() and self._esc is not threading.current_thread():
             self._esc.join(3)
 
-    # ------------------------------------------------------------------ policy helpers
     def severity_of(self, type_code: str | None) -> str:
         return self.policy["severity_by_type"].get(type_code or "", self.policy["defaults"].get("severity", "medium"))
 
@@ -87,10 +84,7 @@ class AlertEngine:
             out.append(self.channels["log"])
         return out
 
-    # ------------------------------------------------------------------ create
     def handle(self, event: dict, actor: str = "system") -> dict | None:
-        """event: {source, job_id?, camera_id?, camera_name?, type_code, type_name, t_sec?, confidence?, message,
-        norm?, evidence_b64?, link?, filename?}. Returns the alert (new or updated) or None if muted by cooldown."""
         now = time.time()
         code = event.get("type_code") or "T99"
         severity = event.get("severity") or self.severity_of(code)
@@ -136,11 +130,10 @@ class AlertEngine:
         self.db.audit("alert.create", actor, str(aid), {"severity": severity, "type_code": code, "scope": scope})
         return {**{k: v for k, v in alert.items() if k != "evidence_b64"}, "new": True}
 
-    # ------------------------------------------------------------------ delivery
     def _deliver(self, alert: dict, role: str, level: int) -> None:
         jury = bool((alert.get("payload") or {}).get("jury"))
         for ch in self._channels_for(role):
-            if jury and ch.name not in ("web", "log"):   # jury test videos never leave the server (brief, section 10)
+            if jury and ch.name not in ("web", "log"):
                 continue
             target = ch.target(role)
             did = self.db.insert("alert_deliveries", {"alert_id": alert["id"], "channel": ch.name, "target": target,
@@ -150,7 +143,7 @@ class AlertEngine:
                 continue
             try:
                 self._pool.submit(self._send_with_retry, ch, dict(alert), role, level, did)
-            except RuntimeError:  # shutting down
+            except RuntimeError:
                 self.db.update("alert_deliveries", "id", did, {"status": "skipped", "last_error": "service stopping"})
 
     def _send_with_retry(self, ch: Channel, alert: dict, role: str, level: int, did: int) -> None:
@@ -171,7 +164,6 @@ class AlertEngine:
                                                        "updated_at": time.time()})
         metrics.ALERT_DELIVERIES.labels(ch.name, "failed").inc()
 
-    # ------------------------------------------------------------------ escalation
     def _escalation_loop(self) -> None:
         while not self._stop.wait(5):
             try:
@@ -200,7 +192,6 @@ class AlertEngine:
             n += 1
         return n
 
-    # ------------------------------------------------------------------ ack / read
     def ack(self, alert_id: int, by: str, decision: str = "acknowledged", comment: str | None = None,
             record_feedback: bool = True) -> dict | None:
         if decision not in STATES or decision == "open":
@@ -230,7 +221,6 @@ class AlertEngine:
         return alert
 
     def sync_review(self, job_id: str, type_code: str | None, t_sec: float | None, decision: str, by: str) -> None:
-        """A reviewer decision on a check finding closes (or reopens) the alert raised for it."""
         rows = self.db.all("SELECT id, payload FROM alerts WHERE job_id=? AND type_code=?", (job_id, type_code or "T99"))
         for r in rows:
             t = (loads(r["payload"], {}) or {}).get("t_sec")

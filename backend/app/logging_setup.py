@@ -1,4 +1,3 @@
-"""Logging: console + rotating file (storage/server.log), optional JSON lines, request id in records."""
 from __future__ import annotations
 
 import contextvars
