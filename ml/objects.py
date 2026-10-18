@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass, field
 
 import cv2
@@ -73,7 +74,8 @@ def find_objects(frames: list[Frame], dets: list[list[Det]], roi) -> list[DeskOb
     stack = np.stack([_lab(frames[i].image, roi) for i in idx])
     hidden = np.stack([_person_mask(dets[i], roi, shape) for i in idx])
     stack[hidden] = np.nan
-    with np.errstate(all="ignore"):
+    with warnings.catch_warnings():  # пиксели, всё время закрытые людьми, - NaN; их ниже не сравниваем
+        warnings.simplefilter("ignore", RuntimeWarning)
         ref = np.nanmedian(stack, axis=0)
     valid = ~np.isnan(ref).any(axis=2)  # пиксели, которые в эталоне всё время закрыты людьми, не сравниваем
     ref = np.nan_to_num(ref)
