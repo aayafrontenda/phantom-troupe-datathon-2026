@@ -19,8 +19,8 @@ from .config import get_settings
 from .signals import Candidate, compute_signals, cv_findings, find_candidates, timeline
 from .video import Frame, iter_frames, nearest, probe, to_jpeg_b64
 from .entry import door_findings
-from .workplace import (client_findings, desk_findings, find_roi, left_items_findings, phone_times, scan,
-                        stranger_findings)
+from .workplace import (bag_drop_findings, client_findings, company_times, desk_findings, find_roi,
+                        left_items_findings, phone_times, scan, stranger_findings)
 
 log = logging.getLogger("ml.pipeline")
 DESK_CALL_TIMEOUT = 25.0  # с на один вопрос скана: обычно ~1 с, до ~10 с при загрузке модели
@@ -143,6 +143,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
     # --- VLM ---
     findings: list[dict] = []
     vlm_calls, vlm_errors, scenes = 0, 0, []
+    desk_trace: list[dict] = []  # ответы VLM по каждому замеру рабочего места - для разбора ошибок
     if dets:
         findings += door_findings(frames, dets)  # T04: дверь после входа в пустую кассу, без VLM
         _emit_partial(progress, findings, frames, s)
@@ -166,7 +167,13 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
             if not st.reused:
                 vlm_calls += 1
                 scenes.append({"t": round(st.t, 1), "reason": "рабочее место", "scene": st.note})
-        for f in desk_findings(desk_states, phone_times(frames, dets, roi)) + client_findings(desk_states):
+        desk_trace = [{"t": round(st.t, 1), "person": st.person, "client": st.client, "screen": st.screen,
+                       "action": st.action, "personal": st.personal, "cash": st.cash, "bag": st.bag,
+                       "safe_open": st.safe_open, "reused": st.reused} for st in desk_states]
+        company = company_times(frames, dets)
+        for f in (desk_findings(desk_states, phone_times(frames, dets, roi), company) + client_findings(desk_states)
+                  + bag_drop_findings(desk_states, company, duration,
+                                      [f.t for f, ds in zip(frames, dets) if any(d.group == "bag" for d in ds)])):
             findings.append({**f, "source": "vlm", "candidate": "рабочее место"})
         _emit_partial(progress, findings, frames, s)
         # после каждого ухода - узкий вопрос «что оставлено на столе» (2 вызова на уход, ~0.4 с каждый)
@@ -224,6 +231,7 @@ def analyze(path: str, on_progress: Progress | None = None, deadline: float | No
             "candidates": [{"t": round(c.t, 1), "reason": c.reason, "priority": c.priority} for c in cands],
             "vlm_calls": vlm_calls,
             "vlm_errors": vlm_errors,
+            "desk_states": desk_trace,
             "scenes": scenes,
             "raw_findings": [{k: v for k, v in f.items()} for f in findings],
         },

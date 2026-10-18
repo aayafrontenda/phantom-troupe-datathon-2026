@@ -1,0 +1,43 @@
+video,angle,label,label_sec,gt_type,outcome,pred,dt_sec,type_ok,sec,schema
+X-1,A,violation,22.0,T10,FN,,,,83.9,OK
+X-2,A,violation,10.0,T06,FN,,,,52.7,OK
+Х-3,A,no_violation,,,TN,,,,60.0,OK
+Х-4,A,violation,57.0,T07,FN,,,,91.6,OK
+Х-47,A,violation,68.0,T08,FN,,,,101.2,OK
+Х-5,A,no_violation,,,TN,,,,96.9,OK
+Х-8,B,no_violation,,,TN,,,,91.9,OK
+Х-10,B,no_violation,,,TN,,,,45.3,OK
+Х-11,B,violation,18.0,T01,TP,16.1s T01,1.9,True,75.4,OK
+Х-12,B,no_violation,,,TN,,,,95.6,OK
+Х-13,B,violation,47.0,T12,FN,,,,94.7,OK
+Х-14,B,no_violation,,,TN,,,,92.8,OK
+Х-15,B,violation,15.0,T02,TP,0.0s T13; 11.0s T02,4.0,False,94.7,OK
+Х-16,A,no_violation,,,FP,18.1s T13,,,78.9,OK
+Х-17,A,violation,7.0,T11,FN,,,,33.9,OK
+Х-18,A,violation,20.0,T05,TP,15.5s T05,4.5,False,54.6,OK
+Х-19,A,no_violation,,,TN,,,,95.2,OK
+Х-20,B,violation,5.0,T03,TP,5.0s T03,0.0,True,41.6,OK
+Х-21,B,no_violation,,,TN,,,,50.0,OK
+Х-22,B,violation,14.0,T01,FN,,,,47.9,OK
+Х-23,B,no_violation,,,TN,,,,43.1,OK
+Х-24,B,violation,8.0,T02,TP,5.0s T02,3.0,True,40.6,OK
+Х-25,B,no_violation,,,TN,,,,97.9,OK
+Х-26,B,violation,9.0,T02,TP,9.0s T02,0.0,True,59.3,OK
+Х-27,B,no_violation,,,TN,,,,71.6,OK
+Х-28,B,violation,7.0,T01,TP,11.1s T01,4.1,False,56.3,OK
+Х-29,B,no_violation,,,TN,,,,47.3,OK
+Х-30,C,violation,13.0,T05,TP,3.0s T04; 12.5s T05,0.5,True,68.3,OK
+Х-31,C,no_violation,,,TN,,,,83.7,OK
+Х-32,C,violation,5.0,T04,TP,3.5s T04,1.5,True,61.3,OK
+Х-33,D,violation,6.0,T04,TP,6.0s T04; 10.5s T05,0.0,True,61.7,OK
+Х-34,E,violation,13.0,T09,FN,,,,55.6,OK
+Х-35,E,no_violation,,,TN,,,,85.6,OK
+Х-37,E,no_violation,,,TN,,,,39.1,OK
+Х-38,E,violation,33.0,T07,FN,,,,91.5,OK
+Х-39,E,no_violation,,,TN,,,,90.7,OK
+Х-40,D,violation,17.0,T13,FN,,,,92.1,OK
+Х-43,D,no_violation,,,TN,,,,67.0,OK
+Х-44,D,violation,16.0,T99,FN,,,,16.0,OK
+Х-45,D,no_violation,,,TN,,,,52.4,OK
+Х-46,D,violation,11.0,T14,TP,14.0s T14,3.0,True,55.6,OK
+Х-48,A,no_violation,,,TN,,,,93.6,OK

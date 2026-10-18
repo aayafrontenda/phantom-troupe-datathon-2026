@@ -239,16 +239,67 @@ def client_findings(states: list[DeskState]) -> list[dict]:
     Таймкод - момент подхода клиента №2: середина между последним замером паузы и первым замером, где он уже у стола
     (по разметке нарушение видно, когда «входит следующий клиент», то есть раньше, чем он сел).
     """
-    has_client = lambda s: s.client in ("sit", "stand")  # noqa: E731
-    visits = [(a, b) for a, b in _runs(states, has_client) if b - a + 1 >= MIN_AWAY_STATES]
     found = []
+    visits = _visits(states)
     for (_, b1), (a2, _) in zip(visits, visits[1:]):
         gap = states[b1 + 1:a2]
         if gap and states[b1].cash and all(s.cash for s in gap) and states[a2].cash:
             found.append({"code": "T07", "t": (states[a2 - 1].t + states[a2].t) / 2, "confidence": 0.7,
                           "observed": "Предыдущий клиент ушёл, наличные остались на столе; "
                                       "к столу подходит следующий клиент"})
+    # T09 (п. 20 Правил № 231): клиент уходит в тот момент, когда кассир встаёт работать с его деньгами (Х-34:
+    # кассир сидит при клиенте, клиент уходит, кассир уже стоит у счётной машины). Если кассир стоял и до ухода
+    # клиента (Х-35, норма) - это не «встала посреди операции». Правило по одному обучающему примеру - гипотеза.
+    for _, b in visits:
+        if b + 1 < len(states) and states[b].person == "sit" and states[b + 1].person == "stand":
+            found.append({"code": "T09", "t": (states[b].t + states[b + 1].t) / 2, "confidence": 0.6,
+                          "observed": "Клиент уходит от стола, когда кассир встаёт и продолжает работу "
+                                      "(возможно, пересчёт его денег); на видео не зафиксировано, что операция "
+                                      "завершена при клиенте"})
     return found
+
+
+# T11: визит второго человека (инкассатора) от и до стольких секунд; сумка на столе в окне [уход - 2 с, уход + 6 с]
+DROP_VISIT_SEC, DROP_WINDOW = (2.0, 15.0), (2.0, 6.0)
+
+
+def bag_drop_findings(states: list[DeskState], company: list[float], duration: float,
+                      bag_times: list[float]) -> list[dict]:
+    """T11: второй человек (инкассатор) подходит, оставляет сумку на столе и вскоре уходит - без передачи документов.
+
+    Х-17: инкассатор у стола 4–11.5 с, сумка на столе и после его ухода. В норме (Х-16) инкассатор ждёт у стола с
+    документами до конца - визит не короткий и не заканчивается уходом. Визиты - по детектору (company_times), сумка -
+    по ответам VLM. Сумку должны принести: bag_times - кадры, где детектор видит сумку; раньше чем за 2 с до визита
+    её быть не должно (Х-14, Х-13: кассир весь ролик работает с сумками, VLM замечает их не сразу).
+    Правило по одному обучающему примеру - гипотеза.
+    """
+    found, runs, start, prev = [], [], None, None
+    for t in company:
+        if start is None:
+            start = t
+        elif t - prev > 1.1:  # пропуск больше двух кадров - визит закончился
+            runs.append((start, prev))
+            start = t
+        prev = t
+    if start is not None:
+        runs.append((start, prev))
+    for a, b in runs:
+        if not DROP_VISIT_SEC[0] <= b - a <= DROP_VISIT_SEC[1] or duration - b < 2.0:
+            continue  # мимолётная рамка, долгий визит или человек у стола до конца видео
+        if any(t < a - 2.0 for t in bag_times) or any(s.bag for s in states if s.t < a):
+            continue  # сумка была до визита - её не принесли
+        bags = [s for s in states if s.bag and b - DROP_WINDOW[0] <= s.t <= b + DROP_WINDOW[1]]
+        if len(bags) >= 2:
+            found.append({"code": "T11", "t": (a + b) / 2, "confidence": 0.6,
+                          "observed": "К столу подходит второй человек (возможно, инкассатор), на столе остаётся сумка, "
+                                      "и он вскоре уходит; передача и проверка документов на видео не зафиксированы"})
+    return found
+
+
+def _visits(states: list[DeskState]) -> list[tuple[int, int]]:
+    """Визиты клиентов: client in (sit, stand) не меньше MIN_AWAY_STATES замеров подряд."""
+    has_client = lambda s: s.client in ("sit", "stand")  # noqa: E731
+    return [(a, b) for a, b in _runs(states, has_client) if b - a + 1 >= MIN_AWAY_STATES]
 
 
 LEFT_PROMPT = (ML_DIR / "prompts" / "left_items_ru.txt").read_text(encoding="utf-8")
@@ -354,7 +405,36 @@ def phone_times(frames: list[Frame], dets: list[list[Det]], roi) -> list[float]:
     return out
 
 
-def desk_findings(states: list[DeskState], phones: list[float] | None = None) -> list[dict]:
+# второй человек в кадре для T13: уверенная рамка (слабые 0.5–0.6 - фон и отражения, Х-40), не меньше этой доли
+# медианного роста людей в видео, не дубль другой рамки (детектор иногда обводит одного человека дважды, Х-40 19 с)
+# и держится 2 кадра подряд
+COMPANY_SCORE, COMPANY_SIZE, COMPANY_DUP_IOU, COMPANY_NEAR_SEC = 0.7, 0.5, 0.5, 2.0
+
+
+def company_times(frames: list[Frame], dets: list[list[Det]]) -> list[float]:
+    """Моменты, когда в кадре кроме кассира есть ещё человек (клиент, инкассатор) - по детектору.
+
+    Сумка на столе при втором человеке рядом - скорее его (Х-16: инкассатор кладёт сумку и ждёт с документами;
+    VLM трижды называет её «личной», а поле client пропускает инкассатора, стоящего не на месте клиента).
+    """
+    persons = [[p for p in ds if p.group == "person" and p.score >= COMPANY_SCORE] for ds in dets]
+    heights = [p.box[3] - p.box[1] for ps in persons for p in ps]
+    if not heights:
+        return []
+    h = float(np.median(heights))
+    two = []
+    for ps in persons:
+        kept: list[Det] = []
+        for p in sorted(ps, key=lambda p: -p.score):
+            if p.box[3] - p.box[1] >= COMPANY_SIZE * h and all(_iou(p.box, k.box) <= COMPANY_DUP_IOU for k in kept):
+                kept.append(p)
+        two.append(len(kept) >= 2)
+    return [f.t for i, f in enumerate(frames)
+            if two[i] and ((i > 0 and two[i - 1]) or (i + 1 < len(two) and two[i + 1]))]
+
+
+def desk_findings(states: list[DeskState], phones: list[float] | None = None,
+                  company: list[float] | None = None) -> list[dict]:
     """T01–T03 по дорожке состояний: кассир был на месте, потом рабочее место пусто; сейф открыт без работы с ним."""
     found: list[dict] = []
     for i0, i1 in _runs(states, lambda s: not s.present):
@@ -400,6 +480,9 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
     # телефон VLM часто «видит» у клиента или в пустых руках - засчитываем, только если детектор тоже видит
     # телефон на рабочем месте в пределах 3 с (phones=None - подтверждения нет, верим VLM)
     phone_ok = (lambda s: True) if phones is None else (lambda s: any(abs(s.t - t) <= 3.0 for t in phones))  # noqa: E731
+    # личные вещи засчитываем, только когда кассир у стола одна: при втором человеке рядом сумка скорее его
+    alone = (lambda s: True) if company is None else (  # noqa: E731
+        lambda s: not any(abs(s.t - t) <= COMPANY_NEAR_SEC for t in company))
     rules = [
         ("T14", lambda s: s.action == "drink", 1, 0.7, "Кассир пьёт или ест на рабочем месте"),
         ("T15", lambda s: s.action == "phone" and phone_ok(s), 2, 0.7,
@@ -407,7 +490,7 @@ def desk_findings(states: list[DeskState], phones: list[float] | None = None) ->
         # пока кассир стоит, вещи могут быть просто в руках (вошла с сумкой) - считаем, когда села или отошла;
         # 3 подтверждения: инкассаторскую сумку на столе модель иногда принимает за личную (Х-16 - 2 раза)
         # при клиенте/инкассаторе напротив сумка на столе скорее его (Х-16), а не личная вещь кассира
-        ("T13", lambda s: s.personal and s.person in ("sit", "none") and s.client == "none", 3, 0.65,
+        ("T13", lambda s: s.personal and s.person in ("sit", "none") and s.client == "none" and alone(s), 3, 0.65,
          "На рабочем столе кассира лежат личные вещи (сумка, рюкзак или верхняя одежда)"),
     ]
     for code, pred, need, conf, observed in rules:
