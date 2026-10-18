@@ -1,5 +1,5 @@
-# Зависимости модели (ставятся на ROG поверх requirements.txt).
-# torch с CUDA для Windows ставьте отдельно, команду см. docs/tasks/ML.md:
+# Зависимости модели (ставятся на машину с GPU поверх requirements.txt).
+# torch с CUDA для Windows ставьте отдельно, команду см. README (Быстрый старт):
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 transformers>=4.45
 timm>=1.0

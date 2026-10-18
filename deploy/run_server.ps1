@@ -1,4 +1,4 @@
-﻿# Запуск сервиса на ROG (Windows) с автоперезапуском при падении.
+﻿# Запуск сервиса на Windows с GPU с автоперезапуском при падении.
 # Из корня репозитория:   powershell -ExecutionPolicy Bypass -File deploy\run_server.ps1
 # Настройки - в файле .env (скопируйте .env.example). ANALYZER по умолчанию здесь = ml.
 

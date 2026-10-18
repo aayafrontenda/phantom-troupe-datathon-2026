@@ -17,7 +17,7 @@ frontend/.vite/
 .DS_Store
 # secrets: copy .env.example to .env
 .env
-# AI-assistant scratch files
+# local tool files
 .claude/
 .agents/
 .aider-desk/

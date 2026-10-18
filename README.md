@@ -14,7 +14,7 @@ Datathon 26, кейс ForteBank. Локальный AI-сервис: загру�
 | Вход в интерфейс | `operator`, `supervisor` или `admin`, пароль `forte2026` |
 
 На 42 метках обучающего датасета: **93 %** верных вердиктов, **0** ложных срабатываний из 20, в среднем 26 с на видео;
-на сервере сдачи (RTX 4070 Laptop, 8 ГБ) - 90 %, 0 ложных, в среднем 21 с, максимум 49 с.
+на развёрнутом сервисе (одна видеокарта 8 ГБ) - 90 %, 0 ложных, в среднем 21 с, максимум 49 с.
 Результат по каждому видео - [`docs/eval_report.csv`](docs/eval_report.csv).
 
 ### Соответствие требованиям ТЗ (раздел 8)
@@ -62,7 +62,7 @@ pytest -q
 ```
 Вход: пользователи из `SEED_USERS` в `.env` (admin / operator / supervisor, пароли там же).
 
-**ROG / Windows с моделью:**
+**Windows с NVIDIA GPU (полная модель):**
 ```powershell
 python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
